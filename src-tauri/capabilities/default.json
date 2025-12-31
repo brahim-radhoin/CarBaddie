@@ -1,0 +1,67 @@
+{
+  "identifier": "default",
+  "description": "Default capabilities",
+  "windows": ["main"],
+  "permissions": [
+    {
+      "identifier": "shell:allow-spawn",
+      "allow": [
+        {
+          "name": "carbaddie-backend",
+          "sidecar": true,
+          "args": [
+            {
+              "validator": "--database-path"
+            },
+            {
+              "validator": ".+"
+            }
+          ]
+        }
+      ]
+    },
+    "core:path:default",
+    "core:event:default",
+    "core:window:allow-close",
+    "core:window:allow-destroy",
+    "core:window:allow-internal-toggle-maximize",
+    {
+      "identifier": "fs:allow-exists",
+      "allow": [{ "path": "$APPDATA" }, { "path": "$APPDATA/**" }]
+    },
+    {
+      "identifier": "fs:allow-create",
+      "allow": [{ "path": "$APPDATA" }, { "path": "$APPDATA/**" }]
+    },
+    {
+      "identifier": "fs:allow-copy-file",
+      "allow": [{ "path": "$RESOURCE/**" }, { "path": "$APPDATA/**" }]
+    },
+    {
+      "identifier": "fs:allow-read-file",
+      "allow": [{ "path": "$RESOURCE/**" }, { "path": "target/**" }, { "path": "$APPDATA/**" }]
+    },
+    {
+      "identifier": "fs:allow-mkdir",
+      "allow": [{ "path": "$APPDATA" }, { "path": "$APPDATA/**" }]
+    },
+    {
+      "identifier": "fs:allow-remove",
+      "allow": [{ "path": "$APPDATA" }, { "path": "$APPDATA/**" }]
+    },
+    {
+      "identifier": "fs:allow-stat",
+      "allow": [{ "path": "$APPDATA" }, { "path": "$APPDATA/**" }]
+    },
+    {
+      "identifier": "fs:allow-write-text-file",
+      "allow": [{ "path": "$APPDATA" }, { "path": "$APPDATA/**" }]
+    },
+    {
+      "identifier": "fs:allow-read-text-file",
+      "allow": [{ "path": "$RESOURCE/**" }, { "path": "target/**" }, { "path": "$APPDATA/**" }]
+    },
+    "dialog:allow-save",
+    "dialog:allow-open"
+  ]
+}
