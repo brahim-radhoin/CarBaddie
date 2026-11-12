@@ -32,12 +32,16 @@ export interface ServiceTypeBase {
 /** Data needed to create a new service type. Mirrors `ServiceTypeCreate`. */
 export interface ServiceTypeCreate extends ServiceTypeBase {
   fields: CustomFieldCreate[];
+  resets?: number[];
+  suggestions?: number[];
 }
 
 /** A service type as returned by the API. Mirrors `ServiceTypeRead`. */
 export interface ServiceTypeRead extends ServiceTypeBase {
   id: number;
   fields: CustomFieldRead[];
+  resets: number[];
+  suggestions: number[];
 }
 
 /** Data needed to update a service type. Mirrors `ServiceTypeUpdate`. */
@@ -46,6 +50,8 @@ export interface ServiceTypeUpdate {
   recommended_interval_km?: number | null;
   recommended_interval_days?: number | null;
   fields?: CustomFieldCreate[];
+  resets?: number[];
+  suggestions?: number[];
 }
 
 // ----------------------------------------
@@ -228,7 +234,12 @@ export interface BackupAnalysisResponse {
   }[];
   conflicting_vehicles: {
     vin: string;
-    backup_vehicle: any; // Define if needed
+    backup_vehicle: {
+      make: string;
+      model: string;
+      year?: number | null;
+      vin?: string | null;
+    };
     existing_vehicle_id: number;
   }[];
 }

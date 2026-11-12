@@ -20,8 +20,9 @@ import {
   MaintenanceLogUpdate,
   CustomFieldRead,
 } from "./types";
+import { queryKeys } from "./queryKeys";
 
-const API_BASE_URL = "http://localhost:8000";
+const API_BASE_URL = "http://127.0.0.1:8000";
 
 // --- VEHICLE HOOKS ---
 
@@ -29,7 +30,7 @@ const API_BASE_URL = "http://localhost:8000";
 export function useVehicles() {
   return useQuery<VehicleRead[]>({
     // Add explicit type for clarity
-    queryKey: ["vehicles"],
+    queryKey: queryKeys.vehicles.all(),
     queryFn: async () => {
       const { data } = await axios.get(`${API_BASE_URL}/vehicles/`);
       return data;
@@ -40,7 +41,7 @@ export function useVehicles() {
 // For fetching a single vehicle by ID
 export const useVehicle = (vehicleId?: string) => {
   return useQuery<VehicleRead>({
-    queryKey: ["vehicles", vehicleId],
+    queryKey: queryKeys.vehicles.one(vehicleId as string),
     queryFn: async () => {
       const { data } = await axios.get(`${API_BASE_URL}/vehicles/${vehicleId}`);
       return data;
@@ -59,7 +60,7 @@ export function useAddVehicle() {
     },
     onSuccess: (newVehicle) => {
       toast.success(`Vehicle "${newVehicle.make} ${newVehicle.model}" added successfully!`);
-      queryClient.invalidateQueries({ queryKey: ["vehicles"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.vehicles.all() });
     },
     onError: (error) => {
       const errorMsg = error.response?.data?.detail?.[0]?.msg || error.response?.data?.detail || "Failed to add vehicle.";
@@ -84,9 +85,9 @@ export function useUpdateVehicle() {
     onSuccess: (updatedVehicle) => {
       toast.success(`Vehicle "${updatedVehicle.make} ${updatedVehicle.model}" updated.`);
       // Invalidate the main list
-      queryClient.invalidateQueries({ queryKey: ["vehicles"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.vehicles.all() });
       // And immediately update the cache for the single vehicle query
-      queryClient.setQueryData(["vehicles", updatedVehicle.id.toString()], updatedVehicle);
+      queryClient.setQueryData(queryKeys.vehicles.one(updatedVehicle.id), updatedVehicle);
     },
     onError: (error) => {
       const errorMsg = error.response?.data?.detail?.[0]?.msg || error.response?.data?.detail || "Failed to update vehicle.";
@@ -98,13 +99,13 @@ export function useUpdateVehicle() {
 // For deleting a vehicle
 export function useDeleteVehicle() {
   const queryClient = useQueryClient();
-  return useMutation<void, AxiosError, number>({
+  return useMutation<void, AxiosError<{ detail: string }>, number>({
     mutationFn: async (vehicleId) => {
       await axios.delete(`${API_BASE_URL}/vehicles/${vehicleId}`);
     },
     onSuccess: () => {
       toast.success("Vehicle deleted successfully.");
-      queryClient.invalidateQueries({ queryKey: ["vehicles"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.vehicles.all() });
     },
     onError: (error) => {
       toast.error(error.response?.data?.detail || "Failed to delete vehicle.");
@@ -178,7 +179,7 @@ export function useUpsertIntervalOverride() {
     onSuccess: (_, { vehicleId }) => {
       toast.success("Interval override saved successfully.");
       // Invalidate the specific vehicle's data to trigger a re-fetch of its overrides
-      queryClient.invalidateQueries({ queryKey: ["vehicles", vehicleId.toString()] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.vehicles.one(vehicleId) });
     },
     onError: (error) => {
       toast.error(error.response?.data?.detail || "Failed to save override.");
@@ -199,7 +200,7 @@ export function useDeleteIntervalOverride() {
     },
     onSuccess: (_, { vehicleId }) => {
       toast.success("Interval override cleared.");
-      queryClient.invalidateQueries({ queryKey: ["vehicles", vehicleId.toString()] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.vehicles.one(vehicleId) });
     },
     onError: (error) => {
       // It's common for a 404 to not be a true "error" in this context, but a state check.
@@ -217,7 +218,7 @@ export function useDeleteIntervalOverride() {
 // Hook for fetching a single service type
 export const useServiceType = (serviceTypeId?: string) => {
   return useQuery<ServiceTypeRead, AxiosError<{ detail: string }>>({
-    queryKey: ["service_types", serviceTypeId],
+    queryKey: queryKeys.serviceTypes.one(serviceTypeId as string),
     queryFn: async () => {
       const { data } = await axios.get(`${API_BASE_URL}/service_types/${serviceTypeId}`);
       return data;
@@ -236,7 +237,7 @@ export function useAddServiceType() {
     },
     onSuccess: (newServiceType) => {
       toast.success(`Service type "${newServiceType.name}" created successfully.`);
-      queryClient.invalidateQueries({ queryKey: ["service_types"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.serviceTypes.all() });
     },
     onError: (error) => {
       const errorMsg = error.response?.data?.detail?.[0]?.msg || error.response?.data?.detail || "Failed to create service type.";
@@ -260,9 +261,9 @@ export function useUpdateServiceType() {
     },
     onSuccess: (updatedServiceType) => {
       toast.success(`Service type "${updatedServiceType.name}" updated successfully.`);
-      queryClient.invalidateQueries({ queryKey: ["service_types"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.serviceTypes.all() });
       // Immediately update the cache for this specific service type
-      queryClient.setQueryData(["service_types", updatedServiceType.id.toString()], updatedServiceType);
+      queryClient.setQueryData(queryKeys.serviceTypes.one(updatedServiceType.id), updatedServiceType);
     },
     onError: (error) => {
       const errorMsg = error.response?.data?.detail?.[0]?.msg || error.response?.data?.detail || "Failed to update service type.";
@@ -273,7 +274,7 @@ export function useUpdateServiceType() {
 
 export function useServiceTypes() {
   return useQuery<ServiceTypeRead[]>({
-    queryKey: ["service_types"],
+    queryKey: queryKeys.serviceTypes.all(),
     queryFn: async () => {
       const { data } = await axios.get(`${API_BASE_URL}/service_types/`);
       return data;
@@ -291,7 +292,7 @@ export function useDeleteServiceType() {
     onSuccess: () => {
       toast.success("Service type deleted successfully.");
       // Invalidate the main list to trigger a re-fetch
-      queryClient.invalidateQueries({ queryKey: ["service_types"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.serviceTypes.all() });
     },
     onError: (error) => {
       toast.error(error.response?.data?.detail || "Failed to delete service type.");
@@ -304,7 +305,7 @@ export function useDeleteServiceType() {
 // Hook for fetching a single maintenance log
 export const useMaintenanceLog = (logId?: string) => {
   return useQuery<MaintenanceLogRead, AxiosError<{ detail: string }>>({
-    queryKey: ["maintenance_logs", logId],
+    queryKey: queryKeys.logs.one(logId as string),
     queryFn: async () => {
       const { data } = await axios.get(`${API_BASE_URL}/maintenance_logs/${logId}`);
       return data;
@@ -316,7 +317,7 @@ export const useMaintenanceLog = (logId?: string) => {
 // Hook for fetching custom fields for a given service type
 export const useCustomFieldsForServiceType = (serviceTypeId?: string | number) => {
   return useQuery<CustomFieldRead[], AxiosError<{ detail: string }>>({
-    queryKey: ["custom_fields", serviceTypeId],
+    queryKey: queryKeys.serviceTypes.customFields(serviceTypeId as string | number),
     queryFn: async () => {
       const { data } = await axios.get(`${API_BASE_URL}/service_types/${serviceTypeId}/custom_fields/`);
       return data;
@@ -341,8 +342,8 @@ export function useAddMaintenanceLog() {
     onSuccess: (_, { vehicleId }) => {
       toast.success("Maintenance log added successfully.");
       // Invalidate vehicle-specific queries to refresh log lists, summaries, etc.
-      queryClient.invalidateQueries({ queryKey: ["vehicles", vehicleId.toString()] });
-      queryClient.invalidateQueries({ queryKey: ["maintenance_logs"] }); // Invalidate general log list if you have one
+      queryClient.invalidateQueries({ queryKey: queryKeys.vehicles.one(vehicleId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.logs.all() }); // Invalidate general log list if you have one
     },
     onError: (error) => {
       const errorMsg = error.response?.data?.detail?.[0]?.msg || error.response?.data?.detail || "Failed to add log.";
@@ -367,9 +368,9 @@ export function useUpdateMaintenanceLog() {
     onSuccess: (updatedLog) => {
       toast.success("Maintenance log updated successfully.");
       // Invalidate vehicle-specific queries
-      queryClient.invalidateQueries({ queryKey: ["vehicles", updatedLog.vehicle_id.toString()] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.vehicles.one(updatedLog.vehicle_id) });
       // Immediately update the cache for this specific log
-      queryClient.setQueryData(["maintenance_logs", updatedLog.id.toString()], updatedLog);
+      queryClient.setQueryData(queryKeys.logs.one(updatedLog.id), updatedLog);
     },
     onError: (error) => {
       const errorMsg = error.response?.data?.detail?.[0]?.msg || error.response?.data?.detail || "Failed to update log.";
@@ -381,7 +382,7 @@ export function useUpdateMaintenanceLog() {
 // Hook for fetching all logs for a specific service type on a specific vehicle
 export const useLogsForServiceType = (vehicleId?: string, serviceTypeId?: string) => {
   return useQuery<MaintenanceLogRead[], AxiosError<{ detail: string }>>({
-    queryKey: ["maintenance_logs", { vehicleId, serviceTypeId }], // A more specific query key
+    queryKey: queryKeys.logs.forServiceType(vehicleId as string, serviceTypeId as string), // A more specific query key
     queryFn: async () => {
       const { data } = await axios.get(`${API_BASE_URL}/vehicles/${vehicleId}/logs?service_type_id=${serviceTypeId}`);
       return data;
@@ -395,7 +396,7 @@ export const useLogsForServiceType = (vehicleId?: string, serviceTypeId?: string
 
 export function useServiceTypeSummaries(vehicleId?: string) {
   return useQuery<ServiceTypeLogSummary[]>({
-    queryKey: ["summaries", vehicleId],
+    queryKey: queryKeys.summaries.forVehicle(vehicleId as string),
     queryFn: async () => {
       const { data } = await axios.get(`${API_BASE_URL}/vehicles/${vehicleId}/maintenance_summary_by_type`);
       return data;
@@ -406,7 +407,7 @@ export function useServiceTypeSummaries(vehicleId?: string) {
 
 export const useAllLogsForVehicle = (vehicleId?: string) => {
   return useQuery<MaintenanceLogRead[]>({
-    queryKey: ["maintenance_logs", { vehicleId }], // More specific key
+    queryKey: queryKeys.logs.forVehicle(vehicleId as string), // More specific key
     queryFn: async () => {
       const { data } = await axios.get(`${API_BASE_URL}/vehicles/${vehicleId}/logs`);
       return data;
@@ -426,12 +427,29 @@ export function useDeleteMaintenanceLog() {
       toast.success("Log deleted successfully.");
       // When a log is deleted, many things could be stale.
       // Invalidate the vehicle (for its log list), the summaries, and the log lists.
-      queryClient.invalidateQueries({ queryKey: ["vehicles", vehicleId] });
-      queryClient.invalidateQueries({ queryKey: ["summaries", vehicleId] });
-      queryClient.invalidateQueries({ queryKey: ["maintenance_logs"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.vehicles.one(vehicleId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.summaries.forVehicle(vehicleId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.logs.all() });
     },
     onError: (error) => {
       toast.error(error.response?.data?.detail || "Failed to delete log.");
+    },
+  });
+}
+
+// --- WIPE DATABASE ---
+export function useWipeDatabase() {
+  const queryClient = useQueryClient();
+  return useMutation<void, AxiosError, void>({
+    mutationFn: async () => {
+      await axios.delete(`${API_BASE_URL}/backup/wipe_database`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries();
+      toast.success("All garage records have been wiped.");
+    },
+    onError: (error) => {
+      toast.error((error.response?.data as any)?.detail || "Failed to wipe database.");
     },
   });
 }

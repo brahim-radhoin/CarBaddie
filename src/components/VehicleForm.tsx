@@ -5,15 +5,12 @@ import { cn } from "@/lib/utils";
 
 // UI Components & Icons
 import { Button } from "@/components/ui/button";
-import { CardContent, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
-import { Save, XCircle, Loader2, Gauge, CalendarDays } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { LoadingButton } from "@/components/interior/loading-button";
 
-// This type defines the data our form will manage internally (all strings)
 type VehicleFormData = Omit<VehicleCreate, "year" | "initial_mileage"> & {
   year: string;
   initial_mileage: string;
@@ -38,18 +35,11 @@ export function VehicleForm({ initialData, isSubmitting, backendErrors, onSubmit
     acquisition_date: initialData?.acquisition_date || "",
   });
 
-  // Data Fetching for Cascading Dropdowns
-  // We allow Make -> Model -> Year OR Year -> Make -> Model flow.
-  // Ideally, if Year is selected first, Make list is filtered.
-  // If Make is selected first, Model is filtered.
-
   const selectedYear = formData.year ? parseInt(formData.year) : undefined;
-
   const { data: makes = [] } = useGetMakes(selectedYear);
   const { data: models = [], isFetching: modelsLoading } = useGetModels(formData.make, selectedYear);
   const { data: years = [], isFetching: yearsLoading } = useGetYears(formData.make, formData.model);
 
-  // Effect to sync form if initial data loads after component mount (for edit mode)
   useEffect(() => {
     if (initialData) {
       setFormData({
@@ -71,17 +61,8 @@ export function VehicleForm({ initialData, isSubmitting, backendErrors, onSubmit
   const handleSelectChange = (name: string, value: string) => {
     setFormData((prev) => {
       const next = { ...prev, [name]: value };
-
-      // Reset dependent fields if parent changes
       if (name === "make") {
         next.model = "";
-        // We don't necessarily reset year, but we could if that year isn't valid for the new make.
-        // For now, let's keep it lenient.
-      }
-      if (name === "year") {
-        // If year changes, make/model might still be valid or might not.
-        // We won't automatically clear them to allow for "Year First" workflow.
-        // But if specific make/model doesn't exist in that year, user might see empty lists if they try to change.
       }
       return next;
     });
@@ -93,7 +74,7 @@ export function VehicleForm({ initialData, isSubmitting, backendErrors, onSubmit
       make: formData.make.trim(),
       model: formData.model.trim(),
       year: formData.year ? parseInt(formData.year, 10) : undefined,
-      vin: formData.vin.trim() || undefined,
+      vin: formData.vin ? formData.vin.trim() || undefined : undefined,
       initial_mileage: formData.initial_mileage ? parseInt(formData.initial_mileage, 10) : undefined,
       acquisition_date: formData.acquisition_date || undefined,
     };
@@ -105,85 +86,88 @@ export function VehicleForm({ initialData, isSubmitting, backendErrors, onSubmit
   };
 
   return (
-    <form onSubmit={handleSubmit}>
-      <CardContent className="space-y-5 pb-5 pt-6">
-        {/* Make & Model Selection */}
-        <div>
-          <p className="text-sm text-muted-foreground mb-3">
-            Select your vehicle's make and model. The dropdown options will update based on your selections.
-          </p>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="make">Make *</Label>
-              <Select value={formData.make} onValueChange={(val) => handleSelectChange("make", val)} disabled={isSubmitting}>
-                <SelectTrigger id="make" className={cn("w-full", getFieldError("make") && "border-destructive")} aria-label="Vehicle make">
-                  <SelectValue placeholder="Select Make" />
-                </SelectTrigger>
-                <SelectContent>
-                  {makes.map((make) => (
-                    <SelectItem key={make} value={make}>
-                      {make}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {getFieldError("make") && <p className="text-xs text-destructive pt-1">{getFieldError("make")}</p>}
-            </div>
+    <form onSubmit={handleSubmit} className="space-y-6">
+      <div className="rounded-lg border border-border bg-card p-5 space-y-5">
+        {/* Make and Model */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="make" className="text-xs font-medium text-foreground">
+              Make <span className="text-destructive">*</span>
+            </Label>
+            <Select value={formData.make} onValueChange={(val) => handleSelectChange("make", val)} disabled={isSubmitting}>
+              <SelectTrigger id="make" className={cn("h-8 text-xs bg-background", getFieldError("make") && "border-destructive")}>
+                <SelectValue placeholder="Select Make" />
+              </SelectTrigger>
+              <SelectContent>
+                {makes.map((make) => (
+                  <SelectItem key={make} value={make} className="text-xs">
+                    {make}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {getFieldError("make") && <p className="text-[11px] text-destructive">{getFieldError("make")}</p>}
+          </div>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="model">Model *</Label>
-              <Select
-                value={formData.model}
-                onValueChange={(val) => handleSelectChange("model", val)}
-                disabled={!formData.make || isSubmitting || modelsLoading}
+          <div className="space-y-1.5">
+            <Label htmlFor="model" className="text-xs font-medium text-foreground">
+              Model <span className="text-destructive">*</span>
+            </Label>
+            <Select
+              value={formData.model}
+              onValueChange={(val) => handleSelectChange("model", val)}
+              disabled={!formData.make || isSubmitting || modelsLoading}
+            >
+              <SelectTrigger
+                id="model"
+                className={cn("h-8 text-xs bg-background", getFieldError("model") && "border-destructive")}
               >
-                <SelectTrigger
-                  id="model"
-                  className={cn("w-full", getFieldError("model") && "border-destructive")}
-                  aria-label="Vehicle model"
-                >
-                  <SelectValue placeholder={modelsLoading ? "Loading..." : !formData.make ? "Select make first" : "Select Model"} />
-                </SelectTrigger>
-                <SelectContent>
-                  {models.map((model) => (
-                    <SelectItem key={model} value={model}>
-                      {model}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {getFieldError("model") && <p className="text-xs text-destructive pt-1">{getFieldError("model")}</p>}
-            </div>
+                <SelectValue placeholder={modelsLoading ? "Loading..." : !formData.make ? "Select make first" : "Select Model"} />
+              </SelectTrigger>
+              <SelectContent>
+                {models.map((model) => (
+                  <SelectItem key={model} value={model} className="text-xs">
+                    {model}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {getFieldError("model") && <p className="text-[11px] text-destructive">{getFieldError("model")}</p>}
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        {/* Year and VIN */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-1.5">
-            <Label htmlFor="year">Year</Label>
+            <Label htmlFor="year" className="text-xs font-medium text-foreground">
+              Year
+            </Label>
             <Select value={formData.year} onValueChange={(val) => handleSelectChange("year", val)} disabled={isSubmitting}>
-              <SelectTrigger id="year" className={cn("w-full", getFieldError("year") && "border-destructive")} aria-label="Vehicle year">
+              <SelectTrigger id="year" className={cn("h-8 text-xs bg-background", getFieldError("year") && "border-destructive")}>
                 <SelectValue placeholder={yearsLoading ? "..." : "Select Year"} />
               </SelectTrigger>
               <SelectContent>
                 {years.map((year) => (
-                  <SelectItem key={year} value={year.toString()}>
+                  <SelectItem key={year} value={year.toString()} className="text-xs">
                     {year}
                   </SelectItem>
                 ))}
                 {years.length === 0 &&
                   !formData.make &&
                   Array.from({ length: 30 }, (_, i) => new Date().getFullYear() + 1 - i).map((y) => (
-                    <SelectItem key={y} value={y.toString()}>
+                    <SelectItem key={y} value={y.toString()} className="text-xs">
                       {y}
                     </SelectItem>
                   ))}
               </SelectContent>
             </Select>
-            {getFieldError("year") && <p className="text-xs text-destructive pt-1">{getFieldError("year")}</p>}
+            {getFieldError("year") && <p className="text-[11px] text-destructive">{getFieldError("year")}</p>}
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="vin">VIN</Label>
+            <Label htmlFor="vin" className="text-xs font-medium text-foreground">
+              VIN <span className="text-muted-foreground font-normal">(11-17 alphanumeric)</span>
+            </Label>
             <Input
               id="vin"
               name="vin"
@@ -191,68 +175,82 @@ export function VehicleForm({ initialData, isSubmitting, backendErrors, onSubmit
               onChange={handleChange}
               minLength={11}
               maxLength={17}
-              placeholder="11-17 characters"
+              placeholder="e.g. 1HGCR2F83HA..."
+              className={cn("h-8 text-xs font-mono uppercase bg-background", getFieldError("vin") && "border-destructive")}
             />
-            {getFieldError("vin") && <p className="text-xs text-destructive pt-1">{getFieldError("vin")}</p>}
+            {getFieldError("vin") && <p className="text-[11px] text-destructive">{getFieldError("vin")}</p>}
           </div>
         </div>
 
-        <Separator className="my-6" />
-
-        <div>
-          <h3 className="text-lg font-medium text-foreground mb-3">
-            Initial Vehicle State <span className="text-sm text-muted-foreground">(Optional)</span>
-          </h3>
+        {/* Initial Telemetry & Odometer */}
+        <div className="pt-3 border-t border-border">
+          <p className="text-xs font-medium text-foreground mb-3">
+            Initial Telemetry
+          </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <Label htmlFor="initial_mileage">Initial Mileage</Label>
-              <div className="relative">
-                <Gauge className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  id="initial_mileage"
-                  name="initial_mileage"
-                  type="number"
-                  value={formData.initial_mileage || ""}
-                  onChange={handleChange}
-                  min="0"
-                  className="pl-9"
-                />
-              </div>
-              {getFieldError("initial_mileage") && <p className="text-xs text-destructive pt-1">{getFieldError("initial_mileage")}</p>}
+              <Label htmlFor="initial_mileage" className="text-xs font-medium text-muted-foreground">
+                Starting Odometer (km)
+              </Label>
+              <Input
+                id="initial_mileage"
+                name="initial_mileage"
+                type="number"
+                value={formData.initial_mileage || ""}
+                onChange={handleChange}
+                min="0"
+                placeholder="0"
+                className={cn("h-8 text-xs font-mono bg-background", getFieldError("initial_mileage") && "border-destructive")}
+              />
+              {getFieldError("initial_mileage") && (
+                <p className="text-[11px] text-destructive">{getFieldError("initial_mileage")}</p>
+              )}
             </div>
+
             <div className="space-y-1.5">
-              <Label htmlFor="acquisition_date">Acquisition Date</Label>
-              <div className="relative">
-                <CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  id="acquisition_date"
-                  name="acquisition_date"
-                  type="date"
-                  value={formData.acquisition_date || ""}
-                  onChange={handleChange}
-                  className="pl-9"
-                />
-              </div>
-              {getFieldError("acquisition_date") && <p className="text-xs text-destructive pt-1">{getFieldError("acquisition_date")}</p>}
+              <Label htmlFor="acquisition_date" className="text-xs font-medium text-muted-foreground">
+                Acquisition Date
+              </Label>
+              <Input
+                id="acquisition_date"
+                name="acquisition_date"
+                type="date"
+                value={formData.acquisition_date || ""}
+                onChange={handleChange}
+                className={cn("h-8 text-xs font-mono bg-background", getFieldError("acquisition_date") && "border-destructive")}
+              />
+              {getFieldError("acquisition_date") && (
+                <p className="text-[11px] text-destructive">{getFieldError("acquisition_date")}</p>
+              )}
             </div>
           </div>
         </div>
-      </CardContent>
-      <CardFooter className="flex justify-end gap-2 border-t px-6 py-4 bg-muted/50">
+      </div>
+
+      {/* Form Action Controls */}
+      <div className="flex items-center justify-end gap-2.5">
         <Button
           type="button"
           variant="outline"
+          size="sm"
           onClick={() => navigate(-1)}
           disabled={isSubmitting}
-          className="hover:bg-secondary hover:text-secondary-foreground"
+          className="h-8 text-xs px-3"
         >
-          <XCircle className="mr-2 h-4 w-4" /> Cancel
+          Cancel
         </Button>
-        <Button type="submit" disabled={isSubmitting}>
-          {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-          {mode === "add" ? "Add Vehicle" : "Save Changes"}
-        </Button>
-      </CardFooter>
+        <LoadingButton
+          type="submit"
+          variant="default"
+          size="sm"
+          loading={isSubmitting}
+          disabled={isSubmitting}
+          pendingLabel={mode === "add" ? "Registering..." : "Saving..."}
+          className="h-8 text-xs px-3"
+        >
+          {mode === "add" ? "Register Vehicle" : "Save Changes"}
+        </LoadingButton>
+      </div>
     </form>
   );
 }

@@ -1,23 +1,17 @@
-import { useParams, useNavigate } from "react-router-dom";
-import { useVehicle, useServiceType, useLogsForServiceType } from "../api";
+import { useParams, useNavigate, Link } from "react-router-dom";
+import { useVehicle, useServiceType, useLogsForServiceType, useDeleteMaintenanceLog } from "../api";
 import { LogCard } from "../components/LogCard";
 import { AxiosError } from "axios";
 
 // UI Components
 import { Button } from "@/components/ui/button";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Separator } from "@/components/ui/separator";
-
-// Icons
-import { ChevronLeft, ListChecks, Tag, AlertTriangle, PlusCircle } from "lucide-react";
+import { ChevronLeft, Plus } from "lucide-react";
 
 export function ServiceTypeLogHistoryPage() {
   const { vehicleId, serviceTypeId } = useParams<{ vehicleId: string; serviceTypeId: string }>();
   const navigate = useNavigate();
 
-  // --- React Query Hooks for parallel data fetching ---
   const { data: vehicle, isLoading: isLoadingVehicle, isError: isVehicleError, error: vehicleError } = useVehicle(vehicleId);
   const {
     data: serviceType,
@@ -31,90 +25,78 @@ export function ServiceTypeLogHistoryPage() {
     isError: isLogsError,
     error: logsError,
   } = useLogsForServiceType(vehicleId, serviceTypeId);
+  const deleteLogMutation = useDeleteMaintenanceLog();
 
   const isLoading = isLoadingVehicle || isLoadingServiceType || isLoadingLogs;
   const isError = isVehicleError || isServiceTypeError || isLogsError;
   const error = vehicleError || serviceTypeError || logsError;
 
-  // --- Render Logic ---
+  const handleDeleteLog = async (logId: number) => {
+    if (!vehicleId) return;
+    await deleteLogMutation.mutateAsync({ logId, vehicleId });
+  };
 
   if (isLoading) {
     return (
-      <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-6 animate-pulse">
-        <Skeleton className="h-8 w-1/2 mb-2" />
-        <div className="flex items-center gap-3 mb-1">
-          <Skeleton className="h-8 w-8" />
-          <Skeleton className="h-8 w-64" />
-        </div>
-        <Skeleton className="h-4 w-48 mb-6" />
-        <Separator />
-        <div className="space-y-4">
-          {[1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-36 rounded-lg" />
-          ))}
-        </div>
+      <div className="max-w-4xl space-y-4">
+        <Skeleton className="h-6 w-32" />
+        <Skeleton className="h-64 w-full" />
       </div>
     );
   }
 
   if (isError || !vehicle || !serviceType) {
     return (
-      <div className="p-4 md:p-6 max-w-md mx-auto">
-        <Alert variant="destructive" className="mt-10">
-          <AlertTriangle className="h-5 w-5" />
-          <AlertTitle>Error Loading Data</AlertTitle>
-          <AlertDescription>
-            {(error as AxiosError<{ detail: string }>)?.response?.data?.detail || "Could not load the requested history."}
-          </AlertDescription>
-        </Alert>
-        <Button onClick={() => navigate(`/vehicles/${vehicleId}/maintenance`)} variant="outline" className="mt-4 w-full">
-          <ChevronLeft className="mr-2 h-4 w-4" /> Back to Maintenance
-        </Button>
+      <div className="max-w-4xl space-y-4">
+        <div className="rounded-lg border border-destructive/20 bg-destructive/10 p-4 text-xs text-destructive">
+          {(error as AxiosError<{ detail: string }>)?.response?.data?.detail || "Could not load the requested history."}
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-6">
-      <header className="flex flex-col sm:flex-row justify-between items-center gap-4">
+    <div className="max-w-4xl space-y-6">
+      {/* Contextual Header */}
+      <div className="flex items-center gap-2 text-xs text-muted-foreground pb-4 border-b border-border">
+        <Link to={`/vehicles/${vehicle.id}`} className="hover:text-foreground transition-colors flex items-center gap-1">
+          <ChevronLeft className="h-3.5 w-3.5" />
+          <span>{vehicle.make} {vehicle.model}</span>
+        </Link>
+        <span className="opacity-40">/</span>
+        <span className="font-medium text-foreground">{serviceType.name} History</span>
+      </div>
+
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <div className="flex items-center gap-3 mb-1">
-            <Tag className="h-8 w-8 text-primary" />
-            <h1 className="text-3xl font-bold tracking-tight">{serviceType.name} History</h1>
-          </div>
-          <p className="text-sm text-muted-foreground ml-11">
-            For {vehicle.make} {vehicle.model}
+          <h1 className="text-xl font-medium tracking-tight text-foreground">
+            {serviceType.name} Log History
+          </h1>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {logs.length} record{logs.length !== 1 ? "s" : ""} on file for this service item.
           </p>
         </div>
-        <Button onClick={() => navigate(`/vehicles/${vehicleId}/add-log?service_type_id=${serviceTypeId}`)}>
-          <PlusCircle className="mr-2 h-5 w-5" /> Add New {serviceType.name} Log
+        <Button
+          size="sm"
+          className="h-8 px-3 text-xs gap-1.5 self-start sm:self-auto"
+          onClick={() => navigate(`/vehicles/${vehicle.id}/add-log?service_type_id=${serviceTypeId}`)}
+        >
+          <Plus className="h-3.5 w-3.5" />
+          Log This Service
         </Button>
-      </header>
+      </div>
 
-      <Separator />
-
-      <section>
-        {logs.length > 0 ? (
-          <div className="grid gap-4">
-            {logs.map((log) => (
-              <LogCard key={log.id} log={log} />
-            ))}
-          </div>
-        ) : (
-          <Card className="text-center py-10">
-            <CardHeader>
-              <ListChecks className="mx-auto h-10 w-10 text-muted-foreground" />
-              <CardTitle className="mt-4 text-xl">No Logs Found</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <CardDescription>No '{serviceType.name}' maintenance has been recorded for this vehicle.</CardDescription>
-              <Button onClick={() => navigate(`/vehicles/${vehicleId}/add-log?service_type_id=${serviceTypeId}`)} className="mt-6">
-                <PlusCircle className="mr-2 h-4 w-4" /> Add First Log
-              </Button>
-            </CardContent>
-          </Card>
-        )}
-      </section>
+      {logs.length === 0 ? (
+        <div className="rounded-lg border border-dashed border-border p-8 text-center text-xs text-muted-foreground">
+          No records logged for {serviceType.name} yet.
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {logs.map((log) => (
+            <LogCard key={log.id} log={log} onDelete={handleDeleteLog} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

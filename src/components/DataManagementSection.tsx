@@ -1,7 +1,8 @@
 import { VehicleRead } from "../types";
 import { Separator } from "@/components/ui/separator";
-import { ExportSection } from "./ExportSection"; // Import the new components
+import { ExportSection } from "./ExportSection";
 import { RestoreSection } from "./RestoreSection";
+import { GoogleDriveSyncSection } from "./GoogleDriveSyncSection";
 
 interface DataManagementSectionProps {
   allVehicles: VehicleRead[];
@@ -10,12 +11,17 @@ interface DataManagementSectionProps {
 export function DataManagementSection({ allVehicles }: DataManagementSectionProps) {
   return (
     <div className="space-y-8">
-      {/* The Export feature is now fully encapsulated */}
+      {/* Cloud Synchronization */}
+      <GoogleDriveSyncSection />
+
+      <Separator />
+
+      {/* The Export feature */}
       <ExportSection allVehicles={allVehicles} />
 
       <Separator />
 
-      {/* The Restore feature is also fully encapsulated */}
+      {/* The Restore feature */}
       <RestoreSection />
     </div>
   );

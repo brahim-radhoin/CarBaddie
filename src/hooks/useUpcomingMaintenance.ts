@@ -46,8 +46,28 @@ export function useUpcomingMaintenance({
     return allServiceTypes
       .map((st): UpcomingMaintenanceItemData | null => {
         const summary = serviceTypeSummaries.find((s) => s.service_type_id === st.id);
-        const lastPerformedDate = summary?.last_log_date ? new Date(`${summary.last_log_date}T00:00:00`) : null;
-        const lastPerformedMileage = summary?.last_log_mileage ?? null;
+        let lastPerformedDate = summary?.last_log_date ? new Date(`${summary.last_log_date}T00:00:00`) : null;
+        let lastPerformedMileage = summary?.last_log_mileage ?? null;
+
+        // Check if this service was reset by another service more recently
+        const resettingServiceTypes = allServiceTypes.filter(parent_st => parent_st.resets?.includes(st.id));
+        
+        for (const resetting_st of resettingServiceTypes) {
+          const resettingSummary = serviceTypeSummaries.find((s) => s.service_type_id === resetting_st.id);
+          
+          if (resettingSummary?.last_log_date) {
+            const resetDate = new Date(`${resettingSummary.last_log_date}T00:00:00`);
+            if (!lastPerformedDate || resetDate > lastPerformedDate) {
+              lastPerformedDate = resetDate;
+            }
+          }
+          
+          if (resettingSummary?.last_log_mileage != null) {
+            if (lastPerformedMileage == null || resettingSummary.last_log_mileage > lastPerformedMileage) {
+              lastPerformedMileage = resettingSummary.last_log_mileage;
+            }
+          }
+        }
 
         const override = vehicleIntervalOverrides.find((ov) => ov.service_type_id === st.id);
 
@@ -64,8 +84,8 @@ export function useUpcomingMaintenance({
 
         let status: UpcomingMaintenanceItemData["status"] = "OK";
         let message = "Service is up to date.";
-        let byDateInfo: UpcomingMaintenanceItemData["details"]["byDate"] | undefined;
-        let byMileageInfo: UpcomingMaintenanceItemData["details"]["byMileage"] | undefined;
+        let byDateInfo: NonNullable<UpcomingMaintenanceItemData["details"]>["byDate"] | undefined;
+        let byMileageInfo: NonNullable<UpcomingMaintenanceItemData["details"]>["byMileage"] | undefined;
         let overdueByDate = false, upcomingByDate = false;
         let overdueByMileage = false, upcomingByMileage = false;
 

@@ -4,7 +4,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 import { useTheme } from "next-themes"; // Import useTheme
 import React, { useEffect, useMemo, useState } from "react"; // Added useEffect
-import ActivityCalendar, { type Contribution, type ExplicitBlock } from "react-activity-calendar";
+import ActivityCalendar, { type Activity } from "react-activity-calendar";
 import { Tooltip as ReactTooltip } from "react-tooltip";
 import { MaintenanceLogRead } from "../types";
 
@@ -20,8 +20,8 @@ const getAvailableYears = (logs: MaintenanceLogRead[]): number[] => {
  * Generates a complete dataset for a given year, merging log counts.
  * This ensures the heatmap always displays a full year.
  */
-const generateFullYearData = (year: number, logsForYear: Record<string, { count: number }>): Contribution[] => {
-  const fullYearData: Contribution[] = [];
+const generateFullYearData = (year: number, logsForYear: Record<string, { count: number }>): Activity[] => {
+  const fullYearData: Activity[] = [];
   const startDate = new Date(year, 0, 1);
   const today = new Date();
   const currentYear = today.getFullYear();

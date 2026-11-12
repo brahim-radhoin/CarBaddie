@@ -1,5 +1,5 @@
-import { useState, useEffect, FormEvent } from "react";
-import { useParams, useNavigate, useSearchParams } from "react-router-dom";
+import { useState, useEffect, FormEvent, useMemo } from "react";
+import { useParams, useNavigate, useSearchParams, Link } from "react-router-dom";
 import {
   useVehicle,
   useServiceTypes,
@@ -10,18 +10,19 @@ import {
 } from "../api";
 import { MaintenanceLogCreate, CustomFieldValueCreate } from "../types";
 import { AxiosError } from "axios";
+import { toast } from "sonner";
+import { Checkbox } from "@/components/ui/checkbox";
 
 // UI Components & Icons
 import { Button } from "@/components/ui/button";
-import { Card, CardHeader, CardTitle, CardContent, CardFooter, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
-import { AlertTriangle, Save, Wrench, Loader2, Edit, ChevronLeft } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { ChevronLeft } from "lucide-react";
+import { LoadingButton } from "@/components/interior/loading-button";
 
 export function AddMaintenanceLogPage() {
   const { vehicleId, logId } = useParams<{ vehicleId: string; logId?: string }>();
@@ -32,7 +33,7 @@ export function AddMaintenanceLogPage() {
   // --- React Query Hooks ---
   const { data: vehicle, isLoading: isLoadingVehicle, isError: isVehicleError, error: vehicleError } = useVehicle(vehicleId);
   const { data: serviceTypes = [], isLoading: isLoadingServiceTypes } = useServiceTypes();
-  const { data: logToEdit, isLoading: isLoadingLog } = useMaintenanceLog(logId);
+  const { data: logToEdit } = useMaintenanceLog(logId);
   const addMutation = useAddMaintenanceLog();
   const updateMutation = useUpdateMaintenanceLog();
 
@@ -43,7 +44,13 @@ export function AddMaintenanceLogPage() {
   const [cost, setCost] = useState("");
   const [notes, setNotes] = useState("");
   const [customFieldValues, setCustomFieldValues] = useState<Record<string, string>>({});
-  const [isFormReady, setIsFormReady] = useState(!isEditMode); // Ready immediately in 'add' mode
+  const isFormReady = !isEditMode || (!!logToEdit && serviceTypes.length > 0);
+  const [checkedSuggestions, setCheckedSuggestions] = useState<number[]>([]);
+
+  const selectedServiceType = useMemo(
+    () => serviceTypes?.find((st) => st.id === Number(serviceTypeId)),
+    [serviceTypes, serviceTypeId]
+  );
 
   const { data: customFields, isLoading: isLoadingCustomFields } = useCustomFieldsForServiceType(serviceTypeId);
 
@@ -61,254 +68,319 @@ export function AddMaintenanceLogPage() {
       initialCustomValues[String(cfv.field_id)] = cfv.value;
     });
     setCustomFieldValues(initialCustomValues);
-    setIsFormReady(true); // Signal that the form state is populated and ready to render
   }, [isEditMode, logToEdit, serviceTypes]);
 
   const handleServiceTypeChange = (newId: string) => {
     setServiceTypeId(newId);
     setCustomFieldValues({});
+    setCheckedSuggestions([]);
   };
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!vehicleId) return;
+    if (!vehicleId || !serviceTypeId) {
+      toast.error("Please select a service type");
+      return;
+    }
 
-    const customValuesPayload: CustomFieldValueCreate[] = Object.entries(customFieldValues)
-      .filter(([, value]) => value?.trim() !== "")
-      .map(([fieldId, value]) => ({ field_id: Number(fieldId), value }));
+    const customFieldsPayload: CustomFieldValueCreate[] = Object.entries(customFieldValues)
+      .filter(([_, value]) => value !== undefined && value !== "")
+      .map(([fieldId, value]) => ({
+        field_id: Number(fieldId),
+        value: String(value),
+      }));
 
     const payload: MaintenanceLogCreate = {
       service_type_id: Number(serviceTypeId),
       date,
-      mileage: Number(mileage),
-      cost: cost ? Number(cost) : 0,
-      notes: notes.trim() || undefined,
-      custom_field_values: customValuesPayload,
+      mileage: parseInt(mileage, 10),
+      cost: cost ? parseFloat(cost) : 0,
+      notes: notes || undefined,
+      custom_field_values: customFieldsPayload,
     };
 
     if (isEditMode && logId) {
       updateMutation.mutate(
         { logId: Number(logId), logData: payload },
         {
-          onSuccess: () => navigate(`/vehicles/${vehicleId}`),
+          onSuccess: () => {
+            navigate(`/vehicles/${vehicleId}`);
+          },
         }
       );
     } else {
       addMutation.mutate(
         { vehicleId: Number(vehicleId), logData: payload },
         {
-          onSuccess: () => navigate(`/vehicles/${vehicleId}`),
+          onSuccess: async () => {
+            if (checkedSuggestions.length > 0) {
+              for (const sugId of checkedSuggestions) {
+                try {
+                  await addMutation.mutateAsync({
+                    vehicleId: Number(vehicleId),
+                    logData: {
+                      service_type_id: sugId,
+                      date,
+                      mileage: parseInt(mileage, 10),
+                      cost: 0,
+                      notes: `Co-performed with ${selectedServiceType?.name ?? "service"}`,
+                      custom_field_values: [],
+                    },
+                  });
+                } catch (err) {
+                  console.error("Failed to add suggested service log:", err);
+                }
+              }
+            }
+            navigate(`/vehicles/${vehicleId}`);
+          },
         }
       );
     }
   };
 
-  const isLoading = isLoadingVehicle || isLoadingServiceTypes || (isEditMode && isLoadingLog);
   const isSubmitting = addMutation.isPending || updateMutation.isPending;
   const mutationError = addMutation.error || updateMutation.error;
-  const pageTitle = isEditMode ? "Edit Maintenance Log" : "Add Maintenance Log";
 
-  // --- Skeleton Loader for initial data ---
-  if (isLoading) {
+  if (isLoadingVehicle || isLoadingServiceTypes) {
     return (
-      <div className="p-4 md:p-6 max-w-3xl mx-auto animate-pulse">
-        <Card className="py-0">
-          <CardHeader className="bg-muted/50 py-4">
-            <div className="flex items-center gap-3">
-              <Skeleton className="h-7 w-7 rounded-full" />
-              <div>
-                <Skeleton className="h-7 w-48 mb-1" />
-                <Skeleton className="h-4 w-64" />
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="pt-6 space-y-6">
-            {[1, 2, 3, 4, 5].map((i) => (
-              <div key={i} className="space-y-1.5">
-                <Skeleton className="h-4 w-1/4" />
-                <Skeleton className="h-10 w-full" />
-              </div>
-            ))}
-          </CardContent>
-          <CardFooter className="flex justify-end gap-2 border-t px-6 py-4 bg-muted/50">
-            <Skeleton className="h-10 w-24" />
-            <Skeleton className="h-10 w-32" />
-          </CardFooter>
-        </Card>
+      <div className="max-w-2xl space-y-4">
+        <Skeleton className="h-6 w-32" />
+        <Skeleton className="h-64 w-full" />
       </div>
     );
   }
 
-  if (isVehicleError) {
+  if (isVehicleError || !vehicle) {
     return (
-      <div className="p-4 md:p-6 max-w-md mx-auto">
-        <Alert variant="destructive" className="mt-10">
-          <AlertTriangle className="h-4 w-4" />
-          <AlertTitle>Error Loading Vehicle</AlertTitle>
-          <AlertDescription>
-            {(vehicleError as AxiosError<{ detail: string }>)?.response?.data?.detail || "Could not load vehicle data."}
-          </AlertDescription>
-        </Alert>
-        <Button onClick={() => navigate("/vehicles")} variant="outline" className="mt-4 w-full">
-          <ChevronLeft className="mr-2 h-4 w-4" />
-          Back to Vehicles List
-        </Button>
+      <div className="max-w-2xl space-y-4">
+        <div className="rounded-lg border border-destructive/20 bg-destructive/10 p-4 text-xs text-destructive">
+          {(vehicleError as AxiosError<{ detail: string }>)?.response?.data?.detail || "Could not load vehicle data."}
+        </div>
       </div>
     );
   }
 
-  // Only show loader in edit mode if form state is not yet populated from fetched data
   if (isEditMode && !isFormReady) {
     return (
-      <div className="p-4 md:p-6 max-w-3xl mx-auto">
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-3">
-              <Edit className="h-7 w-7 text-primary" />
-              <div>
-                <CardTitle className="text-2xl">{pageTitle}</CardTitle>
-                <CardDescription>
-                  For {vehicle?.make} {vehicle?.model}
-                </CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <Skeleton className="h-10 w-full mb-4" />
-            <Skeleton className="h-10 w-full mb-4" />
-            <Skeleton className="h-10 w-full mb-4" />
-          </CardContent>
-        </Card>
+      <div className="max-w-2xl space-y-4">
+        <Skeleton className="h-6 w-32" />
+        <Skeleton className="h-64 w-full" />
       </div>
     );
   }
 
   return (
-    <div className="p-4 md:p-6 max-w-3xl mx-auto">
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-3">
-            {isEditMode ? <Edit className="h-7 w-7 text-primary" /> : <Wrench className="h-7 w-7 text-primary" />}
-            <div>
-              <CardTitle className="text-2xl">{pageTitle}</CardTitle>
-              <CardDescription>
-                For {vehicle?.make} {vehicle?.model}
-              </CardDescription>
-            </div>
-          </div>
-        </CardHeader>
-        <form onSubmit={handleSubmit}>
-          <CardContent className="pt-6 space-y-6">
-            {mutationError && (
-              <Alert variant="destructive">
-                <AlertTriangle className="h-4 w-4" />
-                <AlertTitle>Submission Error</AlertTitle>
-                <AlertDescription>{(mutationError as any)?.response?.data?.detail || "An error occurred."}</AlertDescription>
-              </Alert>
-            )}
+    <div className="max-w-2xl space-y-6">
+      {/* Contextual Header */}
+      <div className="flex items-center gap-2 text-xs text-muted-foreground pb-4 border-b border-border">
+        <Link to={`/vehicles/${vehicle.id}`} className="hover:text-foreground transition-colors flex items-center gap-1">
+          <ChevronLeft className="h-3.5 w-3.5" />
+          <span>{vehicle.make} {vehicle.model}</span>
+        </Link>
+        <span className="opacity-40">/</span>
+        <span className="font-medium text-foreground">{isEditMode ? "Edit Record" : "Add Service Record"}</span>
+      </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label htmlFor="service_type_id">Service Type *</Label>
-                <Select name="service_type_id" value={serviceTypeId} onValueChange={handleServiceTypeChange} required>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a service type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {serviceTypes.map((type) => (
-                      <SelectItem key={type.id} value={String(type.id)}>
-                        {type.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="date">Date *</Label>
-                <Input id="date" name="date" type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
-              </div>
-            </div>
+      <div>
+        <h1 className="text-xl font-medium tracking-tight text-foreground">
+          {isEditMode ? "Edit Service Record" : "Log Vehicle Maintenance"}
+        </h1>
+        <p className="text-xs text-muted-foreground mt-0.5">
+          Record service date, odometer reading, cost, and technician notes.
+        </p>
+      </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label htmlFor="mileage">Mileage (km) *</Label>
-                <Input
-                  id="mileage"
-                  name="mileage"
-                  type="number"
-                  placeholder="e.g., 125000"
-                  value={mileage}
-                  onChange={(e) => setMileage(e.target.value)}
-                  min="0"
-                  required
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="cost">Cost ($)</Label>
-                <Input
-                  id="cost"
-                  name="cost"
-                  type="number"
-                  placeholder="e.g., 75.50"
-                  value={cost}
-                  onChange={(e) => setCost(e.target.value)}
-                  min="0"
-                  step="0.01"
-                />
-              </div>
+      {mutationError && (
+        <div className="rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-xs text-destructive">
+          {(mutationError as AxiosError<{ detail: string }>)?.response?.data?.detail || "An error occurred."}
+        </div>
+      )}
+
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="rounded-lg border border-border bg-card p-5 space-y-5">
+          {/* Service Type and Date */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="service_type_id" className="text-xs font-medium text-foreground">
+                Service Type <span className="text-destructive">*</span>
+              </Label>
+              <Select value={serviceTypeId} onValueChange={handleServiceTypeChange} required>
+                <SelectTrigger id="service_type_id" className="h-8 text-xs bg-background">
+                  <SelectValue placeholder="Select service category" />
+                </SelectTrigger>
+                <SelectContent>
+                  {serviceTypes.map((type) => (
+                    <SelectItem key={type.id} value={String(type.id)} className="text-xs">
+                      {type.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="notes">Notes</Label>
-              <Textarea
-                id="notes"
-                name="notes"
-                placeholder="Any additional details..."
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
+              <Label htmlFor="date" className="text-xs font-medium text-foreground">
+                Date Completed <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                id="date"
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                required
+                className="h-8 text-xs font-mono bg-background"
+              />
+            </div>
+          </div>
+
+          {/* Smart Co-Service Suggestions */}
+          {!isEditMode && selectedServiceType?.suggestions && selectedServiceType.suggestions.length > 0 && (
+            <div className="rounded border border-amber-500/25 bg-amber-500/5 p-3 text-xs space-y-2">
+              <div className="font-medium text-foreground">
+                Recommended Co-Service Items
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                Commonly inspected or replaced alongside {selectedServiceType.name}. Select to log at $0 cost:
+              </p>
+              <div className="space-y-1.5 pt-1">
+                {selectedServiceType.suggestions.map((sugId) => {
+                  const sugType = serviceTypes.find((st) => st.id === sugId);
+                  if (!sugType) return null;
+                  return (
+                    <label key={sugId} className="flex items-center gap-2 cursor-pointer text-xs">
+                      <Checkbox
+                        checked={checkedSuggestions.includes(sugId)}
+                        onCheckedChange={(checked) => {
+                          if (checked) setCheckedSuggestions([...checkedSuggestions, sugId]);
+                          else setCheckedSuggestions(checkedSuggestions.filter((id) => id !== sugId));
+                        }}
+                      />
+                      <span>{sugType.name}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Mileage and Cost */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="mileage" className="text-xs font-medium text-foreground">
+                Odometer Reading (km) <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                id="mileage"
+                type="number"
+                placeholder="e.g. 125000"
+                value={mileage}
+                onChange={(e) => setMileage(e.target.value)}
+                min="0"
+                required
+                className="h-8 text-xs font-mono bg-background"
               />
             </div>
 
-            {isLoadingCustomFields && <Skeleton className="h-10 w-1/3" />}
-            {customFields && customFields.length > 0 && (
-              <>
-                <Separator />
-                <div className="space-y-4">
-                  <h3 className="text-lg font-medium">Additional Details</h3>
-                  {customFields.map((field) => (
-                    <div key={field.id} className="space-y-1.5">
-                      <Label htmlFor={`custom-${field.id}`}>
-                        {field.name} {field.unit && `(${field.unit})`}
-                      </Label>
+            <div className="space-y-1.5">
+              <Label htmlFor="cost" className="text-xs font-medium text-foreground">
+                Cost ($)
+              </Label>
+              <Input
+                id="cost"
+                type="number"
+                placeholder="0.00"
+                value={cost}
+                onChange={(e) => setCost(e.target.value)}
+                min="0"
+                step="0.01"
+                className="h-8 text-xs font-mono bg-background"
+              />
+            </div>
+          </div>
+
+          {/* Technician Notes */}
+          <div className="space-y-1.5">
+            <Label htmlFor="notes" className="text-xs font-medium text-foreground">
+              Notes & Observations
+            </Label>
+            <Textarea
+              id="notes"
+              placeholder="Parts replaced, fluid viscosity, brand used, or mechanic recommendations..."
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              className="text-xs min-h-[70px] bg-background"
+            />
+          </div>
+
+          {/* Custom Fields */}
+          {isLoadingCustomFields && <Skeleton className="h-8 w-1/2" />}
+          {customFields && customFields.length > 0 && (
+            <div className="pt-3 border-t border-border space-y-3">
+              <p className="text-xs font-medium text-foreground">
+                Category Custom Fields
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {customFields.map((field) => (
+                  <div key={field.id} className="space-y-1">
+                    <Label htmlFor={`custom-${field.id}`} className="text-xs text-muted-foreground">
+                      {field.name} {field.unit && `(${field.unit})`}
+                    </Label>
+                    {field.field_type === "boolean" ? (
+                      <div className="flex items-center gap-2 pt-1">
+                        <Switch
+                          id={`custom-${field.id}`}
+                          checked={customFieldValues[field.id] === "true"}
+                          onCheckedChange={(checked) =>
+                            setCustomFieldValues({ ...customFieldValues, [field.id]: checked ? "true" : "false" })
+                          }
+                        />
+                        <span className="text-xs font-mono text-muted-foreground">
+                          {customFieldValues[field.id] === "true" ? "Yes" : "No"}
+                        </span>
+                      </div>
+                    ) : (
                       <Input
                         id={`custom-${field.id}`}
-                        type={field.field_type === "date" ? "date" : "text"}
+                        type={field.field_type === "date" ? "date" : field.field_type === "number" ? "number" : "text"}
+                        step={field.field_type === "number" ? "any" : undefined}
                         value={customFieldValues[field.id] || ""}
                         onChange={(e) => setCustomFieldValues({ ...customFieldValues, [field.id]: e.target.value })}
+                        className="h-8 text-xs font-mono bg-background"
                       />
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
-          </CardContent>
-          <CardFooter className="flex justify-end gap-2 border-t pt-4 mt-4">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => navigate(-1)}
-              disabled={isSubmitting}
-              className="hover:bg-secondary hover:text-secondary-foreground"
-            >
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isSubmitting || !serviceTypeId}>
-              {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-              {isEditMode ? "Save Changes" : "Save Log"}
-            </Button>
-          </CardFooter>
-        </form>
-      </Card>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Action Controls */}
+        <div className="flex items-center justify-end gap-2.5">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => navigate(-1)}
+            disabled={isSubmitting}
+            className="h-8 text-xs px-3"
+          >
+            Cancel
+          </Button>
+          <LoadingButton
+            type="submit"
+            variant="default"
+            size="sm"
+            loading={isSubmitting}
+            disabled={isSubmitting}
+            pendingLabel={isEditMode ? "Saving..." : "Recording..."}
+            className="h-8 text-xs px-3"
+          >
+            {isEditMode ? "Save Changes" : "Record Maintenance"}
+          </LoadingButton>
+        </div>
+      </form>
     </div>
   );
 }

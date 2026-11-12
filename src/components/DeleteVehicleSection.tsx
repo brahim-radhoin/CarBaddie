@@ -1,12 +1,8 @@
-import { useDeleteVehicle } from "../api"; // Adjust path if needed
-import { useNavigate } from "react-router-dom"; // Import for navigation
-
-// UI Components & Icons
+import { useDeleteVehicle } from "../api";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import {
   AlertDialog,
-  AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
@@ -15,9 +11,9 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Alert, AlertTitle, AlertDescription as UiAlertDescription } from "@/components/ui/alert";
-import { Trash2, Loader2, AlertTriangle } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import { AxiosError } from "axios";
+import { HoldToConfirm } from "@/components/interior/hold-to-confirm";
 
 interface DeleteVehicleSectionProps {
   vehicleId: number;
@@ -26,73 +22,63 @@ interface DeleteVehicleSectionProps {
 
 export function DeleteVehicleSection({ vehicleId, vehicleName }: DeleteVehicleSectionProps) {
   const navigate = useNavigate();
-  
-  // The mutation hook now handles all side effects (API call, cache invalidation, toasts).
   const { mutate: deleteVehicle, isPending, isError, error } = useDeleteVehicle();
 
   const handleDelete = () => {
-    // We only need to provide the vehicleId.
-    // The onSuccess/onError logic is now centralized in api.ts.
     deleteVehicle(vehicleId, {
       onSuccess: () => {
-        // After a successful deletion, navigate back to the main vehicle list.
         navigate("/vehicles");
       },
     });
   };
 
   return (
-    <Card className="border-destructive">
-      <CardHeader>
-        <CardTitle className="text-destructive">Danger Zone</CardTitle>
-        <CardDescription>
-          This action is permanent and cannot be undone. All associated data will be deleted.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        {/* The error display is cleaner. It only shows up if there is an error. */}
-        {isError && (
-          <Alert variant="destructive" className="mb-4">
-            <AlertTriangle className="h-4 w-4" />
-            <AlertTitle>Deletion Error</AlertTitle>
-            <UiAlertDescription>
-              {(error as AxiosError<{detail: string}>)?.response?.data?.detail || "An unexpected error occurred."}
-            </UiAlertDescription>
-          </Alert>
-        )}
-        <p>
-          If you are absolutely sure you want to delete <strong>{vehicleName}</strong>, confirm below.
+    <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-5 space-y-4">
+      <div>
+        <h3 className="text-sm font-medium text-destructive">
+          Permanently Delete Vehicle
+        </h3>
+        <p className="text-xs text-muted-foreground mt-0.5">
+          Remove {vehicleName} and all associated maintenance logs, interval overrides, and telemetry records from the database.
         </p>
-      </CardContent>
-      <CardFooter className="border-t border-destructive/30 pt-4">
+      </div>
+
+      {isError && (
+        <div className="rounded border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
+          {(error as AxiosError<{ detail: string }>)?.response?.data?.detail || "An error occurred during deletion."}
+        </div>
+      )}
+
+      <div className="pt-2 flex justify-start">
         <AlertDialog>
           <AlertDialogTrigger asChild>
-            <Button variant="destructive" disabled={isPending}>
-              {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+            <Button variant="destructive" size="sm" disabled={isPending} className="h-8 text-xs px-3">
+              <Trash2 className="mr-1.5 h-3.5 w-3.5" />
               Delete {vehicleName}
             </Button>
           </AlertDialogTrigger>
-          <AlertDialogContent>
+          <AlertDialogContent className="text-xs">
             <AlertDialogHeader>
-              <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-              <AlertDialogDescription>
-                This will permanently remove the vehicle <strong>{vehicleName}</strong> and all of its maintenance history. This action cannot be undone.
+              <AlertDialogTitle className="text-sm font-semibold">Delete {vehicleName}?</AlertDialogTitle>
+              <AlertDialogDescription className="text-xs text-muted-foreground">
+                This action is irreversible. All maintenance history, custom field entries, and interval schedules will be destroyed.
               </AlertDialogDescription>
             </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel disabled={isPending}>Cancel</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={handleDelete}
-                disabled={isPending}
-                className="bg-destructive hover:bg-destructive/90"
+            <AlertDialogFooter className="flex items-center justify-between gap-3 pt-3">
+              <AlertDialogCancel className="h-8 text-xs">Cancel</AlertDialogCancel>
+              <HoldToConfirm
+                onConfirm={handleDelete}
+                confirmLabel="Deleting Vehicle..."
+                duration={2000}
+                tone="destructive"
+                className="h-8 text-xs"
               >
-                {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Yes, delete this vehicle
-              </AlertDialogAction>
+                Hold to Delete Vehicle
+              </HoldToConfirm>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
-      </CardFooter>
-    </Card>
+      </div>
+    </div>
   );
 }

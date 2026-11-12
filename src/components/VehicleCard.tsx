@@ -1,13 +1,6 @@
 import { VehicleRead as Vehicle } from "../types";
 import { useNavigate } from "react-router-dom";
-
-// shadcn/ui components
-import { Card, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
-import { Button } from "@/components/ui/button"; // Corrected path if it's in ui directory
-import { Separator } from "@/components/ui/separator"; // Optional for visual separation
-
-// lucide-react icons
-import { ArrowRight, Car, Edit } from "lucide-react";
+import { Gauge, Calendar, ChevronRight } from "lucide-react";
 
 interface VehicleCardProps {
   vehicle: Vehicle;
@@ -16,73 +9,76 @@ interface VehicleCardProps {
 export function VehicleCard({ vehicle }: VehicleCardProps) {
   const navigate = useNavigate();
 
-  // Main click action for the card content (excluding footer actions)
-  const handleNavigateToMaintenance = () => {
-    navigate(`/vehicles/${vehicle.id}`);
-  };
+  const latestLog =
+    vehicle.maintenance_logs && vehicle.maintenance_logs.length > 0
+      ? vehicle.maintenance_logs[0]
+      : null;
 
-  // Specific action for the edit button
-  const handleNavigateToEdit = (e: React.MouseEvent) => {
-    e.stopPropagation(); // Prevent card's main click if this button is clicked
-    navigate(`/vehicles/${vehicle.id}/edit`);
-  };
+  const currentMileage = latestLog ? latestLog.mileage : vehicle.initial_mileage;
 
   return (
-    <Card className="flex flex-col h-full group transition-all hover:shadow-lg focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
-      {/* Make the content area clickable */}
-      <div
-        onClick={handleNavigateToMaintenance}
-        className="flex-grow cursor-pointer p-5 pb-3 space-y-2" // Combined CardHeader and CardContent padding
-        role="button" // Semantics for clickability
-        tabIndex={0} // Make it focusable
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") handleNavigateToMaintenance();
-        }} // Keyboard accessibility
-      >
-        <div className="flex items-start justify-between gap-2">
-          <div>
-            <CardTitle className="text-lg leading-tight">
-              {" "}
-              {/* Adjusted leading */}
+    <div
+      onClick={() => navigate(`/vehicles/${vehicle.id}`)}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") navigate(`/vehicles/${vehicle.id}`);
+      }}
+      className="group relative flex flex-col justify-between rounded-lg border border-border bg-card p-4 transition-colors hover:border-foreground/20 hover:bg-accent/30 focus-visible:ring-1 focus-visible:ring-foreground focus-visible:outline-none cursor-pointer"
+    >
+      <div>
+        {/* Top Header */}
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h3 className="font-medium text-base text-foreground leading-tight truncate">
               {vehicle.make} {vehicle.model}
-            </CardTitle>
-            {vehicle.year && (
-              <CardDescription className="text-sm text-muted-foreground">
-                {" "}
-                {/* Slightly larger description */}
-                {vehicle.year}
-              </CardDescription>
-            )}
+            </h3>
+            <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-2">
+              <span>{vehicle.year ?? "Year N/A"}</span>
+              {vehicle.vin && (
+                <>
+                  <span className="opacity-30">/</span>
+                  <span className="font-mono text-[11px] opacity-80 uppercase tracking-wide">
+                    {vehicle.vin.slice(-6)}
+                  </span>
+                </>
+              )}
+            </p>
           </div>
-          <Car className="h-6 w-6 text-primary opacity-80 group-hover:opacity-100 transition-opacity" />
+          <span className="font-mono text-xs px-2 py-0.5 rounded bg-secondary text-muted-foreground border border-border flex-shrink-0">
+            {vehicle.maintenance_logs?.length ?? 0} {vehicle.maintenance_logs?.length === 1 ? "log" : "logs"}
+          </span>
         </div>
 
-        {vehicle.vin ? (
-          <p className="text-xs text-muted-foreground pt-1 break-all">
-            VIN: <span className="font-mono">{vehicle.vin}</span> {/* Monospace for VIN */}
-          </p>
-        ) : (
-          <p className="text-xs text-muted-foreground italic pt-1">VIN not provided</p>
-        )}
+        {/* Telemetry Row */}
+        <div className="grid grid-cols-2 gap-3 mt-4 pt-3 border-t border-border/60 text-xs">
+          <div>
+            <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+              <Gauge className="h-3 w-3 opacity-60" /> Odometer
+            </span>
+            <p className="font-mono text-sm font-medium text-foreground mt-0.5">
+              {currentMileage !== null && currentMileage !== undefined
+                ? `${currentMileage.toLocaleString()} km`
+                : "—"}
+            </p>
+          </div>
+
+          <div>
+            <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+              <Calendar className="h-3 w-3 opacity-60" /> Last Service
+            </span>
+            <p className="font-mono text-xs font-medium text-foreground mt-1 truncate">
+              {latestLog ? latestLog.date : "No records"}
+            </p>
+          </div>
+        </div>
       </div>
-      <Separator /> {/* Visually separate content from actions */}
-      <CardFooter className="p-3 flex justify-between items-center">
-        {" "}
-        {/* Reduced padding for footer */}
-        <Button variant="ghost" size="sm" onClick={handleNavigateToEdit} className="text-xs h-8">
-          {" "}
-          {/* Slightly taller button */}
-          <Edit className="mr-1.5 h-3.5 w-3.5" /> Edit
-        </Button>
-        <Button
-          variant="ghost" // Changed to ghost for less emphasis, or keep as link-like
-          size="sm"
-          onClick={handleNavigateToMaintenance}
-          className="text-xs h-8 group/link text-muted-foreground hover:text-primary" // Group for specific hover on this link
-        >
-          Logs <ArrowRight className="ml-1.5 h-4 w-4 transition-transform group-hover/link:translate-x-0.5" />
-        </Button>
-      </CardFooter>
-    </Card>
+
+      {/* Card Action footer */}
+      <div className="flex items-center justify-between mt-4 pt-2 border-t border-border/40 text-xs text-muted-foreground group-hover:text-foreground transition-colors">
+        <span>View maintenance schedule</span>
+        <ChevronRight className="h-3.5 w-3.5 opacity-60 group-hover:translate-x-0.5 transition-transform" />
+      </div>
+    </div>
   );
 }

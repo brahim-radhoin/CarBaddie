@@ -4,13 +4,12 @@ import { ServiceTypeRead, VehicleServiceIntervalOverrideRead } from "../types";
 import { toast } from "sonner";
 
 // UI Components & Icons
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from "@/components/ui/select";
-import { Save, Trash2, Settings, Gauge, CalendarDays, Info, Loader2, PlusCircle } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Plus, Trash2 } from "lucide-react";
+import { LoadingButton } from "@/components/interior/loading-button";
 
 interface IntervalFormData {
   [serviceTypeId: string]: {
@@ -40,7 +39,6 @@ export function VehicleServiceIntervalsManager({
   const [manuallyAddedIds, setManuallyAddedIds] = useState<Set<number>>(new Set());
   const [selectedServiceTypeToAdd, setSelectedServiceTypeToAdd] = useState<string>("");
 
-  // This is the source of truth for which services to show in the UI.
   const serviceTypesToDisplay = useMemo(() => {
     return allServiceTypes
       .filter(
@@ -53,258 +51,223 @@ export function VehicleServiceIntervalsManager({
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [allServiceTypes, currentOverrides, manuallyAddedIds]);
 
-  // This effect ONLY syncs props to state. It does not depend on other state.
   useEffect(() => {
     const newFormData: IntervalFormData = {};
-    // We iterate over the list of types that are meant to be displayed.
     serviceTypesToDisplay.forEach((st) => {
       const override = currentOverrides.find((ov) => ov.service_type_id === st.id);
-      // We check if this form item is already being managed to preserve its dirty state on re-renders.
       const existingEntry = formData[st.id.toString()];
 
       newFormData[st.id.toString()] = {
         km: override?.override_interval_km?.toString() || "",
         days: override?.override_interval_days?.toString() || "",
-        isDirty: existingEntry?.isDirty || false, // Preserve dirty state
+        isDirty: existingEntry?.isDirty || false,
       };
     });
     setFormData(newFormData);
-  }, [currentOverrides, serviceTypesToDisplay]); // Dependency on props only
+  }, [currentOverrides, serviceTypesToDisplay]);
 
   const availableServiceTypesForOverride = useMemo(() => {
     const displayedIds = new Set(serviceTypesToDisplay.map((st) => st.id));
     return allServiceTypes.filter((st) => !displayedIds.has(st.id));
   }, [allServiceTypes, serviceTypesToDisplay]);
 
-  const handleAddServiceTypeToManage = () => {
-    if (!selectedServiceTypeToAdd) return;
-    const newId = Number(selectedServiceTypeToAdd);
-    setManuallyAddedIds((prev) => new Set(prev).add(newId));
-    setFormData((prev) => ({
-      ...prev,
-      [selectedServiceTypeToAdd]: { km: "", days: "", isDirty: false },
-    }));
-    setSelectedServiceTypeToAdd("");
-  };
-
   const handleInputChange = (serviceTypeId: number, field: "km" | "days", value: string) => {
     setFormData((prev) => ({
       ...prev,
-      [String(serviceTypeId)]: {
-        ...(prev[String(serviceTypeId)] || { km: "", days: "", isDirty: false }),
+      [serviceTypeId.toString()]: {
+        ...prev[serviceTypeId.toString()],
         [field]: value,
         isDirty: true,
       },
     }));
   };
 
-  const handleSaveOverride = (serviceTypeId: number) => {
-    const serviceData = formData[String(serviceTypeId)];
-    if (!serviceData) return;
+  const handleSave = (serviceTypeId: number) => {
+    const data = formData[serviceTypeId.toString()];
+    if (!data) return;
 
-    const payloadKm = serviceData.km.trim() === "" ? null : parseInt(serviceData.km, 10);
-    const payloadDays = serviceData.days.trim() === "" ? null : parseInt(serviceData.days, 10);
+    const km = data.km ? parseInt(data.km, 10) : undefined;
+    const days = data.days ? parseInt(data.days, 10) : undefined;
 
-    if (isNaN(payloadKm as number) || isNaN(payloadDays as number)) {
-      toast.error("Intervals must be valid numbers.");
+    if (km === undefined && days === undefined) {
+      handleDelete(serviceTypeId);
       return;
     }
 
-    upsertMutation.mutate({
-      vehicleId,
-      serviceTypeId,
-      overrideData: {
-        override_interval_km: payloadKm,
-        override_interval_days: payloadDays,
+    upsertMutation.mutate(
+      {
+        vehicleId,
+        serviceTypeId,
+        overrideData: {
+          override_interval_km: km,
+          override_interval_days: days,
+        },
       },
-    });
-  };
-
-  const handleDeleteOverride = (serviceTypeId: number) => {
-    deleteMutation.mutate(
-      { vehicleId, serviceTypeId },
       {
         onSuccess: () => {
-          const serviceType = allServiceTypes.find((st) => st.id === serviceTypeId);
-          // If the cleared service has no default interval, remove it from the manual list
-          // so it disappears from the UI entirely.
-          if (serviceType && !serviceType.recommended_interval_km && !serviceType.recommended_interval_days) {
-            setManuallyAddedIds((prev) => {
-              const newSet = new Set(prev);
-              newSet.delete(serviceTypeId);
-              return newSet;
-            });
-          }
+          setFormData((prev) => ({
+            ...prev,
+            [serviceTypeId.toString()]: {
+              ...prev[serviceTypeId.toString()],
+              isDirty: false,
+            },
+          }));
+          toast.success("Interval override updated");
         },
       }
     );
   };
 
+  const handleDelete = (serviceTypeId: number) => {
+    deleteMutation.mutate(
+      { vehicleId, serviceTypeId },
+      {
+        onSuccess: () => {
+          setFormData((prev) => {
+            const next = { ...prev };
+            delete next[serviceTypeId.toString()];
+            return next;
+          });
+          setManuallyAddedIds((prev) => {
+            const next = new Set(prev);
+            next.delete(serviceTypeId);
+            return next;
+          });
+          toast.success("Interval reset to default");
+        },
+      }
+    );
+  };
+
+  const handleAddOverride = () => {
+    if (!selectedServiceTypeToAdd) return;
+    const id = parseInt(selectedServiceTypeToAdd, 10);
+    setManuallyAddedIds((prev) => new Set(prev).add(id));
+    setSelectedServiceTypeToAdd("");
+  };
+
   if (isLoading) {
     return (
-      <section id="intervals-manager" className="space-y-6">
-        <div className="flex items-center gap-2">
-          <Settings className="h-6 w-6 text-primary" />
-          <h2 className="text-2xl font-semibold tracking-tight">Manage Service Intervals</h2>
-        </div>
-        <div className="space-y-4">
-          {[1, 2, 3].map((i) => (
-            <Card key={i}>
-              <CardHeader>
-                <Skeleton className="h-6 w-1/2" />
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-                  <div className="space-y-1.5 md:col-span-1">
-                    <Skeleton className="h-4 w-1/3" />
-                    <Skeleton className="h-10 w-full" />
-                  </div>
-                  <div className="space-y-1.5 md:col-span-1">
-                    <Skeleton className="h-4 w-1/3" />
-                    <Skeleton className="h-10 w-full" />
-                  </div>
-                  <div className="md:col-span-1 flex gap-2">
-                    <Skeleton className="h-10 w-24" />
-                    <Skeleton className="h-10 w-24" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </section>
-    );
-  }
-
-  if (!allServiceTypes.length && !isLoading) {
-    return (
-      <section id="intervals-manager" className="space-y-6">
-        <div className="flex items-center gap-2">
-          <Settings className="h-6 w-6 text-primary" />
-          <h2 className="text-2xl font-semibold tracking-tight">Manage Service Intervals</h2>
-        </div>
-        <Card className="text-center py-8">
-          <CardHeader>
-            <Info className="mx-auto h-10 w-10 text-muted-foreground mb-2" />
-          </CardHeader>
-          <CardContent>
-            <p className="text-muted-foreground">No service types have been defined in the system yet.</p>
-          </CardContent>
-        </Card>
-      </section>
+      <div className="space-y-3">
+        <Skeleton className="h-12 w-full" />
+        <Skeleton className="h-12 w-full" />
+      </div>
     );
   }
 
   return (
-    <section id="intervals-manager" className="space-y-6">
-      <div className="flex items-center gap-2">
-        <Settings className="h-6 w-6 text-primary" />
-        <h2 className="text-2xl font-semibold tracking-tight">Manage Service Intervals</h2>
+    <div className="rounded-lg border border-border bg-card p-5 space-y-5">
+      <div>
+        <h3 className="text-sm font-medium text-foreground">
+          Service Interval Overrides
+        </h3>
+        <p className="text-xs text-muted-foreground mt-0.5">
+          Customize manufacturer recommended maintenance intervals specifically for this vehicle.
+        </p>
       </div>
-      <CardDescription>Set vehicle-specific intervals. Add a service type to the list to create or update its override.</CardDescription>
 
+      {/* Add Custom Category Override */}
       {availableServiceTypesForOverride.length > 0 && (
-        <Card className="mt-6 mb-4">
-          <CardHeader>
-            <CardTitle className="text-lg">Add Override for Another Service Type</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-col sm:flex-row items-end gap-3">
-              <div className="flex-grow space-y-1.5">
-                <Label htmlFor="add-service-type-override">Select Service Type</Label>
-                <Select value={selectedServiceTypeToAdd} onValueChange={setSelectedServiceTypeToAdd}>
-                  <SelectTrigger id="add-service-type-override">
-                    <SelectValue placeholder="Choose a service..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectGroup>
-                      {availableServiceTypesForOverride.map((st) => (
-                        <SelectItem key={st.id} value={st.id.toString()}>
-                          {st.name}
-                        </SelectItem>
-                      ))}
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
-              </div>
-              <Button onClick={handleAddServiceTypeToManage} disabled={!selectedServiceTypeToAdd} className="w-full sm:w-auto">
-                <PlusCircle className="mr-2 h-4 w-4" /> Add to List
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+        <div className="flex gap-2">
+          <Select value={selectedServiceTypeToAdd} onValueChange={setSelectedServiceTypeToAdd}>
+            <SelectTrigger className="h-8 text-xs bg-background flex-1">
+              <SelectValue placeholder="Add interval for additional category..." />
+            </SelectTrigger>
+            <SelectContent>
+              {availableServiceTypesForOverride.map((st) => (
+                <SelectItem key={st.id} value={st.id.toString()} className="text-xs">
+                  {st.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button
+            size="sm"
+            onClick={handleAddOverride}
+            disabled={!selectedServiceTypeToAdd}
+            className="h-8 text-xs px-3 gap-1"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Add Override
+          </Button>
+        </div>
       )}
 
-      {/* Render the list of managed intervals */}
-      <div className="space-y-4">
-        {serviceTypesToDisplay.map((st) => {
-          const serviceData = formData[st.id.toString()];
-          if (!serviceData) return null; // Should not happen with useEffect logic
+      {/* Overrides Table */}
+      <div className="rounded border border-border overflow-hidden">
+        <table className="w-full text-left text-xs">
+          <thead className="bg-muted/40 border-b border-border text-muted-foreground font-medium">
+            <tr>
+              <th className="py-2.5 px-3">Service Category</th>
+              <th className="py-2.5 px-3">Default Schedule</th>
+              <th className="py-2.5 px-3">Vehicle Override (km)</th>
+              <th className="py-2.5 px-3">Vehicle Override (days)</th>
+              <th className="py-2.5 px-3 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border/60">
+            {serviceTypesToDisplay.map((st) => {
+              const entry = formData[st.id.toString()] || { km: "", days: "", isDirty: false };
+              const hasOverride = currentOverrides.some((ov) => ov.service_type_id === st.id);
 
-          // Check if a mutation is running for THIS specific service type
-          const isSaving = upsertMutation.isPending && upsertMutation.variables?.serviceTypeId === st.id;
-          const isDeleting = deleteMutation.isPending && deleteMutation.variables?.serviceTypeId === st.id;
-          const isBusy = isSaving || isDeleting;
-
-          // Check if an override exists in the source data from props
-          const overrideExists = currentOverrides.some((ov) => ov.service_type_id === st.id);
-
-          return (
-            <Card key={st.id}>
-              <CardHeader>
-                <CardTitle>{st.name}</CardTitle>
-                <CardDescription className="text-xs">{/* Default interval display logic is correct */}</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
-                  <div className="space-y-1.5">
-                    <Label htmlFor={`override-km-${st.id}`}>Override Mileage (km)</Label>
-                    <div className="relative">
-                      <Gauge className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4" />
-                      <Input
-                        id={`override-km-${st.id}`}
-                        type="number"
-                        placeholder={`${st.recommended_interval_km || "No default"} km`}
-                        value={serviceData.km}
-                        onChange={(e) => handleInputChange(st.id, "km", e.target.value)}
-                        min="0"
-                        className="pl-9"
-                        disabled={isBusy}
-                      />
+              return (
+                <tr key={st.id} className="hover:bg-accent/15 transition-colors">
+                  <td className="py-2.5 px-3 font-medium text-foreground">
+                    {st.name}
+                  </td>
+                  <td className="py-2.5 px-3 font-mono text-[11px] text-muted-foreground">
+                    {st.recommended_interval_km ? `${st.recommended_interval_km.toLocaleString()} km` : "—"} /{" "}
+                    {st.recommended_interval_days ? `${st.recommended_interval_days} d` : "—"}
+                  </td>
+                  <td className="py-2.5 px-3">
+                    <Input
+                      type="number"
+                      placeholder={st.recommended_interval_km?.toString() || "km"}
+                      value={entry.km}
+                      onChange={(e) => handleInputChange(st.id, "km", e.target.value)}
+                      className="h-7 text-xs font-mono w-28 bg-background"
+                    />
+                  </td>
+                  <td className="py-2.5 px-3">
+                    <Input
+                      type="number"
+                      placeholder={st.recommended_interval_days?.toString() || "days"}
+                      value={entry.days}
+                      onChange={(e) => handleInputChange(st.id, "days", e.target.value)}
+                      className="h-7 text-xs font-mono w-24 bg-background"
+                    />
+                  </td>
+                  <td className="py-2.5 px-3 text-right">
+                    <div className="flex items-center justify-end gap-1.5">
+                      <LoadingButton
+                        size="sm"
+                        variant={entry.isDirty ? "default" : "outline"}
+                        onClick={() => handleSave(st.id)}
+                        disabled={!entry.isDirty || upsertMutation.isPending}
+                        loading={upsertMutation.isPending}
+                        className="h-7 text-[11px] px-2.5"
+                      >
+                        Save
+                      </LoadingButton>
+                      {hasOverride && (
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => handleDelete(st.id)}
+                          className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                          title="Reset to default"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      )}
                     </div>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor={`override-days-${st.id}`}>Override Time (days)</Label>
-                    <div className="relative">
-                      <CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4" />
-                      <Input
-                        id={`override-days-${st.id}`}
-                        type="number"
-                        placeholder={`${st.recommended_interval_days || "No default"} days`}
-                        value={serviceData.days}
-                        onChange={(e) => handleInputChange(st.id, "days", e.target.value)}
-                        min="0"
-                        className="pl-9"
-                        disabled={isBusy}
-                      />
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-              <CardFooter className="flex justify-end gap-2 border-t px-6 py-3">
-                <Button variant="ghost" size="sm" onClick={() => handleDeleteOverride(st.id)} disabled={isBusy || !overrideExists}>
-                  {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
-                  Clear Override
-                </Button>
-                <Button size="sm" onClick={() => handleSaveOverride(st.id)} disabled={isBusy || !serviceData.isDirty}>
-                  {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                  Save
-                </Button>
-              </CardFooter>
-            </Card>
-          );
-        })}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
-    </section>
+    </div>
   );
 }

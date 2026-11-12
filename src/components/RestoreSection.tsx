@@ -1,256 +1,251 @@
 import { useState } from "react";
 import { useAnalyzeBackup, useRestoreBackup } from "../api";
-import { RestorePlan, FullBackupData, BackupAnalysisResponse } from "../types";
+import { RestorePlan, FullBackupData } from "../types";
 import { toast } from "sonner";
-import { AxiosError } from "axios";
 import { open } from "@tauri-apps/plugin-dialog";
 import { readTextFile } from "@tauri-apps/plugin-fs";
 
 // UI Components & Icons
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Upload, AlertTriangle, Loader2, SkipForward, Replace, FileUp, FileCheck2, Trash2 } from "lucide-react";
+import { Upload, Trash2 } from "lucide-react";
+import { LoadingButton } from "@/components/interior/loading-button";
+import { HoldToConfirm } from "@/components/interior/hold-to-confirm";
 
 export function RestoreSection() {
   const analyzeMutation = useAnalyzeBackup();
   const restoreMutation = useRestoreBackup();
 
-  // State encapsulated within this component
   const [backupFileName, setBackupFileName] = useState<string | null>(null);
   const [parsedBackupData, setParsedBackupData] = useState<FullBackupData | null>(null);
   const [restorePlan, setRestorePlan] = useState<RestorePlan>({ vehicles_to_add: [], conflict_resolutions: [] });
 
-  // Handle file selection with Tauri dialog
-  const handleFileSelect = async () => {
+  const processFileContent = (content: string, filename: string) => {
     try {
-      const filePath = await open({
-        multiple: false,
-        filters: [
-          {
-            name: "JSON",
-            extensions: ["json"],
-          },
-        ],
-      });
-
-      if (!filePath) {
-        console.log("User canceled file dialog");
-        return;
-      }
-
-      console.log("Selected file:", filePath);
-
-      // Read file content
-      const content = await readTextFile(filePath);
-      console.log("File content read, length:", content.length);
-
-      // Parse JSON
       const parsedData = JSON.parse(content) as FullBackupData;
-
-      // Basic validation
       if (!parsedData.metadata || !parsedData.vehicles || !parsedData.service_types) {
-        throw new Error("Invalid backup file structure.");
+        throw new Error("Invalid backup file: missing metadata, vehicles, or service_types.");
       }
 
       setParsedBackupData(parsedData);
-      setBackupFileName(filePath.split(/[/\\]/).pop() || "backup.json"); // Extract filename
+      setBackupFileName(filename);
       analyzeMutation.reset();
       setRestorePlan({ vehicles_to_add: [], conflict_resolutions: [] });
 
-      toast.success("Backup file loaded successfully");
+      toast.success("Backup loaded successfully");
     } catch (error) {
       console.error("Failed to load backup:", error);
-      if (error instanceof SyntaxError) {
-        toast.error("Could not parse the backup file. It may be corrupt or invalid.");
-      } else {
-        toast.error(`Failed to load backup file: ${error instanceof Error ? error.message : String(error)}`);
-      }
+      toast.error(`Invalid backup: ${error instanceof Error ? error.message : String(error)}`);
       handleClearFile();
     }
+  };
+
+  const handleFileSelect = async () => {
+    const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+
+    if (isTauri) {
+      try {
+        const filePath = await open({
+          multiple: false,
+          filters: [{ name: "JSON", extensions: ["json"] }],
+        });
+
+        if (!filePath) return;
+        const content = await readTextFile(filePath);
+        processFileContent(content, filePath.split(/[/\\]/).pop() || "backup.json");
+        return;
+      } catch (tauriError) {
+        console.warn("Tauri open failed, falling back to browser input:", tauriError);
+      }
+    }
+
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "application/json,.json";
+    input.onchange = (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const content = event.target?.result as string;
+        processFileContent(content, file.name);
+      };
+      reader.onerror = () => {
+        toast.error("Failed to read the file");
+      };
+      reader.readAsText(file);
+    };
+    input.click();
   };
 
   const handleClearFile = () => {
     setBackupFileName(null);
     setParsedBackupData(null);
     analyzeMutation.reset();
+    setRestorePlan({ vehicles_to_add: [], conflict_resolutions: [] });
   };
 
-  const handleAnalyzeBackup = () => {
-    if (!parsedBackupData) {
-      toast.error("No backup file loaded");
-      return;
-    }
-
-    // Create FormData with the parsed backup as a JSON string
+  const handleAnalyze = () => {
+    if (!parsedBackupData) return;
     const formData = new FormData();
-    const jsonBlob = new Blob([JSON.stringify(parsedBackupData)], { type: "application/json" });
-    formData.append("backup_file", jsonBlob, backupFileName || "backup.json");
+    const blob = new Blob([JSON.stringify(parsedBackupData)], { type: "application/json" });
+    formData.append("file", blob, backupFileName || "backup.json");
 
     analyzeMutation.mutate(formData, {
-      onSuccess: (analysis: BackupAnalysisResponse) => {
-        setRestorePlan({
+      onSuccess: (analysis) => {
+        const initialPlan: RestorePlan = {
           vehicles_to_add: analysis.new_vehicles.map((v) => v.id_in_backup),
-          conflict_resolutions: analysis.conflicting_vehicles.map((c) => ({ vin: c.vin, action: "skip" })),
-        });
+          conflict_resolutions: analysis.conflicting_vehicles.map((c) => ({
+            vin: c.vin,
+            action: "skip",
+          })),
+        };
+        setRestorePlan(initialPlan);
       },
     });
   };
 
-  const handleExecuteRestore = () => {
-    if (!analyzeMutation.data || !parsedBackupData) {
-      toast.error("Cannot execute restore without a valid analysis and parsed file.");
-      return;
-    }
-    const payload = { plan: restorePlan, backup_data: parsedBackupData };
-    restoreMutation.mutate(payload, {
-      onSuccess: () => {
-        // The hook in api.ts now handles the success toast.
-        // The page reload is a significant side effect that should stay here.
-        setTimeout(() => window.location.reload(), 1500);
-      },
-      // Error is handled by the hook in api.ts
-    });
+  const handleRestore = () => {
+    if (!parsedBackupData) return;
+    restoreMutation.mutate(
+      { backup_data: parsedBackupData, plan: restorePlan },
+      {
+        onSuccess: () => {
+          toast.success("Database restored successfully!");
+          handleClearFile();
+        },
+      }
+    );
   };
-
-  const handlePlanChange = (vin: string, action: "skip" | "replace") => {
-    setRestorePlan((prev) => ({
-      ...prev,
-      conflict_resolutions: prev.conflict_resolutions.map((res) => (res.vin === vin ? { ...res, action } : res)),
-    }));
-  };
-
-  const handleAddVehicleToggle = (id_in_backup: number) => {
-    setRestorePlan((prev) => ({
-      ...prev,
-      vehicles_to_add: prev.vehicles_to_add.includes(id_in_backup)
-        ? prev.vehicles_to_add.filter((id) => id !== id_in_backup)
-        : [...prev.vehicles_to_add, id_in_backup],
-    }));
-  };
-
-  const analysisResult = analyzeMutation.data;
 
   return (
-    <div className="space-y-4">
-      <div className="space-y-1">
-        <h3 className="text-xl font-semibold">Restore from Backup</h3>
-        <p className="text-sm text-orange-600 dark:text-orange-400">
-          <AlertTriangle className="inline h-4 w-4 mr-1.5" />
-          Warning: This action can replace existing data. Proceed with caution.
+    <div className="rounded-lg border border-border bg-card p-5 space-y-4">
+      <div>
+        <h3 className="text-sm font-medium text-foreground">
+          Import & Restore Backup
+        </h3>
+        <p className="text-xs text-muted-foreground mt-0.5">
+          Load a JSON backup file to restore vehicles, maintenance logs, and categories with dry-run conflict analysis.
         </p>
       </div>
-      <Card>
-        <CardHeader>
-          <CardTitle>Step 1: Upload Backup File</CardTitle>
-          <CardDescription>Select the `.json` backup file you wish to restore.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {!backupFileName ? (
-            <div className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg bg-muted/50">
-              <FileUp className="w-8 h-8 mb-3 text-muted-foreground" />
-              <p className="mb-2 text-sm text-muted-foreground">No file selected</p>
-              <Button onClick={handleFileSelect} variant="outline" size="sm">
-                <Upload className="mr-2 h-4 w-4" />
-                Browse for Backup File
-              </Button>
-            </div>
-          ) : (
-            <div className="flex items-center justify-between p-3 border rounded-lg bg-muted/50">
-              <div className="flex items-center gap-3">
-                <FileCheck2 className="h-6 w-6 text-green-500" />
-                <div>
-                  <span className="text-sm font-medium">{backupFileName}</span>
-                  <span className="text-xs text-muted-foreground block">Loaded successfully</span>
-                </div>
-              </div>
-              <Button variant="ghost" size="icon" onClick={handleClearFile}>
-                <Trash2 className="h-4 w-4" />
-              </Button>
+
+      {!backupFileName ? (
+        <div
+          onClick={handleFileSelect}
+          role="button"
+          tabIndex={0}
+          className="rounded border border-dashed border-border p-6 text-center hover:bg-accent/20 cursor-pointer transition-colors"
+        >
+          <Upload className="h-5 w-5 mx-auto text-muted-foreground opacity-60 mb-2" />
+          <p className="text-xs font-medium text-foreground">Select Backup JSON File</p>
+          <p className="text-[11px] text-muted-foreground mt-0.5">Click to choose a backup file from your disk</p>
+        </div>
+      ) : (
+        <div className="space-y-4 pt-2">
+          <div className="flex items-center justify-between p-3 rounded border border-border bg-background text-xs">
+            <span className="font-mono text-foreground">{backupFileName}</span>
+            <Button variant="ghost" size="sm" onClick={handleClearFile} className="h-6 text-xs text-muted-foreground hover:text-destructive">
+              <Trash2 className="h-3.5 w-3.5 mr-1" /> Remove
+            </Button>
+          </div>
+
+          {!analyzeMutation.data && (
+            <div className="flex justify-end">
+              <LoadingButton
+                size="sm"
+                onClick={handleAnalyze}
+                loading={analyzeMutation.isPending}
+                disabled={analyzeMutation.isPending}
+                pendingLabel="Analyzing..."
+                className="h-8 text-xs px-3"
+              >
+                Analyze Conflicts
+              </LoadingButton>
             </div>
           )}
-        </CardContent>
-        <CardFooter>
-          <Button onClick={handleAnalyzeBackup} disabled={!backupFileName || analyzeMutation.isPending}>
-            {analyzeMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
-            Analyze Backup File
-          </Button>
-        </CardFooter>
 
-        {analyzeMutation.isError && (
-          <CardContent>
-            <Alert variant="destructive">
-              <AlertTriangle className="h-4 w-4" />
-              <AlertTitle>Analysis Error</AlertTitle>
-              <AlertDescription>
-                {(analyzeMutation.error as AxiosError<{ detail: string }>)?.response?.data?.detail || "An unknown error occurred."}
-              </AlertDescription>
-            </Alert>
-          </CardContent>
-        )}
+          {analyzeMutation.data && (
+            <div className="space-y-4 border-t border-border pt-4 text-xs">
+              <div>
+                <p className="font-medium text-foreground">
+                  New Vehicles to Add ({analyzeMutation.data.new_vehicles.length})
+                </p>
+                <div className="space-y-1.5 mt-2">
+                  {analyzeMutation.data.new_vehicles.map((v) => (
+                    <label key={v.id_in_backup} className="flex items-center gap-2 cursor-pointer">
+                      <Checkbox
+                        checked={restorePlan.vehicles_to_add.includes(v.id_in_backup)}
+                        onCheckedChange={(checked) => {
+                          setRestorePlan((prev) => ({
+                            ...prev,
+                            vehicles_to_add: checked
+                              ? [...prev.vehicles_to_add, v.id_in_backup]
+                              : prev.vehicles_to_add.filter((id) => id !== v.id_in_backup),
+                          }));
+                        }}
+                      />
+                      <span>{v.make} {v.model} {v.vin ? `(${v.vin})` : ""}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
 
-        {analysisResult && (
-          <CardContent className="border-t pt-6 space-y-6">
-            <h3 className="text-lg font-semibold">Step 2: Configure Restore Plan</h3>
-            {analysisResult.new_vehicles.length > 0 && (
-              <div className="space-y-2">
-                <Label className="font-medium">New Vehicles to Add</Label>
-                {analysisResult.new_vehicles.map((v) => (
-                  <div key={v.id_in_backup} className="flex items-center space-x-2">
-                    <Checkbox
-                      id={`add-${v.id_in_backup}`}
-                      checked={restorePlan.vehicles_to_add.includes(v.id_in_backup)}
-                      onCheckedChange={() => handleAddVehicleToggle(v.id_in_backup)}
-                    />
-                    <Label htmlFor={`add-${v.id_in_backup}`} className="font-normal">
-                      {v.make} {v.model} ({v.vin || "No VIN"})
-                    </Label>
-                  </div>
-                ))}
-              </div>
-            )}
-            {analysisResult.conflicting_vehicles.length > 0 && (
-              <div className="space-y-4">
-                <Label className="font-medium">Conflicting Vehicles</Label>
-                {analysisResult.conflicting_vehicles.map((c) => (
-                  <div key={c.vin} className="p-4 border rounded-md">
-                    <p className="font-semibold">
-                      {c.backup_vehicle.make} {c.backup_vehicle.model} ({c.vin})
-                    </p>
-                    <RadioGroup
-                      value={restorePlan.conflict_resolutions.find((r) => r.vin === c.vin)?.action || "skip"}
-                      className="mt-2"
-                      onValueChange={(value: "skip" | "replace") => handlePlanChange(c.vin, value)}
-                    >
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="skip" id={`skip-${c.vin}`} />
-                        <Label htmlFor={`skip-${c.vin}`} className="flex items-center gap-2">
-                          <SkipForward className="h-4 w-4" /> Skip
-                        </Label>
+              {analyzeMutation.data.conflicting_vehicles.length > 0 && (
+                <div>
+                  <p className="font-medium text-destructive">
+                    Conflicting Vehicles ({analyzeMutation.data.conflicting_vehicles.length})
+                  </p>
+                  <div className="space-y-3 mt-2">
+                    {analyzeMutation.data.conflicting_vehicles.map((c) => (
+                      <div key={c.vin} className="p-3 rounded border border-border bg-background">
+                        <p className="font-medium text-foreground mb-2">
+                          {c.backup_vehicle.make} {c.backup_vehicle.model} ({c.vin})
+                        </p>
+                        <RadioGroup
+                          defaultValue="skip"
+                          onValueChange={(val) => {
+                            setRestorePlan((prev) => ({
+                              ...prev,
+                              conflict_resolutions: [
+                                ...prev.conflict_resolutions.filter((cr) => cr.vin !== c.vin),
+                                { vin: c.vin, action: val as "skip" | "replace" },
+                              ],
+                            }));
+                          }}
+                          className="flex gap-4 text-xs"
+                        >
+                          <div className="flex items-center gap-1.5">
+                            <RadioGroupItem value="skip" id={`skip-${c.vin}`} />
+                            <Label htmlFor={`skip-${c.vin}`}>Skip</Label>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <RadioGroupItem value="replace" id={`rep-${c.vin}`} />
+                            <Label htmlFor={`rep-${c.vin}`}>Overwrite existing</Label>
+                          </div>
+                        </RadioGroup>
                       </div>
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="replace" id={`replace-${c.vin}`} />
-                        <Label htmlFor={`replace-${c.vin}`} className="flex items-center gap-2 text-destructive">
-                          <Replace className="h-4 w-4" /> Replace
-                        </Label>
-                      </div>
-                    </RadioGroup>
+                    ))}
                   </div>
-                ))}
+                </div>
+              )}
+
+              <div className="pt-2 flex justify-end">
+                <HoldToConfirm
+                  onConfirm={handleRestore}
+                  confirmLabel="Restoring Database..."
+                  duration={1500}
+                  className="h-8 text-xs"
+                >
+                  Hold to Execute Restore
+                </HoldToConfirm>
               </div>
-            )}
-            <CardFooter className="px-0 pt-6">
-              <Button onClick={handleExecuteRestore} disabled={restoreMutation.isPending} variant="destructive">
-                {restoreMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <AlertTriangle className="mr-2 h-4 w-4" />}
-                Confirm and Execute Restore
-              </Button>
-            </CardFooter>
-          </CardContent>
-        )}
-      </Card>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

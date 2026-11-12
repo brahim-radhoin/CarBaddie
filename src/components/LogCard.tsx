@@ -7,10 +7,8 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,16 +16,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Separator } from "@/components/ui/separator";
-import { MaintenanceLogRead as MaintenanceLog } from "@/types"; // Use MaintenanceLogRead
-import { CalendarDays, DollarSign, Edit3, Gauge, Loader2, MoreHorizontal, Tag, Trash2 } from "lucide-react";
+import { MaintenanceLogRead as MaintenanceLog } from "@/types";
+import { Calendar, Edit3, Gauge, MoreHorizontal, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 interface LogCardProps {
   log: MaintenanceLog;
-  onDelete: (logId: number) => Promise<void>; // Callback to parent after successful delete
-  // onEdit?: (logId: number) => void; // You'd add this for edit functionality
+  onDelete: (logId: number) => Promise<void>;
 }
 
 export function LogCard({ log, onDelete }: LogCardProps) {
@@ -41,125 +37,114 @@ export function LogCard({ log, onDelete }: LogCardProps) {
         month: "short",
         day: "numeric",
       })
-    : "N/A";
+    : "—";
 
   const handleEdit = () => {
-    // Ensure log.vehicle_id is available if needed for the route
     navigate(`/vehicles/${log.vehicle_id}/logs/${log.id}/edit`);
   };
 
   const confirmDelete = async () => {
     setIsDeleting(true);
     try {
-      // API call is handled by the parent via onDelete prop
       await onDelete(log.id);
-      // Success toast/message can be handled by parent or here if desired
     } catch (error) {
-      // Error handling (e.g., toast) should ideally be managed by the parent
-      // or a global error handler, as LogCard doesn't know the broader context.
-      console.error("Failed to delete log from LogCard:", error);
+      console.error("Failed to delete log:", error);
     } finally {
       setIsDeleting(false);
-      setShowDeleteConfirm(false); // Close the dialog
+      setShowDeleteConfirm(false);
     }
   };
 
   return (
-    <Card className="hover:shadow-lg transition-shadow w-full">
-      <CardHeader className="pb-3">
-        <div className="flex justify-between items-start gap-2">
-          <CardTitle className="text-xl leading-tight">{log.service_type ? log.service_type.name : "General Maintenance"}</CardTitle>
-          {/* Actions Dropdown */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8 data-[state=open]:bg-muted flex-shrink-0">
-                <MoreHorizontal className="h-4 w-4" />
-                <span className="sr-only">Log Actions</span>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={handleEdit} className="flex items-center">
-                <Edit3 className="mr-2 h-3.5 w-3.5 text-muted-foreground" /> Edit
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
-                <AlertDialogTrigger asChild>
-                  <DropdownMenuItem
-                    onSelect={(e) => e.preventDefault()} // Prevent dropdown from closing
-                    className="flex items-center text-destructive focus:bg-destructive/10 focus:text-destructive"
-                    disabled={isDeleting}
-                  >
-                    {isDeleting ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : <Trash2 className="mr-2 h-3.5 w-3.5" />}
-                    Delete
-                  </DropdownMenuItem>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      This action cannot be undone. This will permanently delete this maintenance log.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={confirmDelete} disabled={isDeleting} className="bg-destructive hover:bg-destructive/90">
-                      {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                      Yes, delete log
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-        <div className="flex items-center gap-4 text-xs text-muted-foreground pt-1">
-          <span className="flex items-center">
-            <CalendarDays className="mr-1 h-3 w-3" />
-            {displayDate}
-          </span>
-          <span className="flex items-center">
-            <Gauge className="mr-1 h-3 w-3" /> {log.mileage.toLocaleString()} km
-          </span>
-          <span className="flex items-center">
-            <DollarSign className="mr-1 h-3 w-3" /> {log.cost.toFixed(2)}
-          </span>
-        </div>
-      </CardHeader>
-      <CardContent className="pt-2 text-sm">
-        {" "}
-        {/* Adjusted pt */}
-        {log.notes && (
-          <>
-            <p className="text-muted-foreground prose prose-sm max-w-none line-clamp-3">{log.notes}</p>
-            {log.custom_field_values && log.custom_field_values.length > 0 && <Separator className="my-3" />}
-          </>
-        )}
-        {log.custom_field_values && log.custom_field_values.length > 0 && (
-          <div>
-            <h4 className="text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wider">Details</h4>
-            <ul className="space-y-1">
-              {log.custom_field_values.map(
-                (cfv) =>
-                  cfv.custom_field && ( // Defensive check
-                    <li key={cfv.id} className="text-xs text-foreground flex justify-between items-center">
-                      <span className="flex items-center">
-                        <Tag className="mr-1.5 h-3 w-3 text-muted-foreground" />
-                        {cfv.custom_field.name}:
-                      </span>
-                      <span className="font-medium">
-                        {cfv.value}
-                        {cfv.custom_field.unit && ` ${cfv.custom_field.unit}`}
-                      </span>
-                    </li>
-                  )
-              )}
-            </ul>
+    <div className="rounded-lg border border-border bg-card p-4 transition-colors hover:border-foreground/20">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h4 className="text-sm font-medium text-foreground leading-snug">
+            {log.service_type ? log.service_type.name : "General Maintenance"}
+          </h4>
+          <div className="flex flex-wrap items-center gap-3 mt-1.5 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1 font-mono">
+              <Calendar className="h-3 w-3 opacity-60" />
+              {displayDate}
+            </span>
+            <span className="opacity-30">/</span>
+            <span className="flex items-center gap-1 font-mono">
+              <Gauge className="h-3 w-3 opacity-60" />
+              {log.mileage.toLocaleString()} km
+            </span>
+            <span className="opacity-30">/</span>
+            <span className="flex items-center gap-1 font-mono font-medium text-foreground">
+              ${log.cost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </span>
           </div>
-        )}
-        {!log.notes && (!log.custom_field_values || log.custom_field_values.length === 0) && (
-          <p className="text-xs text-muted-foreground italic">No additional notes or details.</p>
-        )}
-      </CardContent>
-    </Card>
+        </div>
+
+        {/* Actions Dropdown */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="h-7 w-7 rounded text-muted-foreground hover:text-foreground">
+              <MoreHorizontal className="h-3.5 w-3.5" />
+              <span className="sr-only">Actions</span>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="text-xs">
+            <DropdownMenuItem onClick={handleEdit}>
+              <Edit3 className="mr-2 h-3.5 w-3.5 opacity-70" />
+              Edit Record
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              className="text-destructive focus:text-destructive"
+              onClick={() => setShowDeleteConfirm(true)}
+            >
+              <Trash2 className="mr-2 h-3.5 w-3.5 opacity-70" />
+              Delete Record
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+
+      {/* Notes / Custom Field Values */}
+      {log.notes && (
+        <p className="mt-2.5 text-xs text-muted-foreground leading-relaxed pt-2 border-t border-border/40">
+          {log.notes}
+        </p>
+      )}
+
+      {log.custom_field_values && log.custom_field_values.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mt-2.5 pt-2 border-t border-border/40">
+          {log.custom_field_values.map((cf) => (
+            <span
+              key={cf.id}
+              className="font-mono text-[11px] px-2 py-0.5 rounded bg-secondary text-muted-foreground border border-border"
+            >
+              {cf.custom_field?.name ?? "Field"}: {cf.value} {cf.custom_field?.unit ?? ""}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Delete Confirmation Alert Dialog */}
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent className="text-xs">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-sm font-semibold">Delete maintenance entry?</AlertDialogTitle>
+            <AlertDialogDescription className="text-xs text-muted-foreground">
+              This action cannot be undone. This service record will be removed from your logs.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="h-8 text-xs">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              disabled={isDeleting}
+              className="h-8 text-xs bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeleting ? "Deleting..." : "Delete Record"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
   );
 }

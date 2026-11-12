@@ -16,10 +16,17 @@ const AppPreferencesContext = createContext<AppPreferencesContextType | undefine
 const DEFAULT_PRIMARY = "oklch(0.45 0.15 265)"; // Indigo
 const DEFAULT_ACCENT = "oklch(0.93 0.08 150)"; // Green
 
-// Helper to validate color string (basic check)
-const isValidColor = (color: string) => {
-  // Very basic check, mainly to prevent completely broken CSS
-  return color.startsWith("#") || color.startsWith("rgb") || color.startsWith("hsl") || color.startsWith("oklch");
+// Helper to validate color string — blocks injection patterns like `oklch(...); --background: red`
+const isValidColor = (color: string): boolean => {
+  if (!color || typeof color !== "string") return false;
+  // Reject any value containing CSS block terminators (injection vectors)
+  if (color.includes(";") || color.includes("}") || color.includes("{")) return false;
+  return (
+    color.startsWith("#") ||
+    color.startsWith("rgb") ||
+    color.startsWith("hsl") ||
+    color.startsWith("oklch")
+  );
 };
 
 // Helper to determine foreground color (black or white) based on background lightness
@@ -66,6 +73,10 @@ export function AppPreferencesProvider({ children }: { children: React.ReactNode
   // --- Effects to Update CSS Variables ---
 
   useEffect(() => {
+    if (!isValidColor(primaryColor)) {
+      console.warn("AppPreferences: invalid primary color value, skipping.");
+      return;
+    }
     const root = document.documentElement;
     root.style.setProperty("--primary", primaryColor);
 
@@ -80,6 +91,10 @@ export function AppPreferencesProvider({ children }: { children: React.ReactNode
   }, [primaryColor]);
 
   useEffect(() => {
+    if (!isValidColor(accentColor)) {
+      console.warn("AppPreferences: invalid accent color value, skipping.");
+      return;
+    }
     const root = document.documentElement;
     root.style.setProperty("--accent", accentColor);
 
@@ -92,6 +107,15 @@ export function AppPreferencesProvider({ children }: { children: React.ReactNode
 
   useEffect(() => {
     if (backgroundImage) {
+      const isSafe =
+        backgroundImage.startsWith("data:image/") ||
+        backgroundImage.startsWith("asset://") ||
+        backgroundImage.startsWith("tauri://");
+        
+      if (!isSafe) {
+        console.warn("Blocked unsafe background image URL");
+        return;
+      }
       document.body.style.backgroundImage = `url('${backgroundImage}')`;
       document.body.style.backgroundSize = "cover";
       document.body.style.backgroundPosition = "center";

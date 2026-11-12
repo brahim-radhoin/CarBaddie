@@ -1,4 +1,4 @@
-import { useParams, Link, Outlet, Navigate, useLocation, matchPath } from "react-router-dom";
+import { useParams, Link, Outlet, Navigate, useLocation, matchPath, useNavigate } from "react-router-dom";
 import { useVehicle, useServiceType } from "../api";
 import { VehicleRead } from "../types";
 import { toast } from "sonner";
@@ -6,21 +6,17 @@ import { AxiosError } from "axios";
 
 // UI Components
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbList,
-  BreadcrumbSeparator,
-  BreadcrumbPage,
-  BreadcrumbLink,
-} from "@/components/ui/breadcrumb";
 import { Button } from "@/components/ui/button";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 // Icons
-import { Car, MoreHorizontal, PlusCircle, Settings } from "lucide-react";
+import { MoreHorizontal, Plus, Settings, Edit, ChevronLeft } from "lucide-react";
 
-// This is a custom type we'll use for the context passed to child routes
 export type VehicleDetailContext = {
   vehicle: VehicleRead;
 };
@@ -28,159 +24,126 @@ export type VehicleDetailContext = {
 export function VehicleDetailPage() {
   const { vehicleId } = useParams<{ vehicleId: string }>();
   const location = useLocation();
+  const navigate = useNavigate();
 
-  // Fetch the core data for this entire section of the app
   const { data: vehicle, isLoading, isError, error } = useVehicle(vehicleId);
 
-  // Helper to extract service type ID if we are in the history view
   const historyMatch = matchPath({ path: "/vehicles/:vehicleId/history/:serviceTypeId" }, location.pathname);
   const serviceTypeId = historyMatch?.params.serviceTypeId;
-
-  // We only fetch this if we are actually on a history page
   const { data: serviceType } = useServiceType(serviceTypeId);
 
-  // --- Render Logic ---
+  const isSettings = location.pathname.endsWith("/settings");
+  const isAddLog = location.pathname.endsWith("/add-log") || location.pathname.includes("/add-log?");
+  const isEditLog = matchPath({ path: "/vehicles/:vehicleId/logs/:logId/edit" }, location.pathname);
+  const isChildPage = serviceTypeId || isSettings || isAddLog || isEditLog;
 
   if (isLoading) {
     return (
-      <div className="p-4 md:p-6 max-w-5xl mx-auto space-y-8 animate-pulse">
-        <Skeleton className="h-8 w-64" />
-        <div className="flex justify-between items-start">
-          <Skeleton className="h-12 w-96" />
-          <Skeleton className="h-12 w-48" />
-        </div>
-        <Skeleton className="h-[400px] w-full" />
+      <div className="space-y-4">
+        <Skeleton className="h-10 w-64" />
+        <Skeleton className="h-64 w-full" />
       </div>
     );
   }
 
-  // If the vehicle doesn't exist, this is a critical error. Redirect.
   if (isError) {
     toast.error((error as AxiosError<{ detail: string }>)?.response?.data?.detail || "Vehicle not found.");
     return <Navigate to="/vehicles" replace />;
   }
 
-  // If we're done loading but have no vehicle, something went wrong.
   if (!vehicle) {
     return <Navigate to="/vehicles" replace />;
   }
 
-  // Determine current child page for breadcrumbs
-  const isSettings = location.pathname.endsWith("/settings");
-  const isAddLog = location.pathname.endsWith("/add-log") || location.pathname.includes("/add-log?");
-  // Edit log path is /vehicles/:id/logs/:logId/edit
-  const isEditLog = matchPath({ path: "/vehicles/:vehicleId/logs/:logId/edit" }, location.pathname);
-
-  // If data is loaded successfully, render the common layout and the child route
   return (
-    <div className="p-4 md:p-6 max-w-5xl mx-auto space-y-6">
-      <Breadcrumb>
-        <BreadcrumbList>
-          <BreadcrumbItem>
-            <BreadcrumbLink asChild>
-              <Link to="/vehicles">Vehicles</Link>
-            </BreadcrumbLink>
-          </BreadcrumbItem>
-          <BreadcrumbSeparator />
-          <BreadcrumbItem>
-            {/* If we are on a child page, this should be a link. If we are on the root dashboard, it's the page. */}
-            {serviceTypeId || isSettings || isAddLog || isEditLog ? (
-              <BreadcrumbLink asChild>
-                <Link to={`/vehicles/${vehicleId}`}>
-                  {vehicle.make} {vehicle.model}
-                </Link>
-              </BreadcrumbLink>
-            ) : (
-              <BreadcrumbPage>
-                {vehicle.make} {vehicle.model}
-              </BreadcrumbPage>
-            )}
-          </BreadcrumbItem>
+    <div className="space-y-6 max-w-6xl">
+      {/* Contextual Header / Breadcrumbs */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-4 border-b border-border">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground min-w-0">
+          <Link
+            to="/vehicles"
+            className="hover:text-foreground transition-colors flex items-center gap-1"
+          >
+            <ChevronLeft className="h-3.5 w-3.5" />
+            <span>Vehicles</span>
+          </Link>
+          <span className="opacity-40">/</span>
+          <Link
+            to={`/vehicles/${vehicle.id}`}
+            className="font-medium text-foreground truncate hover:underline"
+          >
+            {vehicle.year ? `${vehicle.year} ` : ""}
+            {vehicle.make} {vehicle.model}
+          </Link>
 
-          {/* Dynamic Child Crumbs */}
           {serviceType && (
             <>
-              <BreadcrumbSeparator />
-              <BreadcrumbItem>
-                <BreadcrumbPage>{serviceType.name} History</BreadcrumbPage>
-              </BreadcrumbItem>
+              <span className="opacity-40">/</span>
+              <span className="truncate">{serviceType.name}</span>
             </>
           )}
-
           {isSettings && (
             <>
-              <BreadcrumbSeparator />
-              <BreadcrumbItem>
-                <BreadcrumbPage>Settings</BreadcrumbPage>
-              </BreadcrumbItem>
+              <span className="opacity-40">/</span>
+              <span>Settings</span>
             </>
           )}
-
           {isAddLog && (
             <>
-              <BreadcrumbSeparator />
-              <BreadcrumbItem>
-                <BreadcrumbPage>Add Log</BreadcrumbPage>
-              </BreadcrumbItem>
+              <span className="opacity-40">/</span>
+              <span>New Log</span>
             </>
           )}
-
           {isEditLog && (
             <>
-              <BreadcrumbSeparator />
-              <BreadcrumbItem>
-                <BreadcrumbPage>Edit Log</BreadcrumbPage>
-              </BreadcrumbItem>
+              <span className="opacity-40">/</span>
+              <span>Edit Log</span>
             </>
           )}
-        </BreadcrumbList>
-      </Breadcrumb>
-
-      <header className="flex flex-col sm:flex-row justify-between sm:items-start gap-4">
-        <div className="flex items-center gap-4">
-          <Car className="h-9 w-9 text-primary flex-shrink-0" />
-          <div>
-            <h1 className="text-3xl font-bold">
-              <Link to={`/vehicles/${vehicleId}`}>
-                {vehicle.make} {vehicle.model}
-              </Link>
-            </h1>
-            <p className="text-muted-foreground">
-              {vehicle.year} &bull; VIN: {vehicle.vin || "N/A"}
-            </p>
-          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Button size="lg" asChild>
-            <Link to="add-log">
-              <PlusCircle className="mr-2 h-5 w-5" />
-              Add Log
-            </Link>
-          </Button>
-          {!isSettings && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="lg" className="px-3">
-                  <MoreHorizontal className="h-5 w-5" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem asChild>
-                  <Link to="settings">
-                    <Settings className="mr-2 h-4 w-4" />
-                    Vehicle Settings
-                  </Link>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+
+        {/* Action Controls */}
+        <div className="flex items-center gap-2 self-start sm:self-auto flex-shrink-0">
+          {!isChildPage && (
+            <>
+              <Button
+                size="sm"
+                className="h-8 px-3 text-xs gap-1.5"
+                onClick={() => navigate(`/vehicles/${vehicle.id}/add-log`)}
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Add Log
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 px-2.5 text-xs gap-1"
+                onClick={() => navigate(`/vehicles/${vehicle.id}/edit`)}
+              >
+                <Edit className="h-3.5 w-3.5" />
+                Edit
+              </Button>
+            </>
           )}
-        </div>
-      </header>
 
-      {/* The child route will be rendered here, and we pass the vehicle data down */}
-      <main>
-        <Outlet context={{ vehicle } satisfies VehicleDetailContext} />
-      </main>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-8 w-8 rounded text-muted-foreground hover:text-foreground">
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="text-xs">
+              <DropdownMenuItem onClick={() => navigate(`/vehicles/${vehicle.id}/settings`)}>
+                <Settings className="mr-2 h-3.5 w-3.5 opacity-70" />
+                Vehicle Settings
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </div>
+
+      {/* Child Route Outlet */}
+      <Outlet context={{ vehicle }} />
     </div>
   );
 }

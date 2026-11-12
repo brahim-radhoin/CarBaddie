@@ -1,20 +1,20 @@
-// src/components/Layout.tsx
-import { Header } from "./Header";
-import { Footer } from "./Footer";
+import { Sidebar } from "./Sidebar";
 import { Toaster } from "sonner";
 import { Outlet } from "react-router-dom";
-import { useTheme } from "next-themes"; 
+import { useTheme } from "next-themes";
 
 export function Layout() {
-  const headerPaddingTop = "pt-6";
   const { resolvedTheme } = useTheme();
 
   return (
-    <div className="flex min-h-screen flex-col bg-background text-foreground">
-      <Header />
-      <Toaster richColors theme={resolvedTheme === "dark" ? "dark" : "light" } />
-      <main className={`container flex-1 ${headerPaddingTop} pb-10 md:pb-12 lg:pb-16`}><Outlet /> </main>
-      <Footer />
+    <div className="app-shell">
+      <Sidebar />
+      <div className="app-shell-content">
+        <Toaster richColors theme={resolvedTheme === "dark" ? "dark" : "light"} />
+        <main className="flex-1 p-6 md:p-8">
+          <Outlet />
+        </main>
+      </div>
     </div>
   );
 }
