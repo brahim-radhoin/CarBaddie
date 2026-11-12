@@ -1,0 +1,14 @@
+{
+  "name": "carbaddie",
+  "private": true,
+  "description": "CarBaddie vehicle maintenance tracker: desktop (Tauri), mobile (Expo) and shared core.",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "typecheck": "pnpm -r --if-present run typecheck",
+    "test": "pnpm -r --if-present run test",
+    "desktop": "pnpm --filter @carbaddie/desktop run tauri dev",
+    "mobile": "pnpm --filter @carbaddie/mobile run start"
+  }
+}

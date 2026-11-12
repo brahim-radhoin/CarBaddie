@@ -1,0 +1,14 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Archived .git folders of the three repos this monorepo was merged from
+.old-repos/
+
+# Local backup exports
+/carbaddie_*export*.json
+
+# Logs and OS files
+*.log
+.DS_Store
+Thumbs.db
