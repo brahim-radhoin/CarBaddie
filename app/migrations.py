@@ -38,7 +38,29 @@ def run_migrations(database_path: str | None = None):
     # Check if Alembic files exist (they must be bundled with PyInstaller)
     if not alembic_ini.exists():
         print(f"[Migrations] WARNING: alembic.ini not found at {alembic_ini}")
-        print("[Migrations] Skipping migrations - ensure alembic files are bundled with PyInstaller")
+        print("[Migrations] Falling back to SQLAlchemy create_all to ensure all tables exist...")
+        # Use create_all as a fallback. This is idempotent — it only creates
+        # tables that don't already exist, so existing data is safe.
+        import asyncio
+        from app.database import engine
+        from app.models.base import Base
+        
+        async def _create_tables():
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+        
+        # Handle case where we're already inside an event loop vs not
+        try:
+            loop = asyncio.get_running_loop()
+            # We're in a sync context called before the async app starts,
+            # so we need a new event loop
+            raise RuntimeError("Need new loop")
+        except RuntimeError:
+            if sys.platform == "win32":
+                asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+            asyncio.run(_create_tables())
+        
+        print("[Migrations] Table schema ensured via create_all.")
         return
     
     if not alembic_dir.exists():

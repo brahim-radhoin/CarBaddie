@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Column, Integer, String, Date, Float, Text, ForeignKey, UniqueConstraint
+from sqlalchemy import Boolean, Column, Integer, String, Date, Float, Text, ForeignKey, UniqueConstraint, Table
 from sqlalchemy.orm import relationship, declarative_base
 
 Base = declarative_base()
@@ -34,6 +34,18 @@ class MaintenanceLog(Base):
     custom_field_values = relationship("CustomFieldValue", back_populates="maintenance_log", cascade="all, delete-orphan")
 
 
+service_type_resets = Table(
+    'service_type_resets', Base.metadata,
+    Column('parent_id', Integer, ForeignKey('service_types.id', ondelete='CASCADE'), primary_key=True),
+    Column('reset_id', Integer, ForeignKey('service_types.id', ondelete='CASCADE'), primary_key=True)
+)
+
+service_type_suggestions = Table(
+    'service_type_suggestions', Base.metadata,
+    Column('parent_id', Integer, ForeignKey('service_types.id', ondelete='CASCADE'), primary_key=True),
+    Column('suggestion_id', Integer, ForeignKey('service_types.id', ondelete='CASCADE'), primary_key=True)
+)
+
 class ServiceType(Base):
     __tablename__ = "service_types"
 
@@ -48,6 +60,20 @@ class ServiceType(Base):
         "CustomField",
         back_populates="service_type",
         cascade="all, delete-orphan"
+    )
+    resets = relationship(
+        "ServiceType",
+        secondary=service_type_resets,
+        primaryjoin="ServiceType.id == service_type_resets.c.parent_id",
+        secondaryjoin="ServiceType.id == service_type_resets.c.reset_id",
+        backref="reset_by"
+    )
+    suggestions = relationship(
+        "ServiceType",
+        secondary=service_type_suggestions,
+        primaryjoin="ServiceType.id == service_type_suggestions.c.parent_id",
+        secondaryjoin="ServiceType.id == service_type_suggestions.c.suggestion_id",
+        backref="suggested_by"
     )
 
 class CustomField(Base):

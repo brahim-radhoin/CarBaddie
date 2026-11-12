@@ -3,7 +3,7 @@ from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 from typing import List
 
-from app.models.base import ServiceType, CustomField
+from app.models.base import ServiceType, CustomField, service_type_resets, service_type_suggestions
 from app.schemas import ServiceTypeCreate, ServiceTypeUpdate
 from fastapi import HTTPException, status
 
@@ -47,15 +47,32 @@ async def create_service_type(db: AsyncSession, service_type_data: ServiceTypeCr
         # Flush again to process the new fields within the same transaction
         await db.flush()
 
-    # Refresh the service type to load the 'fields' relationship collection from the DB
-    await db.refresh(db_service_type, attribute_names=['fields'])
+    # Handle resets and suggestions via association table inserts instead of
+    # relationship assignment (avoids MissingGreenlet lazy-load on set)
+    if service_type_data.resets:
+        for reset_id in service_type_data.resets:
+            await db.execute(
+                service_type_resets.insert().values(parent_id=db_service_type.id, reset_id=reset_id)
+            )
+        
+    if service_type_data.suggestions:
+        for suggestion_id in service_type_data.suggestions:
+            await db.execute(
+                service_type_suggestions.insert().values(parent_id=db_service_type.id, suggestion_id=suggestion_id)
+            )
+
+    await db.flush()
     return db_service_type
 
 async def get_service_types(db: AsyncSession) -> List[ServiceType]:
-    """Gets all service types, including their custom fields."""
+    """Gets all service types, including their custom fields, resets, and suggestions."""
     result = await db.execute(
         select(ServiceType)
-        .options(selectinload(ServiceType.fields))
+        .options(
+            selectinload(ServiceType.fields),
+            selectinload(ServiceType.resets),
+            selectinload(ServiceType.suggestions)
+        )
         .order_by(ServiceType.name)
     )
     return result.scalars().all()
@@ -65,7 +82,11 @@ async def get_service_type_by_id(db: AsyncSession, service_type_id: int) -> Serv
     result = await db.execute(
         select(ServiceType)
         .where(ServiceType.id == service_type_id)
-        .options(selectinload(ServiceType.fields))
+        .options(
+            selectinload(ServiceType.fields),
+            selectinload(ServiceType.resets),
+            selectinload(ServiceType.suggestions)
+        )
     )
     service_type = result.scalar_one_or_none()
     if not service_type:
@@ -80,7 +101,7 @@ async def update_service_type_by_id(db: AsyncSession, service_type_id: int, upda
     service_type = await get_service_type_by_id(db, service_type_id)
 
     # Update scalar properties (name, intervals) from the Pydantic model
-    update_data_dict = updated_data.model_dump(exclude_unset=True, exclude={'fields'})
+    update_data_dict = updated_data.model_dump(exclude_unset=True, exclude={'fields', 'resets', 'suggestions'})
     for key, value in update_data_dict.items():
         setattr(service_type, key, value)
 
@@ -102,10 +123,28 @@ async def update_service_type_by_id(db: AsyncSession, service_type_id: int, upda
         ]
         db.add_all(new_fields)
     
+    # Handle resets via association table (avoids MissingGreenlet)
+    if updated_data.resets is not None:
+        await db.execute(
+            service_type_resets.delete().where(service_type_resets.c.parent_id == service_type_id)
+        )
+        for reset_id in updated_data.resets:
+            await db.execute(
+                service_type_resets.insert().values(parent_id=service_type_id, reset_id=reset_id)
+            )
+
+    # Handle suggestions via association table (avoids MissingGreenlet)
+    if updated_data.suggestions is not None:
+        await db.execute(
+            service_type_suggestions.delete().where(service_type_suggestions.c.parent_id == service_type_id)
+        )
+        for suggestion_id in updated_data.suggestions:
+            await db.execute(
+                service_type_suggestions.insert().values(parent_id=service_type_id, suggestion_id=suggestion_id)
+            )
+
     # Flush all staged changes (scalar updates, new fields)
     await db.flush()
-    # Refresh the main service_type object to get its final state including any new/updated fields
-    await db.refresh(service_type, attribute_names=['fields'])
     return service_type
 
 async def delete_service_type_by_id(db: AsyncSession, service_type_id: int) -> None:

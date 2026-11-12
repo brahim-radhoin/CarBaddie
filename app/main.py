@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -5,11 +6,20 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api import vehicles, service_types, maintenance_logs, backup, vehicle_definitions
 # from app.auth.basic_auth import verify_credentials
 
+from app.seed_service_types import seed_service_types
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Run startup scripts
+    await seed_service_types()
+    yield
+
 # 1. Create the FastAPI app instance
 app = FastAPI(
     title="CarBaddie API",
     description="A precision-engineered vehicle maintenance log system.",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan
 )
 
 origins = [    

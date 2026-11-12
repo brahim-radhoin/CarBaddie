@@ -28,8 +28,8 @@ async def add_service_type_route(service_type_data: ServiceTypeCreate, db: Async
     """
     new_service_type = await create_service_type(db, service_type_data)
     await db.commit()
-    # The CRUD function returns the fully refreshed object, so we can return it directly.
-    return new_service_type
+    # Re-fetch with eager loading to avoid MissingGreenlet during serialization
+    return await get_service_type_by_id(db, new_service_type.id)
 
 @router.get("/", response_model=List[ServiceTypeRead])
 async def list_service_types_route(db: AsyncSession = Depends(get_db)):
@@ -52,10 +52,10 @@ async def update_service_type_route(service_type_id: int, updated_data: ServiceT
     """
     Updates a service type's properties and/or its custom fields.
     """
-    updated_service_type = await update_service_type_by_id(db, service_type_id, updated_data)
-    # The CRUD function raises 404 if not found.
+    await update_service_type_by_id(db, service_type_id, updated_data)
     await db.commit()
-    return updated_service_type
+    # Re-fetch with eager loading to avoid MissingGreenlet during serialization
+    return await get_service_type_by_id(db, service_type_id)
 
 @router.delete("/{service_type_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_service_type_route(service_type_id: int, db: AsyncSession = Depends(get_db)):

@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List, Literal
 from datetime import date, datetime, timezone 
 
@@ -37,10 +37,29 @@ class ServiceTypeBase(BaseModel):
 
 class ServiceTypeCreate(ServiceTypeBase):
     fields: List[CustomFieldCreate] = [] # Default to empty list if not provided
+    resets: List[int] = []
+    suggestions: List[int] = []
 
-class ServiceTypeRead(ServiceTypeBase):
+class ServiceTypeBasic(ServiceTypeBase):
     id: int
     fields: List[CustomFieldRead] = []
+
+    model_config = {
+        "from_attributes": True
+    }
+
+class ServiceTypeRead(ServiceTypeBasic):
+    resets: List[int] = []
+    suggestions: List[int] = []
+
+    @field_validator("resets", "suggestions", mode="before")
+    @classmethod
+    def extract_ids(cls, v):
+        if not v:
+            return []
+        if hasattr(v[0], "id"):
+            return [item.id for item in v]
+        return v
 
     model_config = {
         "from_attributes": True
@@ -51,6 +70,8 @@ class ServiceTypeUpdate(BaseModel):
     recommended_interval_km: Optional[int] = Field(default=None, ge=0)
     recommended_interval_days: Optional[int] = Field(default=None, ge=0)
     fields: Optional[List[CustomFieldCreate]] = None # For adding/replacing fields
+    resets: Optional[List[int]] = None
+    suggestions: Optional[List[int]] = None
 
 class ServiceTypeLogSummary(BaseModel):
     service_type_id: int
@@ -106,7 +127,7 @@ class MaintenanceLogCreate(MaintenanceLogBase):
 class MaintenanceLogRead(MaintenanceLogBase):
     id: int
     vehicle_id: int # Included for clarity, though often derivable from context
-    service_type: Optional[ServiceTypeRead] = None 
+    service_type: Optional[ServiceTypeBasic] = None 
     custom_field_values: List[CustomFieldValueRead] = [] # Nested list of custom field values with their definitions
     # parent_log: Optional['MaintenanceLogRead'] = None # For recursive structures, needs careful handling
     # child_logs: List['MaintenanceLogRead'] = []    # For recursive structures

@@ -1,4 +1,4 @@
-from sqlalchemy.ext.asyncio import AsyncSession
+﻿from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload, subqueryload
@@ -15,7 +15,11 @@ async def get_configured_backup_data(db: AsyncSession, config: BackupConfigurati
     """
     # 1. Fetch all Service Types (we always include these for context)
     service_types_result = await db.execute(
-        select(ServiceType).options(selectinload(ServiceType.fields))
+        select(ServiceType).options(
+            selectinload(ServiceType.fields),
+            selectinload(ServiceType.resets),
+            selectinload(ServiceType.suggestions)
+        )
     )
     all_service_types = service_types_result.scalars().all()
 
@@ -47,9 +51,11 @@ async def get_configured_backup_data(db: AsyncSession, config: BackupConfigurati
         # Also load the nested relationships for each log
         logs_loader = logs_loader.options(
             selectinload(MaintenanceLog.custom_field_values).selectinload(CustomFieldValue.custom_field),
-            selectinload(MaintenanceLog.service_type) # service_type definition for the log
+            selectinload(MaintenanceLog.service_type).selectinload(ServiceType.fields)
         )
         loader_options.append(logs_loader)
+    else:
+        loader_options.append(subqueryload(Vehicle.maintenance_logs.and_(MaintenanceLog.id == -1)))
 
     # Apply all loader options to the main vehicle query
     if loader_options:

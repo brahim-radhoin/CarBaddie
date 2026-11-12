@@ -3,6 +3,7 @@ import json
 
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from pydantic import BaseModel
+from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
 
@@ -83,3 +84,12 @@ async def execute_restore_from_backup_route(
 
     # A 204 No Content response is returned on success.
     return
+
+@router.delete("/wipe_database", status_code=status.HTTP_204_NO_CONTENT)
+async def wipe_database_route(db: AsyncSession = Depends(get_db)):
+    """Permanently deletes all vehicles, maintenance logs, and interval overrides."""
+    from app.models.base import MaintenanceLog, VehicleServiceIntervalOverride, Vehicle
+    await db.execute(delete(MaintenanceLog))
+    await db.execute(delete(VehicleServiceIntervalOverride))
+    await db.execute(delete(Vehicle))
+    await db.commit()
