@@ -78,6 +78,11 @@ async def get_configured_backup_data(db: AsyncSession, config: BackupConfigurati
     return backup_data
 
 
+def _vehicle_key(make, model, year):
+    """Identity used for vehicles without a VIN: case-insensitive make/model plus year."""
+    return ((make or "").strip().lower(), (model or "").strip().lower(), year)
+
+
 async def analyze_backup_file(db: AsyncSession, backup_data: FullBackupData) -> BackupAnalysisResponse:
     """
     Analyzes a backup file against the current database to find new vs. conflicting vehicles.
@@ -86,8 +91,15 @@ async def analyze_backup_file(db: AsyncSession, backup_data: FullBackupData) -> 
     existing_vins_query = await db.execute(select(Vehicle.vin, Vehicle.id).where(Vehicle.vin.is_not(None)))
     existing_vin_map = {vin: id for vin, id in existing_vins_query.all()}
 
+    # Vehicles without a VIN have no stable identity across devices. Treat a backup vehicle
+    # without a VIN as already present when a local VIN-less vehicle has the same
+    # make/model/year, so repeated restores and Drive syncs don't duplicate it.
+    no_vin_query = await db.execute(select(Vehicle.make, Vehicle.model, Vehicle.year).where(Vehicle.vin.is_(None)))
+    existing_no_vin_keys = {_vehicle_key(make, model, year) for make, model, year in no_vin_query.all()}
+
     new_vehicles: List[BackupVehicleInfo] = []
     conflicting_vehicles: List[BackupConflictInfo] = []
+    skipped_duplicates: List[BackupVehicleInfo] = []
 
     # 2. Iterate through vehicles from the backup file
     for vehicle_from_backup in backup_data.vehicles:
@@ -107,13 +119,18 @@ async def analyze_backup_file(db: AsyncSession, backup_data: FullBackupData) -> 
                 backup_vehicle=info,
                 existing_vehicle_id=existing_vin_map[vehicle_from_backup.vin]
             ))
+        elif not vehicle_from_backup.vin and _vehicle_key(
+            vehicle_from_backup.make, vehicle_from_backup.model, vehicle_from_backup.year
+        ) in existing_no_vin_keys:
+            skipped_duplicates.append(info)
         else:
             # No VIN or VIN is not in the database
             new_vehicles.append(info)
 
     return BackupAnalysisResponse(
         new_vehicles=new_vehicles,
-        conflicting_vehicles=conflicting_vehicles
+        conflicting_vehicles=conflicting_vehicles,
+        skipped_duplicates=skipped_duplicates,
     )
 
 

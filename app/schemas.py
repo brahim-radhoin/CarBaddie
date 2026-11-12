@@ -274,6 +274,9 @@ class BackupAnalysisResponse(BaseModel):
     """The response from the analysis endpoint, outlining what was found."""
     new_vehicles: List[BackupVehicleInfo]
     conflicting_vehicles: List[BackupConflictInfo]
+    # VIN-less vehicles that match a local VIN-less vehicle (same make/model/year).
+    # They are not imported, to avoid creating duplicates on every restore/sync.
+    skipped_duplicates: List[BackupVehicleInfo] = []
 
 class ConflictResolution(BaseModel):
     """Defines the user's choice for a single conflicting vehicle."""
