@@ -17,6 +17,14 @@ const STORAGE_AUTO_SYNC = "carbaddie_gdrive_auto_sync";
 const STORAGE_CLIENT_ID = "carbaddie_gdrive_client_id";
 const BACKUP_FILENAME = "carbaddie_backup.json";
 
+/** Thrown when Drive has no CarBaddie backup file yet (as opposed to a network/auth failure). */
+export class BackupNotFoundError extends Error {
+  constructor(message = "No 'carbaddie_backup.json' found in your Google Drive.") {
+    super(message);
+    this.name = "BackupNotFoundError";
+  }
+}
+
 const DEFAULT_GOOGLE_CLIENT_ID = "58648902421-3ksgpe4l3jetkbvi5rusivmp02glltuq.apps.googleusercontent.com";
 
 function generateCodeVerifier(): string {
@@ -386,7 +394,7 @@ export async function downloadBackupFromGoogleDrive(): Promise<{
   const file = listData.files?.[0];
 
   if (!file) {
-    throw new Error("No 'carbaddie_backup.json' found in your Google Drive.");
+    throw new BackupNotFoundError();
   }
 
   const downloadUrl = `https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`;

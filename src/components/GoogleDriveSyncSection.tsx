@@ -7,6 +7,7 @@ import {
   setAutoSyncEnabled,
   uploadBackupToGoogleDrive,
   downloadBackupFromGoogleDrive,
+  BackupNotFoundError,
   GoogleDriveStatus,
 } from "../services/googleDrive";
 import { useExportBackup, useAnalyzeBackup, useRestoreBackup } from "../api";
@@ -77,7 +78,7 @@ export function GoogleDriveSyncSection() {
       // 2. Prepare FormData for analyze
       const formData = new FormData();
       const jsonBlob = new Blob([JSON.stringify(backupData)], { type: "application/json" });
-      formData.append("file", jsonBlob, "carbaddie_backup.json");
+      formData.append("backup_file", jsonBlob, "carbaddie_backup.json");
 
       const analysis = await analyzeBackup(formData);
       const newCount = analysis.new_vehicles.length;
@@ -110,7 +111,12 @@ export function GoogleDriveSyncSection() {
       refreshStatus();
       toast.success("Synchronized with Google Drive!");
     } catch (e: any) {
-      // If no file exists in Drive yet, push local up
+      // Only push local data up when Drive has no backup yet. Any other failure
+      // (network, restore error, expired token) must not overwrite the Drive copy.
+      if (!(e instanceof BackupNotFoundError)) {
+        toast.error(e?.message || "Sync failed.");
+        return;
+      }
       try {
         const localBlob = await exportBackup({ include_maintenance_logs: true });
         const text = await localBlob.text();

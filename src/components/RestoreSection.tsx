@@ -92,7 +92,7 @@ export function RestoreSection() {
     if (!parsedBackupData) return;
     const formData = new FormData();
     const blob = new Blob([JSON.stringify(parsedBackupData)], { type: "application/json" });
-    formData.append("file", blob, backupFileName || "backup.json");
+    formData.append("backup_file", blob, backupFileName || "backup.json");
 
     analyzeMutation.mutate(formData, {
       onSuccess: (analysis) => {

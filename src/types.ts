@@ -242,6 +242,8 @@ export interface BackupAnalysisResponse {
     };
     existing_vehicle_id: number;
   }[];
+  /** VIN-less vehicles matching a local one (make/model/year); not imported. */
+  skipped_duplicates?: BackupAnalysisResponse["new_vehicles"];
 }
 
 /** The restore plan sent to the execution endpoint. Mirrors `RestorePlan`. */
