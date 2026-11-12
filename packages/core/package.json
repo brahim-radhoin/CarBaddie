@@ -1,0 +1,20 @@
+{
+  "name": "@carbaddie/core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Domain types and logic shared by the CarBaddie desktop and mobile apps.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "node --test \"test/**/*.test.ts\""
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.1",
+    "typescript": "~5.7.2"
+  }
+}

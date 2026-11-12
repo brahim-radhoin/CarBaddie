@@ -1,4 +1,5 @@
 import type { SQLiteDatabase } from "expo-sqlite";
+import { vehicleIdentityKey } from "@carbaddie/core";
 import { getDatabase } from "./schema";
 import * as repo from "./repository";
 import type {
@@ -59,12 +60,10 @@ export async function analyzeBackup(backupData: FullBackupData): Promise<BackupA
   // Vehicles without a VIN have no stable identity across devices. Treat a backup vehicle
   // without a VIN as already present when a local VIN-less vehicle has the same
   // make/model/year, so repeated restores and Drive syncs don't duplicate it.
-  const vehicleKey = (make?: string | null, model?: string | null, year?: number | null) =>
-    `${(make ?? "").trim().toLowerCase()}|${(model ?? "").trim().toLowerCase()}|${year ?? ""}`;
   const noVinRows = await db.getAllAsync<{ make: string; model: string; year: number | null }>(
     "SELECT make, model, year FROM vehicles WHERE vin IS NULL OR TRIM(vin) = ''"
   );
-  const existingNoVinKeys = new Set(noVinRows.map(r => vehicleKey(r.make, r.model, r.year)));
+  const existingNoVinKeys = new Set(noVinRows.map(r => vehicleIdentityKey(r.make, r.model, r.year)));
   const skippedDuplicates: BackupAnalysisResponse["new_vehicles"] = [];
 
   const newVehicles: BackupAnalysisResponse["new_vehicles"] = [];
@@ -86,7 +85,7 @@ export async function analyzeBackup(backupData: FullBackupData): Promise<BackupA
         backup_vehicle: { make: v.make, model: v.model, year: v.year, vin: v.vin },
         existing_vehicle_id: vinMap.get(v.vin)!,
       });
-    } else if (!v.vin && existingNoVinKeys.has(vehicleKey(v.make, v.model, v.year))) {
+    } else if (!v.vin && existingNoVinKeys.has(vehicleIdentityKey(v.make, v.model, v.year))) {
       skippedDuplicates.push(info);
     } else {
       newVehicles.push(info);
