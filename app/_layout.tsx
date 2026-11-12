@@ -66,12 +66,19 @@ export default function RootLayout() {
   return <RootLayoutNav />;
 }
 
+// useAutoSync needs the QueryClient, so it must run in a component rendered
+// *inside* QueryClientProvider, not in the component that renders the provider.
+function AutoSync() {
+  useAutoSync();
+  return null;
+}
+
 function RootLayoutNav() {
   const colorScheme = useColorScheme();
-  useAutoSync();
 
   return (
     <QueryClientProvider client={queryClient}>
+      <AutoSync />
       <ThemeProvider value={colorScheme === "dark" ? CarBaddieDark : CarBaddieLight}>
         <Stack>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />

@@ -1,3 +1,4 @@
+import type { SQLiteDatabase } from "expo-sqlite";
 import { getDatabase } from "./schema";
 import * as repo from "./repository";
 import type {
@@ -55,6 +56,17 @@ export async function analyzeBackup(backupData: FullBackupData): Promise<BackupA
   );
   const vinMap = new Map(existingVins.map(v => [v.vin, v.id]));
 
+  // Vehicles without a VIN have no stable identity across devices. Treat a backup vehicle
+  // without a VIN as already present when a local VIN-less vehicle has the same
+  // make/model/year, so repeated restores and Drive syncs don't duplicate it.
+  const vehicleKey = (make?: string | null, model?: string | null, year?: number | null) =>
+    `${(make ?? "").trim().toLowerCase()}|${(model ?? "").trim().toLowerCase()}|${year ?? ""}`;
+  const noVinRows = await db.getAllAsync<{ make: string; model: string; year: number | null }>(
+    "SELECT make, model, year FROM vehicles WHERE vin IS NULL OR TRIM(vin) = ''"
+  );
+  const existingNoVinKeys = new Set(noVinRows.map(r => vehicleKey(r.make, r.model, r.year)));
+  const skippedDuplicates: BackupAnalysisResponse["new_vehicles"] = [];
+
   const newVehicles: BackupAnalysisResponse["new_vehicles"] = [];
   const conflictingVehicles: BackupAnalysisResponse["conflicting_vehicles"] = [];
 
@@ -74,12 +86,14 @@ export async function analyzeBackup(backupData: FullBackupData): Promise<BackupA
         backup_vehicle: { make: v.make, model: v.model, year: v.year, vin: v.vin },
         existing_vehicle_id: vinMap.get(v.vin)!,
       });
+    } else if (!v.vin && existingNoVinKeys.has(vehicleKey(v.make, v.model, v.year))) {
+      skippedDuplicates.push(info);
     } else {
       newVehicles.push(info);
     }
   }
 
-  return { new_vehicles: newVehicles, conflicting_vehicles: conflictingVehicles };
+  return { new_vehicles: newVehicles, conflicting_vehicles: conflictingVehicles, skipped_duplicates: skippedDuplicates };
 }
 
 // ====================================================================
@@ -88,6 +102,12 @@ export async function analyzeBackup(backupData: FullBackupData): Promise<BackupA
 
 export async function executeImport(backupData: FullBackupData, plan: RestorePlan): Promise<void> {
   const db = await getDatabase();
+  // One transaction: "replace" deletes the local vehicle before re-inserting it, so a
+  // failure halfway must roll back instead of leaving the vehicle deleted.
+  await db.withTransactionAsync(() => executeImportInTransaction(db, backupData, plan));
+}
+
+async function executeImportInTransaction(db: SQLiteDatabase, backupData: FullBackupData, plan: RestorePlan): Promise<void> {
 
   // --- Step 1: Handle Replacements (delete existing vehicles being replaced) ---
   const vinsToReplace = new Set(
