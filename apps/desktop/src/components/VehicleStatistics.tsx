@@ -190,7 +190,7 @@ export function VehicleStatistics({
                       fontSize: "12px",
                       borderRadius: "6px",
                     }}
-                    formatter={(val: number) => [`$${val.toFixed(2)}`, "Cumulative"]}
+                    formatter={(val) => [`$${Number(val ?? 0).toFixed(2)}`, "Cumulative"]}
                   />
                   <Line
                     type="monotone"
@@ -235,7 +235,7 @@ export function VehicleStatistics({
                         fontSize: "12px",
                         borderRadius: "6px",
                       }}
-                      formatter={(val: number) => [`$${val.toFixed(2)}`, "Cost"]}
+                      formatter={(val) => [`$${Number(val ?? 0).toFixed(2)}`, "Cost"]}
                     />
                   </PieChart>
                 </ResponsiveContainer>

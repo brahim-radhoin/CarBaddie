@@ -64,7 +64,6 @@ native layer — SQLite via tauri-plugin-sql, OAuth loopback, keychain, notifica
 
 ## Known open issues
 
-- `pnpm typecheck` fails in apps/desktop `VehicleStatistics.tsx` (recharts Tooltip formatter types); predates step 3.
 - Step 5 must handle two devices creating the same VIN (partial unique index on live VINs) and name
   collisions of custom service types; built-ins and interval overrides already share ids across devices.
 
