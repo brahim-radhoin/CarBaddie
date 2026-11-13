@@ -28,5 +28,6 @@ tauri-plugin-fs = "2.4.2"
 tauri-plugin-dialog = "2.0"
 tauri-plugin-window-state = "2.4.1"
 rusqlite = { version = "0.32", features = ["bundled", "backup"] }
+keyring = { version = "3", features = ["windows-native", "apple-native", "linux-native"] }
 
 

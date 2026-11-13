@@ -1,4 +1,5 @@
 mod db;
+mod secrets;
 
 use tauri_plugin_log::{Builder, Target, TargetKind};
 use std::sync::{Arc, Mutex};
@@ -34,7 +35,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .msg { font-size: 14px; color: #10b981; font-weight: 600; margin: 16px 0 8px; }
 .hint { font-size: 12px; color: #64748b; }
 </style></head>
-<body><div class="card"><div class="logo">CarBaddie</div><div class="msg">&#10003; Sign-in Successful</div><div class="hint">Your garage records are now synced. You may close this tab.</div></div>
+<body><div class="card"><div class="logo">CarBaddie</div><div class="msg">&#10003; Google responded</div><div class="hint">Return to CarBaddie to finish signing in. You may close this tab.</div></div>
 <script>setTimeout(function(){ window.close(); }, 1500);</script>
 </body></html>"#;
 
@@ -104,7 +105,10 @@ pub fn run() {
             db::db_open,
             db::db_exec,
             db::db_run,
-            db::db_all
+            db::db_all,
+            secrets::secret_get,
+            secrets::secret_set,
+            secrets::secret_delete
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

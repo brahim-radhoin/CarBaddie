@@ -58,23 +58,30 @@ its connection pool can't keep BEGIN/COMMIT on one connection).
    desktop migrates its existing DB in place (copy saved first as `car_baddie.before-v<N>-<ts>.db`);
    migration v3 drops `vehicle_definitions`/`alembic_version`; catalog is `apps/desktop/src/data/
    vehicle-catalog.json`, loaded lazily; no DB is bundled. Verified on a copy of the real desktop DB.
-5. NEXT — Sync engine: each device appends its own change files to Drive `appDataFolder`
-   (`drive.appdata` scope), merges others' changes by last-writer-wins on the HLC, compacts into
-   snapshots. JSON/CSV export stays as a separate backup feature. OAuth: separate client per
-   platform, PKCE + `state`, tokens in OS keychain (not localStorage).
+5. DONE (core + desktop) — sync engine (`packages/core/src/sync/engine.ts`, `files.ts`, `drive.ts`): each
+   device writes only its own files to Drive `appDataFolder` (`carbaddie-chg-<device>-<seq>.json`, compacted
+   into `carbaddie-snap-<device>-<seq>.json` after 50), merges others' rows by last-writer-wins on the HLC.
+   Same live VIN → merged into the smaller id (`vehicles.merged_into`, migration v4; children moved); same
+   service type / active field name → larger id renamed "Name (2)"; children of deleted parents tombstoned.
+   Files from a newer schema are refused. Sync state is in app_settings (`sync.*`). Desktop: PKCE + `state`
+   loopback sign-in, refresh token in the OS keychain (`src-tauri/src/secrets.rs`, keyring crate),
+   `useAutoSync` (start, 5 min, focus, after edits); set `VITE_GOOGLE_CLIENT_SECRET` if the Desktop OAuth
+   client demands its (non-confidential) secret. Verified on a copy of the real desktop DB vs a fresh device.
+   NEXT: mobile — native Google OAuth client + Expo dev build (Expo Go can't take the redirect),
+   expo-auth-session PKCE, expo-secure-store, then `openRepository(...).sync(createDriveTransport(...))`.
 6. Domain upgrades: garage visits with multiple service items (`service_events` + items),
    first-class `odometer_readings`, money as integer cents + currency, km canonical with display
    units, local notifications from the engine.
 
 ## Known open issues
 
-- Step 5 must handle two devices creating the same VIN (partial unique index on live VINs) and name
-  collisions of custom service types; built-ins and interval overrides already share ids across devices.
 - Desktop's service types came from the old backend seed; on the user's real DB 6 of 17 matched a core
-  built-in name and got its slug/UUID. Mobile seeds 25. Nothing reconciles the two lists yet.
-- Drive sync is still snapshot-restore: VIN matches are replaced by the incoming copy (remote wins),
-  mobile pushes its whole DB on every foreground. Replaced by step 5.
+  built-in name and got its slug/UUID. Mobile seeds 25. Nothing reconciles the two lists, so the first
+  sync gives desktop every built-in it lacked (real DB: 17 → 36 types); near-duplicates by meaning may show.
+- Mobile Drive sync is still snapshot-restore of `carbaddie_backup.json` (VIN matches replaced, whole DB
+  pushed on every foreground). Desktop only touches that file through its "Save/Import backup file" buttons.
 - Desktop dashboard counts "overdue" as >365 days since last log instead of using
   `computeUpcomingMaintenance` (the shared hook exists in apps/desktop/src/hooks but is unused).
-- Desktop "auto sync" toggle does nothing. Mobile Google sign-in uses implicit flow, no refresh token.
+- Mobile Google sign-in uses implicit flow, no refresh token, token stored in app_settings.
+- Desktop sign-in not yet tried against Google with the new scopes; the sync engine is only tested in-memory.
 - Tauri capability allows writing text files anywhere (`"**"`).

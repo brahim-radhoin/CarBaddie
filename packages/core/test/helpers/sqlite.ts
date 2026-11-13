@@ -35,5 +35,6 @@ export function testContext(deviceId = "0190a0a0-0000-7000-8000-000000000001", s
     deviceId,
     stamp: () => clock.now(),
     newId: () => uuidv7(wall++),
+    observe: (stamp) => clock.observe(stamp),
   };
 }

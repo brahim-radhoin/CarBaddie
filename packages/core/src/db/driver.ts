@@ -1,6 +1,5 @@
 // The minimum a SQLite connection must offer for the shared migrations and seed.
-// Mobile adapts expo-sqlite to it; tests adapt node:sqlite; desktop will adapt
-// tauri-plugin-sql in roadmap step 4.
+// Mobile adapts expo-sqlite to it, desktop its rusqlite commands, tests node:sqlite.
 
 export type SqlValue = string | number | null;
 
@@ -18,4 +17,6 @@ export interface WriteContext {
   stamp(): string;
   /** A fresh row id (UUIDv7). */
   newId(): string;
+  /** Advances the clock past a timestamp received from another device. */
+  observe(stamp: string): void;
 }

@@ -1,66 +1,93 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   getGoogleDriveStatus,
-  setGoogleDriveToken,
   disconnectGoogleDrive,
   signInWithGoogle,
   setAutoSyncEnabled,
   uploadBackupToGoogleDrive,
   downloadBackupFromGoogleDrive,
-  BackupNotFoundError,
   GoogleDriveStatus,
 } from "../services/googleDrive";
-import { useExportBackup, useAnalyzeBackup, useRestoreBackup } from "../api";
-import { FullBackupData } from "../types";
+import { getLastSyncTime, resetSyncProgress, syncNow, SYNCED_EVENT } from "../services/sync";
+import { useAnalyzeBackup, useRestoreBackup } from "../api";
+import { getRepository } from "../db";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { Cloud, RotateCw, LogOut, ChevronDown, ChevronUp } from "lucide-react";
+import { Cloud, RotateCw, LogOut, ChevronDown, ChevronUp, Upload, Download } from "lucide-react";
+
+const errorText = (e: unknown, fallback: string) => (e instanceof Error && e.message) || fallback;
 
 export function GoogleDriveSyncSection() {
   const queryClient = useQueryClient();
   const [status, setStatus] = useState<GoogleDriveStatus>({ isConnected: false, autoSyncEnabled: true });
+  const [lastSync, setLastSync] = useState<string | null>(null);
   const [isSigningIn, setIsSigningIn] = useState(false);
-  const [isSyncing, setIsSyncing] = useState(false);
+  const [busy, setBusy] = useState<"sync" | "upload" | "download" | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [customClientId, setCustomClientId] = useState("");
-  const [manualTokenInput, setManualTokenInput] = useState("");
 
-  const { mutateAsync: exportBackup } = useExportBackup();
   const { mutateAsync: analyzeBackup } = useAnalyzeBackup();
   const { mutateAsync: executeRestore } = useRestoreBackup();
 
-  const refreshStatus = () => {
-    setStatus(getGoogleDriveStatus());
-  };
+  const refreshStatus = useCallback(async () => {
+    setStatus(await getGoogleDriveStatus());
+    setLastSync(await getLastSyncTime());
+  }, []);
 
   useEffect(() => {
     refreshStatus();
-  }, []);
+    const onSynced = () => void refreshStatus();
+    window.addEventListener(SYNCED_EVENT, onSynced);
+    return () => window.removeEventListener(SYNCED_EVENT, onSynced);
+  }, [refreshStatus]);
+
+  const runSync = async (quiet = false) => {
+    try {
+      setBusy("sync");
+      const result = await syncNow();
+      if (result.applied > 0) await queryClient.invalidateQueries();
+      if (!quiet) {
+        toast.success(
+          result.applied > 0
+            ? `Synced: ${result.applied} change${result.applied === 1 ? "" : "s"} from your other devices.`
+            : "Everything is in sync.",
+        );
+      }
+    } catch (e) {
+      toast.error(errorText(e, "Sync failed."));
+    } finally {
+      setBusy(null);
+    }
+  };
 
   const handleGoogleSignIn = async () => {
     try {
       setIsSigningIn(true);
       const res = await signInWithGoogle(customClientId.trim() || undefined);
       if (res.success) {
-        refreshStatus();
-        toast.success(`Connected to Google Drive as ${res.email || "User"}!`);
+        await resetSyncProgress(); // possibly another account: send everything there
+        await refreshStatus();
+        toast.success(`Connected to Google Drive as ${res.email || "your Google account"}.`);
+        await runSync(true);
       } else if (res.error) {
         toast.error(res.error);
       }
-    } catch (e: any) {
-      toast.error(e.message || "Failed to sign in with Google.");
     } finally {
       setIsSigningIn(false);
     }
   };
 
-  const handleDisconnect = () => {
-    disconnectGoogleDrive();
-    refreshStatus();
-    toast.info("Google Drive disconnected.");
+  const handleDisconnect = async () => {
+    try {
+      await disconnectGoogleDrive();
+      toast.info("Google Drive disconnected.");
+    } catch (e) {
+      toast.error(errorText(e, "Failed to disconnect."));
+    }
+    await refreshStatus();
   };
 
   const handleToggleAutoSync = (enabled: boolean) => {
@@ -69,74 +96,47 @@ export function GoogleDriveSyncSection() {
     toast.info(enabled ? "Automatic background sync enabled." : "Automatic sync paused.");
   };
 
-  const handleSyncNow = async () => {
+  /** Writes the visible backup file (readable by the mobile app and older versions). */
+  const handleUploadBackupFile = async () => {
     try {
-      setIsSyncing(true);
-      // 1. Download latest from Google Drive
+      setBusy("upload");
+      const backup = await (await getRepository()).exportBackup({ include_maintenance_logs: true });
+      await uploadBackupToGoogleDrive(backup);
+      await refreshStatus();
+      toast.success("Backup file saved to Google Drive.");
+    } catch (e) {
+      toast.error(errorText(e, "Backup upload failed."));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  /** Adds vehicles from the backup file that aren't here yet; vehicles already here are left as they are. */
+  const handleImportBackupFile = async () => {
+    try {
+      setBusy("download");
       const { backupData } = await downloadBackupFromGoogleDrive();
-
-      // 2. Compare it with local data
       const analysis = await analyzeBackup(backupData);
-      const newCount = analysis.new_vehicles.length;
-      const conflictCount = analysis.conflicting_vehicles.length;
-
-      if (newCount === 0 && conflictCount === 0) {
-        // Local is already in sync or newer -> push local
-        const localBlob = await exportBackup({ include_maintenance_logs: true });
-        const text = await localBlob.text();
-        const localData: FullBackupData = JSON.parse(text);
-        const res = await uploadBackupToGoogleDrive(localData);
-        refreshStatus();
-        toast.success(`In sync with Google Drive! (${new Date(res.modifiedTime).toLocaleTimeString()})`);
+      if (analysis.new_vehicles.length === 0) {
+        toast.info("The Drive backup file has no vehicles that aren't already here.");
         return;
       }
-
-      // Restore newer changes
       await executeRestore({
         backup_data: backupData,
         plan: {
           vehicles_to_add: analysis.new_vehicles.map((v) => v.id_in_backup),
-          conflict_resolutions: analysis.conflicting_vehicles.map((c) => ({
-            vin: c.vin,
-            action: "replace",
-          })),
+          conflict_resolutions: analysis.conflicting_vehicles.map((c) => ({ vin: c.vin, action: "skip" })),
         },
       });
-
-      queryClient.invalidateQueries();
-      refreshStatus();
-      toast.success("Synchronized with Google Drive!");
-    } catch (e: any) {
-      // Only push local data up when Drive has no backup yet. Any other failure
-      // (network, restore error, expired token) must not overwrite the Drive copy.
-      if (!(e instanceof BackupNotFoundError)) {
-        toast.error(e?.message || "Sync failed.");
-        return;
-      }
-      try {
-        const localBlob = await exportBackup({ include_maintenance_logs: true });
-        const text = await localBlob.text();
-        const localData: FullBackupData = JSON.parse(text);
-        const res = await uploadBackupToGoogleDrive(localData);
-        refreshStatus();
-        toast.success(`First backup saved to Google Drive! (${new Date(res.modifiedTime).toLocaleTimeString()})`);
-      } catch (err: any) {
-        toast.error(err.message || "Sync failed.");
-      }
+      const skipped = analysis.conflicting_vehicles.length;
+      toast.success(
+        `Added ${analysis.new_vehicles.length} vehicle(s) from the Drive backup file` +
+          (skipped ? `; kept your copy of ${skipped} already here.` : "."),
+      );
+    } catch (e) {
+      toast.error(errorText(e, "Import failed."));
     } finally {
-      setIsSyncing(false);
-    }
-  };
-
-  const handleManualTokenSave = async () => {
-    if (!manualTokenInput.trim()) return;
-    try {
-      await setGoogleDriveToken(manualTokenInput.trim());
-      refreshStatus();
-      setManualTokenInput("");
-      toast.success("Access token saved.");
-    } catch (e: any) {
-      toast.error(e.message || "Failed to save token.");
+      setBusy(null);
     }
   };
 
@@ -158,7 +158,7 @@ export function GoogleDriveSyncSection() {
             </span>
           </div>
           <p className="text-xs text-muted-foreground mt-1">
-            Seamless background synchronization with Google Drive across your PC and mobile devices.
+            Keeps your devices in step through a private folder in your Google Drive. Changes made on each device are merged.
           </p>
         </div>
 
@@ -184,9 +184,9 @@ export function GoogleDriveSyncSection() {
               </div>
               <span className="font-medium text-foreground">{status.email || "Connected Google Account"}</span>
             </div>
-            {status.lastBackupTime && (
+            {lastSync && (
               <span className="text-muted-foreground font-mono text-[11px]">
-                Last synced: {new Date(status.lastBackupTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                Last synced: {new Date(lastSync).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
               </span>
             )}
           </div>
@@ -194,29 +194,44 @@ export function GoogleDriveSyncSection() {
           <div className="flex items-center justify-between py-2 border-y border-border/40 text-xs">
             <div>
               <p className="font-medium text-foreground">Automatic Background Sync</p>
-              <p className="text-[11px] text-muted-foreground">Keep database up to date whenever changes occur.</p>
+              <p className="text-[11px] text-muted-foreground">
+                Sync at start, every few minutes, when the window is focused and after each change.
+              </p>
             </div>
-            <Switch
-              checked={status.autoSyncEnabled}
-              onCheckedChange={handleToggleAutoSync}
-            />
+            <Switch checked={status.autoSyncEnabled} onCheckedChange={handleToggleAutoSync} />
           </div>
 
-          <div className="flex gap-2 pt-1">
+          <div className="flex flex-wrap gap-2 pt-1">
+            <Button size="sm" onClick={() => runSync()} disabled={busy !== null} className="h-8 text-xs font-medium gap-1.5">
+              <RotateCw className={`h-3.5 w-3.5 ${busy === "sync" ? "animate-spin" : ""}`} />
+              {busy === "sync" ? "Syncing..." : "Sync Now"}
+            </Button>
             <Button
               size="sm"
-              onClick={handleSyncNow}
-              disabled={isSyncing}
-              className="h-8 text-xs font-medium gap-1.5"
+              variant="outline"
+              onClick={handleUploadBackupFile}
+              disabled={busy !== null}
+              className="h-8 text-xs gap-1.5"
+              title={`Writes carbaddie_backup.json to your Drive${status.lastBackupTime ? ` (last: ${new Date(status.lastBackupTime).toLocaleString()})` : ""}`}
             >
-              <RotateCw className={`h-3.5 w-3.5 ${isSyncing ? "animate-spin" : ""}`} />
-              {isSyncing ? "Syncing with Drive..." : "Sync Now"}
+              <Upload className="h-3.5 w-3.5" />
+              {busy === "upload" ? "Saving..." : "Save backup file"}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleImportBackupFile}
+              disabled={busy !== null}
+              className="h-8 text-xs gap-1.5"
+              title="Adds vehicles from carbaddie_backup.json (e.g. written by the mobile app) that aren't here yet"
+            >
+              <Download className="h-3.5 w-3.5" />
+              {busy === "download" ? "Importing..." : "Import backup file"}
             </Button>
           </div>
         </div>
       ) : (
         <div className="pt-3 border-t border-border/60 space-y-3">
-          {/* Consumer-friendly Google Sign In */}
           <Button
             onClick={handleGoogleSignIn}
             disabled={isSigningIn}
@@ -228,7 +243,7 @@ export function GoogleDriveSyncSection() {
             {isSigningIn ? "Connecting to Google..." : "Sign in with Google"}
           </Button>
           <p className="text-[11px] text-muted-foreground">
-            Sign in to automatically sync your garage database to your personal Google Drive.
+            Sign in to sync your garage between devices through your personal Google Drive.
           </p>
 
           <button
@@ -241,31 +256,14 @@ export function GoogleDriveSyncSection() {
           </button>
 
           {showAdvanced && (
-            <div className="p-3 rounded-lg border border-border/60 bg-background/50 space-y-3">
-              <div className="space-y-1">
-                <label className="text-[11px] font-medium text-foreground">Custom Google Client ID (Optional)</label>
-                <Input
-                  placeholder="Enter custom OAuth Client ID"
-                  value={customClientId}
-                  onChange={(e) => setCustomClientId(e.target.value)}
-                  className="h-7 text-xs font-mono bg-background"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-[11px] font-medium text-foreground">Direct Access Token Fallback</label>
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="ya29..."
-                    value={manualTokenInput}
-                    onChange={(e) => setManualTokenInput(e.target.value)}
-                    className="h-7 text-xs font-mono bg-background"
-                  />
-                  <Button size="sm" onClick={handleManualTokenSave} className="h-7 text-xs px-3">
-                    Save
-                  </Button>
-                </div>
-              </div>
+            <div className="p-3 rounded-lg border border-border/60 bg-background/50 space-y-1">
+              <label className="text-[11px] font-medium text-foreground">Custom Google Client ID (Optional)</label>
+              <Input
+                placeholder="Enter custom OAuth Client ID"
+                value={customClientId}
+                onChange={(e) => setCustomClientId(e.target.value)}
+                className="h-7 text-xs font-mono bg-background"
+              />
             </div>
           )}
         </div>

@@ -6,19 +6,13 @@ import { HlcClock } from "../sync/hlc.ts";
 import { migrate } from "./migrations.ts";
 import { createRepository, type Repository } from "./repository.ts";
 import { seedBuiltinServiceTypes } from "./seed.ts";
+import { resetSyncState, runSync } from "../sync/engine.ts";
+import { SYNCED_TABLES } from "../sync/tables.ts";
 import type { SqlDriver, WriteContext } from "./driver";
+import type { SyncOptions, SyncResult } from "../sync/engine";
+import type { SyncTransport } from "../sync/transport";
 
-/** Tables that carry sync columns (updated_at, deleted_at, device_id). */
-export const SYNCED_TABLES = [
-  "vehicles",
-  "service_types",
-  "custom_fields",
-  "maintenance_logs",
-  "custom_field_values",
-  "vehicle_service_interval_overrides",
-  "service_type_resets",
-  "service_type_suggestions",
-] as const;
+export { SYNCED_TABLES };
 
 const DEVICE_ID_KEY = "device_id";
 
@@ -27,6 +21,10 @@ export interface OpenedDatabase {
   deviceId: string;
   /** Schema versions before and after opening. */
   migrated: { from: number; to: number };
+  /** Pulls other devices' changes, merges them and pushes this device's (sync/engine.ts). */
+  sync(transport: SyncTransport, options?: SyncOptions): Promise<SyncResult>;
+  /** Forget sync progress, e.g. after connecting another account; the next sync re-sends everything. */
+  resetSync(): Promise<void>;
 }
 
 export async function openRepository(db: SqlDriver, wallClock: () => number = Date.now): Promise<OpenedDatabase> {
@@ -40,7 +38,12 @@ export async function openRepository(db: SqlDriver, wallClock: () => number = Da
   }
 
   const clock = new HlcClock(deviceId, null, wallClock);
-  const ctx: WriteContext = { deviceId, stamp: () => clock.now(), newId: () => uuidv7(wallClock()) };
+  const ctx: WriteContext = {
+    deviceId,
+    stamp: () => clock.now(),
+    newId: () => uuidv7(wallClock()),
+    observe: (stamp) => clock.observe(stamp),
+  };
 
   const migrated = await migrate(db, ctx); // leaves foreign key enforcement on
 
@@ -51,5 +54,11 @@ export async function openRepository(db: SqlDriver, wallClock: () => number = Da
   if (latest[0]?.latest) clock.observe(latest[0].latest);
 
   await seedBuiltinServiceTypes(db, ctx);
-  return { repo: createRepository(db, ctx), deviceId, migrated };
+  return {
+    repo: createRepository(db, ctx),
+    deviceId,
+    migrated,
+    sync: (transport, options) => runSync(db, ctx, transport, options),
+    resetSync: () => resetSyncState(db),
+  };
 }

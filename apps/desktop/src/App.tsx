@@ -14,9 +14,11 @@ import { SettingsPage } from "./pages/SettingsPage";
 import { StartupScreen } from "./components/StartupScreen";
 import { ErrorScreen } from "./components/ErrorScreen";
 import { useDatabaseBootstrap } from "./hooks/useDatabaseBootstrap";
+import { useAutoSync } from "./hooks/useAutoSync";
 
 export default function App() {
   const { status, errorMessage, logs, retry } = useDatabaseBootstrap();
+  useAutoSync(status === "running");
 
   if (status === "starting") {
     return <StartupScreen backendLogs={logs} progress={50} />;

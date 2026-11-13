@@ -20,6 +20,14 @@ export type { RandomBytes } from "./ids/uuid";
 
 export { HlcClock, formatHlc, parseHlc, tickHlc, receiveHlc } from "./sync/hlc";
 export type { Hlc } from "./sync/hlc";
+export { runSync, resetSyncState, SYNC_SETTING_KEYS } from "./sync/engine";
+export type { SyncOptions, SyncResult } from "./sync/engine";
+export { parseSyncFile, parseSyncFileName, syncFileName, syncFileSchema } from "./sync/files";
+export type { SyncFile, SyncFileName, SyncRow } from "./sync/files";
+export type { RemoteFile, SyncTransport } from "./sync/transport";
+export { createDriveTransport, DriveError, DRIVE_APPDATA_SCOPE } from "./sync/drive";
+export type { DriveTransportOptions } from "./sync/drive";
+export { SYNCED_TABLE_INFO } from "./sync/tables";
 
 export {
   BUILTIN_SERVICE_TYPES,

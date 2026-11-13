@@ -356,6 +356,15 @@ export const MIGRATIONS: readonly Migration[] = [
     checkForeignKeys: false,
     up: (db) => db.exec("DROP TABLE IF EXISTS vehicle_definitions; DROP TABLE IF EXISTS alembic_version;"),
   },
+  {
+    // Sync merges two live vehicles with the same VIN into one: the duplicate is tombstoned
+    // and points at the vehicle it was merged into, so logs that arrive for it later
+    // (from a device that hadn't seen the merge yet) can be moved over too.
+    version: 4,
+    description: "vehicles.merged_into for sync merges",
+    checkForeignKeys: false,
+    up: (db) => db.exec("ALTER TABLE vehicles ADD COLUMN merged_into TEXT"),
+  },
 ];
 
 export const LATEST_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;
