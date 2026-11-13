@@ -1,7 +1,6 @@
 import { Link } from "react-router-dom";
 import { useServiceTypes, useDeleteServiceType } from "../api";
 import { ServiceTypeRead } from "../types";
-import { AxiosError } from "axios";
 
 // UI Components & Icons
 import { Button } from "@/components/ui/button";
@@ -44,7 +43,7 @@ export function ManageServiceTypesPage() {
     return (
       <div className="max-w-4xl space-y-4">
         <div className="rounded-lg border border-destructive/20 bg-destructive/10 p-4 text-xs text-destructive">
-          {(error as AxiosError<{ detail: string }>)?.response?.data?.detail || "Could not fetch service types."}
+          {(error as Error | null)?.message || "Could not fetch service types."}
         </div>
       </div>
     );

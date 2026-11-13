@@ -20,7 +20,7 @@ interface IntervalFormData {
 }
 
 interface VehicleServiceIntervalsManagerProps {
-  vehicleId: number;
+  vehicleId: string;
   allServiceTypes: ServiceTypeRead[];
   currentOverrides: VehicleServiceIntervalOverrideRead[];
   isLoading: boolean;
@@ -36,7 +36,7 @@ export function VehicleServiceIntervalsManager({
   const deleteMutation = useDeleteIntervalOverride();
 
   const [formData, setFormData] = useState<IntervalFormData>({});
-  const [manuallyAddedIds, setManuallyAddedIds] = useState<Set<number>>(new Set());
+  const [manuallyAddedIds, setManuallyAddedIds] = useState<Set<string>>(new Set());
   const [selectedServiceTypeToAdd, setSelectedServiceTypeToAdd] = useState<string>("");
 
   const serviceTypesToDisplay = useMemo(() => {
@@ -71,7 +71,7 @@ export function VehicleServiceIntervalsManager({
     return allServiceTypes.filter((st) => !displayedIds.has(st.id));
   }, [allServiceTypes, serviceTypesToDisplay]);
 
-  const handleInputChange = (serviceTypeId: number, field: "km" | "days", value: string) => {
+  const handleInputChange = (serviceTypeId: string, field: "km" | "days", value: string) => {
     setFormData((prev) => ({
       ...prev,
       [serviceTypeId.toString()]: {
@@ -82,7 +82,7 @@ export function VehicleServiceIntervalsManager({
     }));
   };
 
-  const handleSave = (serviceTypeId: number) => {
+  const handleSave = (serviceTypeId: string) => {
     const data = formData[serviceTypeId.toString()];
     if (!data) return;
 
@@ -118,7 +118,7 @@ export function VehicleServiceIntervalsManager({
     );
   };
 
-  const handleDelete = (serviceTypeId: number) => {
+  const handleDelete = (serviceTypeId: string) => {
     deleteMutation.mutate(
       { vehicleId, serviceTypeId },
       {
@@ -141,7 +141,7 @@ export function VehicleServiceIntervalsManager({
 
   const handleAddOverride = () => {
     if (!selectedServiceTypeToAdd) return;
-    const id = parseInt(selectedServiceTypeToAdd, 10);
+    const id = selectedServiceTypeToAdd;
     setManuallyAddedIds((prev) => new Set(prev).add(id));
     setSelectedServiceTypeToAdd("");
   };

@@ -1,5 +1,4 @@
 import { Navigate, Route, Routes } from "react-router-dom";
-import { useState } from "react";
 import { Layout } from "./components/Layout";
 import { AddEditServiceTypePage } from "./pages/AddEditServiceTypePage";
 import { AddMaintenanceLogPage } from "./pages/AddMaintenanceLog";
@@ -12,22 +11,19 @@ import { VehicleMaintenancePage } from "./pages/VehicleMaintenancePage";
 import { VehicleSettingsPage } from "./pages/VehicleSettingsPage";
 import { VehicleDetailPage } from "./pages/VehicleDetailPage";
 import { SettingsPage } from "./pages/SettingsPage";
-import { ShutdownOverlay } from "./components/ShutdownOverlay";
 import { StartupScreen } from "./components/StartupScreen";
 import { ErrorScreen } from "./components/ErrorScreen";
-import { useBackendBootstrap } from "./hooks/useBackendBootstrap";
+import { useDatabaseBootstrap } from "./hooks/useDatabaseBootstrap";
 
 export default function App() {
-  const { backendStatus, errorMessage, backendLogs, startupProgress, retry } = useBackendBootstrap();
-  const [isShuttingDown, setIsShuttingDown] = useState(false);
+  const { status, errorMessage, logs, retry } = useDatabaseBootstrap();
 
-  if (backendStatus === "starting") {
-    return <StartupScreen backendLogs={backendLogs} progress={startupProgress} />;
+  if (status === "starting") {
+    return <StartupScreen backendLogs={logs} progress={50} />;
   }
 
-  // Don't show error state during intentional shutdown
-  if (backendStatus === "error" && !isShuttingDown) {
-    return <ErrorScreen errorMessage={errorMessage} backendLogs={backendLogs} onRetry={retry} />;
+  if (status === "error") {
+    return <ErrorScreen errorMessage={errorMessage} backendLogs={logs} onRetry={retry} />;
   }
 
   return (
@@ -56,7 +52,6 @@ export default function App() {
           <Route path="/" element={<Navigate to="/vehicles" replace />} />
         </Route>
       </Routes>
-      <ShutdownOverlay onShutdownStart={() => setIsShuttingDown(true)} />
     </>
   );
 }

@@ -348,6 +348,14 @@ async function migrateV2(db: SqlDriver, ctx: WriteContext): Promise<void> {
 export const MIGRATIONS: readonly Migration[] = [
   { version: 1, description: "legacy integer-id schema", checkForeignKeys: false, up: (db) => db.exec(V1_LEGACY_SCHEMA) },
   { version: 2, description: "UUID ids, sync columns, archivable custom fields", checkForeignKeys: true, up: migrateV2 },
+  {
+    // The vehicle catalog is a read-only app asset now, and Alembic no longer manages the
+    // desktop database; both tables only exist in databases created by the Python backend.
+    version: 3,
+    description: "drop backend-only tables",
+    checkForeignKeys: false,
+    up: (db) => db.exec("DROP TABLE IF EXISTS vehicle_definitions; DROP TABLE IF EXISTS alembic_version;"),
+  },
 ];
 
 export const LATEST_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

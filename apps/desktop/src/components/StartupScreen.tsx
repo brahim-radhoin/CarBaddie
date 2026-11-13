@@ -41,7 +41,7 @@ export function StartupScreen({ backendLogs, progress = 0 }: StartupScreenProps)
             />
           </div>
           <div className="flex justify-between items-center text-[11px] font-mono text-muted-foreground">
-            <span>Starting sidecar daemon</span>
+            <span>Opening local database</span>
             <span>{Math.round(clampedProgress)}%</span>
           </div>
         </div>

@@ -1,25 +1,10 @@
 {
   "identifier": "default",
   "description": "Default capabilities",
-  "windows": ["main"],
+  "windows": [
+    "main"
+  ],
   "permissions": [
-    {
-      "identifier": "shell:allow-spawn",
-      "allow": [
-        {
-          "name": "carbaddie-backend",
-          "sidecar": true,
-          "args": [
-            {
-              "validator": "--database-path"
-            },
-            {
-              "validator": ".+"
-            }
-          ]
-        }
-      ]
-    },
     "core:path:default",
     "core:event:default",
     "core:window:allow-close",
@@ -27,69 +12,164 @@
     "core:window:allow-internal-toggle-maximize",
     {
       "identifier": "fs:allow-exists",
-      "allow": [{ "path": "$APPDATA" }, { "path": "$APPDATA/**" }]
+      "allow": [
+        {
+          "path": "$APPDATA"
+        },
+        {
+          "path": "$APPDATA/**"
+        }
+      ]
     },
     {
       "identifier": "fs:allow-create",
-      "allow": [{ "path": "$APPDATA" }, { "path": "$APPDATA/**" }]
+      "allow": [
+        {
+          "path": "$APPDATA"
+        },
+        {
+          "path": "$APPDATA/**"
+        }
+      ]
     },
     {
       "identifier": "fs:allow-copy-file",
-      "allow": [{ "path": "$RESOURCE/**" }, { "path": "$APPDATA/**" }]
+      "allow": [
+        {
+          "path": "$APPDATA/**"
+        }
+      ]
     },
     {
       "identifier": "fs:allow-read-file",
-      "allow": [{ "path": "$RESOURCE/**" }, { "path": "target/**" }, { "path": "$APPDATA/**" }]
+      "allow": [
+        {
+          "path": "target/**"
+        },
+        {
+          "path": "$APPDATA/**"
+        }
+      ]
     },
     {
       "identifier": "fs:allow-mkdir",
-      "allow": [{ "path": "$APPDATA" }, { "path": "$APPDATA/**" }]
+      "allow": [
+        {
+          "path": "$APPDATA"
+        },
+        {
+          "path": "$APPDATA/**"
+        }
+      ]
     },
     {
       "identifier": "fs:allow-remove",
-      "allow": [{ "path": "$APPDATA" }, { "path": "$APPDATA/**" }]
+      "allow": [
+        {
+          "path": "$APPDATA"
+        },
+        {
+          "path": "$APPDATA/**"
+        }
+      ]
     },
     {
       "identifier": "fs:allow-stat",
       "allow": [
-        { "path": "$APPDATA" },
-        { "path": "$APPDATA/**" },
-        { "path": "$DESKTOP" },
-        { "path": "$DESKTOP/**" },
-        { "path": "$DOWNLOAD" },
-        { "path": "$DOWNLOAD/**" },
-        { "path": "$DOCUMENT" },
-        { "path": "$DOCUMENT/**" },
-        { "path": "$HOME" },
-        { "path": "$HOME/**" }
+        {
+          "path": "$APPDATA"
+        },
+        {
+          "path": "$APPDATA/**"
+        },
+        {
+          "path": "$DESKTOP"
+        },
+        {
+          "path": "$DESKTOP/**"
+        },
+        {
+          "path": "$DOWNLOAD"
+        },
+        {
+          "path": "$DOWNLOAD/**"
+        },
+        {
+          "path": "$DOCUMENT"
+        },
+        {
+          "path": "$DOCUMENT/**"
+        },
+        {
+          "path": "$HOME"
+        },
+        {
+          "path": "$HOME/**"
+        }
       ]
     },
     {
       "identifier": "fs:allow-write-text-file",
       "allow": [
-        { "path": "$APPDATA" },
-        { "path": "$APPDATA/**" },
-        { "path": "$DESKTOP" },
-        { "path": "$DESKTOP/**" },
-        { "path": "$DOWNLOAD" },
-        { "path": "$DOWNLOAD/**" },
-        { "path": "$DOCUMENT" },
-        { "path": "$DOCUMENT/**" },
-        { "path": "$HOME" },
-        { "path": "$HOME/**" },
-        { "path": "**" }
+        {
+          "path": "$APPDATA"
+        },
+        {
+          "path": "$APPDATA/**"
+        },
+        {
+          "path": "$DESKTOP"
+        },
+        {
+          "path": "$DESKTOP/**"
+        },
+        {
+          "path": "$DOWNLOAD"
+        },
+        {
+          "path": "$DOWNLOAD/**"
+        },
+        {
+          "path": "$DOCUMENT"
+        },
+        {
+          "path": "$DOCUMENT/**"
+        },
+        {
+          "path": "$HOME"
+        },
+        {
+          "path": "$HOME/**"
+        },
+        {
+          "path": "**"
+        }
       ]
     },
     {
       "identifier": "fs:allow-read-text-file",
       "allow": [
-        { "path": "$RESOURCE/**" },
-        { "path": "target/**" },
-        { "path": "$APPDATA/**" },
-        { "path": "$DESKTOP/**" },
-        { "path": "$DOWNLOAD/**" },
-        { "path": "$DOCUMENT/**" },
-        { "path": "$HOME/**" }
+        {
+          "path": "$RESOURCE/**"
+        },
+        {
+          "path": "target/**"
+        },
+        {
+          "path": "$APPDATA/**"
+        },
+        {
+          "path": "$DESKTOP/**"
+        },
+        {
+          "path": "$DOWNLOAD/**"
+        },
+        {
+          "path": "$DOCUMENT/**"
+        },
+        {
+          "path": "$HOME/**"
+        }
       ]
     },
     "dialog:allow-save",

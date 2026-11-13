@@ -1,11 +1,9 @@
-use tauri::{Manager, WindowEvent};
+mod db;
+
 use tauri_plugin_log::{Builder, Target, TargetKind};
 use std::sync::{Arc, Mutex};
 use std::io::{Read, Write};
 use std::net::TcpListener;
-
-// Shared state to store backend PID
-struct BackendPid(Arc<Mutex<Option<u32>>>);
 
 // Shared state for OAuth listener socket
 struct OAuthListener(Arc<Mutex<Option<TcpListener>>>);
@@ -81,58 +79,6 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
     }
 }
 
-#[tauri::command]
-fn store_backend_pid(state: tauri::State<BackendPid>, pid: u32) {
-    *state.0.lock().unwrap() = Some(pid);
-    log::info!("Stored backend PID: {}", pid);
-}
-
-#[tauri::command]
-fn cleanup_backend(state: tauri::State<BackendPid>) {
-    log::info!("Cleanup backend command called");
-    // take() so the backend is only killed once; close triggers this from several places.
-    if let Some(pid) = state.0.lock().unwrap().take() {
-        log::info!("Killing backend process tree for PID: {}", pid);
-        kill_process_tree(pid);
-    } else {
-        log::info!("Backend already stopped - nothing to clean up");
-    }
-}
-
-#[cfg(target_os = "windows")]
-fn kill_process_tree(pid: u32) {
-    use std::process::Command;
-    log::info!("Attempting to kill process tree for PID: {}", pid);
-    
-    // Use taskkill /F /T to forcefully kill process tree
-    match Command::new("taskkill")
-        .args(&["/F", "/T", "/PID", &pid.to_string()])
-        .output()
-    {
-        Ok(output) => {
-            if output.status.success() {
-                log::info!("Successfully killed process tree for PID: {}", pid);
-            } else {
-                log::warn!("Failed to kill process tree: {:?}", String::from_utf8_lossy(&output.stderr));
-            }
-        }
-        Err(e) => {
-            log::error!("Error executing taskkill: {}", e);
-        }
-    }
-}
-
-#[cfg(not(target_os = "windows"))]
-fn kill_process_tree(pid: u32) {
-    use std::process::Command;
-    log::info!("Attempting to kill process tree for PID: {}", pid);
-    
-    // On Unix-like systems, kill the process group
-    let _ = Command::new("kill")
-        .args(&["-9", &pid.to_string()])
-        .output();
-}
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let targets = [
@@ -142,8 +88,6 @@ pub fn run() {
 
     let log_plugin = Builder::new().targets(targets).build();
     
-    // Initialize shared state for backend PID
-    let backend_pid = BackendPid(Arc::new(Mutex::new(None)));
     let oauth_listener = OAuthListener(Arc::new(Mutex::new(None)));
 
     tauri::Builder::default()
@@ -152,35 +96,16 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_window_state::Builder::default().build())
-        .manage(backend_pid)
+        .manage(db::Db::default())
         .manage(oauth_listener)
         .invoke_handler(tauri::generate_handler![
-            store_backend_pid,
-            cleanup_backend,
             start_oauth_listener,
-            wait_oauth_token
+            wait_oauth_token,
+            db::db_open,
+            db::db_exec,
+            db::db_run,
+            db::db_all
         ])
-        .setup(|app| {
-            let window = app.get_webview_window("main").unwrap();
-            let backend_pid_state = app.state::<BackendPid>();
-            let pid_arc = backend_pid_state.0.clone();
-            
-            // Add window close event handler as fallback
-            window.on_window_event(move |event| {
-                if let WindowEvent::CloseRequested { .. } = event {
-                    log::info!("Window close requested (Rust fallback) - cleaning up backend process");
-                    if let Some(pid) = pid_arc.lock().unwrap().take() {
-                        // Call cleanup directly (frontend should have already done this)
-                        log::info!("Rust fallback: Killing backend process tree for PID: {}", pid);
-                        kill_process_tree(pid);
-                    } else {
-                        log::warn!("No backend PID stored - skipping cleanup");
-                    }
-                }
-            });
-            
-            Ok(())
-        })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

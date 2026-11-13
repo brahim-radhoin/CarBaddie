@@ -36,4 +36,11 @@ export type { BackupFile, EncodeBackupInput } from "./backup/format";
 export type { SqlDriver, SqlValue, WriteContext } from "./db/driver";
 export { migrate, getSchemaVersion, MIGRATIONS, LATEST_SCHEMA_VERSION } from "./db/migrations";
 export { seedBuiltinServiceTypes } from "./db/seed";
+export { createRepository } from "./db/repository";
+export type { Repository } from "./db/repository";
+export { openRepository, SYNCED_TABLES } from "./db/open";
+export type { OpenedDatabase } from "./db/open";
+export { transaction } from "./db/transaction";
 export type { SeedOptions } from "./db/seed";
+
+export { ValidationError, normaliseVin, validateVehicle, validateServiceType, validateIntervalOverride } from "./validation";

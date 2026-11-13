@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useAnalyzeBackup, useRestoreBackup } from "../api";
+import { parseBackup } from "@carbaddie/core";
 import { RestorePlan, FullBackupData } from "../types";
 import { toast } from "sonner";
 import { open } from "@tauri-apps/plugin-dialog";
@@ -24,10 +25,7 @@ export function RestoreSection() {
 
   const processFileContent = (content: string, filename: string) => {
     try {
-      const parsedData = JSON.parse(content) as FullBackupData;
-      if (!parsedData.metadata || !parsedData.vehicles || !parsedData.service_types) {
-        throw new Error("Invalid backup file: missing metadata, vehicles, or service_types.");
-      }
+      const parsedData = parseBackup(JSON.parse(content));
 
       setParsedBackupData(parsedData);
       setBackupFileName(filename);
@@ -90,11 +88,7 @@ export function RestoreSection() {
 
   const handleAnalyze = () => {
     if (!parsedBackupData) return;
-    const formData = new FormData();
-    const blob = new Blob([JSON.stringify(parsedBackupData)], { type: "application/json" });
-    formData.append("backup_file", blob, backupFileName || "backup.json");
-
-    analyzeMutation.mutate(formData, {
+    analyzeMutation.mutate(parsedBackupData, {
       onSuccess: (analysis) => {
         const initialPlan: RestorePlan = {
           vehicles_to_add: analysis.new_vehicles.map((v) => v.id_in_backup),

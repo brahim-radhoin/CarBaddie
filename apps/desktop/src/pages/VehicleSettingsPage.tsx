@@ -3,7 +3,7 @@ import { VehicleDetailContext } from "./VehicleDetailPage";
 import { useUpdateVehicle, useVehicles, useServiceTypes } from "../api";
 import { VehicleUpdate } from "../types";
 import { toast } from "sonner";
-import { AxiosError } from "axios";
+import { ValidationError } from "@carbaddie/core";
 
 // Import child components
 import { VehicleForm } from "@/components/VehicleForm";
@@ -35,21 +35,12 @@ export function VehicleSettingsPage() {
       toast.info("No changes were made.");
       return;
     }
-    updateVehicle({ id: Number(vehicleId), vehicleData: payload });
+    updateVehicle({ id: vehicleId!, vehicleData: payload });
   };
 
-  const getBackendErrors = () => {
-    const axiosError = updateError as AxiosError<{ detail: any[] }>;
-    const errors: Record<string, string[]> = {};
-    if (axiosError?.response?.status === 422 && Array.isArray(axiosError.response.data.detail)) {
-      axiosError.response.data.detail.forEach((err) => {
-        const fieldKey = String(err.loc[1]) || "general";
-        if (!errors[fieldKey]) errors[fieldKey] = [];
-        errors[fieldKey].push(err.msg);
-      });
-    }
-    return errors;
-  };
+  // Field errors from the repository's input checks (@carbaddie/core validation.ts).
+  const getBackendErrors = (): Record<string, string[]> =>
+    updateError instanceof ValidationError ? updateError.fieldErrors : {};
 
   if (isPageLoading) {
     return (

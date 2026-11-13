@@ -12,11 +12,10 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Trash2 } from "lucide-react";
-import { AxiosError } from "axios";
 import { HoldToConfirm } from "@/components/interior/hold-to-confirm";
 
 interface DeleteVehicleSectionProps {
-  vehicleId: number;
+  vehicleId: string;
   vehicleName: string;
 }
 
@@ -45,7 +44,7 @@ export function DeleteVehicleSection({ vehicleId, vehicleName }: DeleteVehicleSe
 
       {isError && (
         <div className="rounded border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
-          {(error as AxiosError<{ detail: string }>)?.response?.data?.detail || "An error occurred during deletion."}
+          {(error as Error | null)?.message || "An error occurred during deletion."}
         </div>
       )}
 

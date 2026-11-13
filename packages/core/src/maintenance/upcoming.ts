@@ -25,8 +25,8 @@ function formatDate(date: Date): string {
   return date.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 }
 
-// The engine only needs these fields, so it accepts both the UUID types and the desktop's
-// legacy integer-id types (`TId` = number) until roadmap step 4.
+// The engine only needs these fields; it is generic over the id type so callers can pass
+// structurally compatible data.
 interface EngineVehicle<TId> {
   initial_mileage?: number | null;
   acquisition_date?: string | null;

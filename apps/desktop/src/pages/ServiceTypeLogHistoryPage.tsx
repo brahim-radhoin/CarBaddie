@@ -1,7 +1,6 @@
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useVehicle, useServiceType, useLogsForServiceType, useDeleteMaintenanceLog } from "../api";
 import { LogCard } from "../components/LogCard";
-import { AxiosError } from "axios";
 
 // UI Components
 import { Button } from "@/components/ui/button";
@@ -31,7 +30,7 @@ export function ServiceTypeLogHistoryPage() {
   const isError = isVehicleError || isServiceTypeError || isLogsError;
   const error = vehicleError || serviceTypeError || logsError;
 
-  const handleDeleteLog = async (logId: number) => {
+  const handleDeleteLog = async (logId: string) => {
     if (!vehicleId) return;
     await deleteLogMutation.mutateAsync({ logId, vehicleId });
   };
@@ -49,7 +48,7 @@ export function ServiceTypeLogHistoryPage() {
     return (
       <div className="max-w-4xl space-y-4">
         <div className="rounded-lg border border-destructive/20 bg-destructive/10 p-4 text-xs text-destructive">
-          {(error as AxiosError<{ detail: string }>)?.response?.data?.detail || "Could not load the requested history."}
+          {(error as Error | null)?.message || "Could not load the requested history."}
         </div>
       </div>
     );

@@ -3,7 +3,6 @@
  *
  * Backup imports use it to recognise a VIN-less vehicle that already exists locally, so
  * restoring or syncing the same backup twice doesn't add the vehicle again.
- * Keep in step with `_vehicle_key` in apps/backend/app/crud/backup.py.
  */
 export function vehicleIdentityKey(
   make?: string | null,

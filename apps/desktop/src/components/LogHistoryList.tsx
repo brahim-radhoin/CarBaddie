@@ -21,7 +21,7 @@ interface LogHistoryListProps {
   allLogs: MaintenanceLogRead[];
   vehicleName: string;
   isLoading: boolean;
-  onDeleteLog: (logId: number) => Promise<void>;
+  onDeleteLog: (logId: string) => Promise<void>;
   vehicleId: string; // Needed for "Add First Log" if list is empty
   externalDateFilter: string | null; // New prop
   onClearExternalDateFilter: () => void; // New prop

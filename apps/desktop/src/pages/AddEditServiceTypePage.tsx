@@ -2,7 +2,6 @@ import { useState, useEffect, FormEvent } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import { useServiceType, useAddServiceType, useUpdateServiceType, useServiceTypes } from "../api";
 import { ServiceTypeCreate, ServiceTypeUpdate, CustomFieldCreate, ServiceTypeRead } from "../types";
-import { AxiosError } from "axios";
 
 // UI Components & Icons
 import { Button } from "@/components/ui/button";
@@ -32,9 +31,9 @@ function ServiceTypeCheckboxList({
   onChange,
 }: {
   allServiceTypes: ServiceTypeRead[];
-  excludeId?: number;
-  selected: number[];
-  onChange: (ids: number[]) => void;
+  excludeId?: string;
+  selected: string[];
+  onChange: (ids: string[]) => void;
 }) {
   const filtered = allServiceTypes.filter((st) => st.id !== excludeId);
   return (
@@ -71,8 +70,8 @@ export function AddEditServiceTypePage() {
   const [recommendedIntervalKm, setRecommendedIntervalKm] = useState("");
   const [recommendedIntervalDays, setRecommendedIntervalDays] = useState("");
   const [customFields, setCustomFields] = useState<FormCustomField[]>([]);
-  const [resetIds, setResetIds] = useState<number[]>([]);
-  const [suggestionIds, setSuggestionIds] = useState<number[]>([]);
+  const [resetIds, setResetIds] = useState<string[]>([]);
+  const [suggestionIds, setSuggestionIds] = useState<string[]>([]);
 
   useEffect(() => {
     if (isEditMode && serviceType) {
@@ -81,6 +80,7 @@ export function AddEditServiceTypePage() {
       setRecommendedIntervalDays(serviceType.recommended_interval_days?.toString() || "");
       const loadedFields = (serviceType.fields || []).map((f) => ({
         _key: String(f.id),
+        id: f.id,
         name: f.name,
         field_type: f.field_type,
         unit: f.unit || undefined,
@@ -143,7 +143,7 @@ export function AddEditServiceTypePage() {
         suggestions: suggestionIds,
       };
       updateMutation.mutate(
-        { id: Number(serviceTypeId), serviceTypeData: payload },
+        { id: serviceTypeId, serviceTypeData: payload },
         {
           onSuccess: () => navigate("/service-types"),
         }
@@ -179,7 +179,7 @@ export function AddEditServiceTypePage() {
     return (
       <div className="max-w-3xl space-y-4">
         <div className="rounded-lg border border-destructive/20 bg-destructive/10 p-4 text-xs text-destructive">
-          {(queryError as AxiosError<{ detail: string }>)?.response?.data?.detail || "Could not load service category."}
+          {(queryError as Error | null)?.message || "Could not load service category."}
         </div>
       </div>
     );
@@ -208,7 +208,7 @@ export function AddEditServiceTypePage() {
 
       {mutationError && (
         <div className="rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-xs text-destructive">
-          {(mutationError as AxiosError<{ detail: string }>)?.response?.data?.detail || "An error occurred."}
+          {(mutationError as Error | null)?.message || "An error occurred."}
         </div>
       )}
 
@@ -273,7 +273,7 @@ export function AddEditServiceTypePage() {
               </p>
               <ServiceTypeCheckboxList
                 allServiceTypes={allServiceTypes}
-                excludeId={isEditMode && serviceTypeId ? Number(serviceTypeId) : undefined}
+                excludeId={isEditMode && serviceTypeId ? serviceTypeId : undefined}
                 selected={resetIds}
                 onChange={setResetIds}
               />
@@ -288,7 +288,7 @@ export function AddEditServiceTypePage() {
               </p>
               <ServiceTypeCheckboxList
                 allServiceTypes={allServiceTypes}
-                excludeId={isEditMode && serviceTypeId ? Number(serviceTypeId) : undefined}
+                excludeId={isEditMode && serviceTypeId ? serviceTypeId : undefined}
                 selected={suggestionIds}
                 onChange={setSuggestionIds}
               />

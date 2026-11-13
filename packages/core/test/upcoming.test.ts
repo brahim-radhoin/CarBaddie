@@ -8,20 +8,22 @@ import type {
   UpcomingMaintenanceItemData,
   VehicleRead,
   VehicleServiceIntervalOverrideRead,
-} from "../src/legacy/types.ts";
+} from "../src/types.ts";
 
 // Fixed "today" so results don't depend on the clock. Dates in these tests stay in the
 // same half of the year as TODAY so daylight-saving shifts can't change day counts.
 const TODAY = new Date(2026, 0, 31); // 31 Jan 2026, local time
 
-type IntervalOpts = Partial<Pick<ServiceTypeRead, "recommended_interval_km" | "recommended_interval_days" | "resets">>;
+// Fixtures use small numbers for readability; ids are strings in the data model.
+type IntervalOpts = Partial<Pick<ServiceTypeRead, "recommended_interval_km" | "recommended_interval_days">> & { resets?: number[] };
 
-function serviceType(id: number, name: string, opts: IntervalOpts = {}): ServiceTypeRead {
+function serviceType(id: number, name: string, { resets = [], ...opts }: IntervalOpts = {}): ServiceTypeRead {
   return {
-    id,
+    id: String(id),
+    slug: null,
     name,
     fields: [],
-    resets: [],
+    resets: resets.map(String),
     suggestions: [],
     recommended_interval_km: null,
     recommended_interval_days: null,
@@ -31,13 +33,13 @@ function serviceType(id: number, name: string, opts: IntervalOpts = {}): Service
 
 function log(id: number, date: string, mileage: number, serviceTypeId: number): MaintenanceLogRead {
   return {
-    id,
-    vehicle_id: 1,
+    id: String(id),
+    vehicle_id: "1",
     date,
     mileage,
     cost: 0,
     notes: null,
-    service_type_id: serviceTypeId,
+    service_type_id: String(serviceTypeId),
     service_type: null,
     custom_field_values: [],
   };
@@ -52,7 +54,7 @@ function vehicle(
   } = {},
 ): VehicleRead {
   return {
-    id: 1,
+    id: "1",
     make: "Ford",
     model: "Fiesta",
     year: 2003,
@@ -66,7 +68,7 @@ function vehicle(
 
 function summary(serviceTypeId: number, date: string | null, mileage: number | null): ServiceTypeLogSummary {
   return {
-    service_type_id: serviceTypeId,
+    service_type_id: String(serviceTypeId),
     service_type_name: "",
     log_count: 1,
     last_log_date: date,
@@ -143,16 +145,16 @@ test("a service that resets another counts as performing it", () => {
   const oilChange = serviceType(1, "Oil change", { recommended_interval_days: 180, resets: [2] });
   const oilFilter = serviceType(2, "Oil filter", { recommended_interval_days: 180 });
   const items = compute(vehicle(), [oilChange, oilFilter], [summary(1, "2026-01-10", 15000)]);
-  const filter = items.find((i) => i.serviceTypeId === 2);
+  const filter = items.find((i) => i.serviceTypeId === "2");
   assert.equal(filter?.status, "OK");
   assert.equal(filter?.details?.lastPerformed?.mileage, 15000);
 });
 
 test("a vehicle override replaces the recommended interval", () => {
   const override: VehicleServiceIntervalOverrideRead = {
-    id: 1,
-    vehicle_id: 1,
-    service_type_id: 1,
+    id: "1",
+    vehicle_id: "1",
+    service_type_id: "1",
     override_interval_km: 5000,
     override_interval_days: null,
   };

@@ -2,7 +2,6 @@ import { useParams, Link, Outlet, Navigate, useLocation, matchPath, useNavigate 
 import { useVehicle, useServiceType } from "../api";
 import { VehicleRead } from "../types";
 import { toast } from "sonner";
-import { AxiosError } from "axios";
 
 // UI Components
 import { Skeleton } from "@/components/ui/skeleton";
@@ -47,7 +46,7 @@ export function VehicleDetailPage() {
   }
 
   if (isError) {
-    toast.error((error as AxiosError<{ detail: string }>)?.response?.data?.detail || "Vehicle not found.");
+    toast.error((error as Error | null)?.message || "Vehicle not found.");
     return <Navigate to="/vehicles" replace />;
   }
 

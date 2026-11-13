@@ -17,10 +17,10 @@ export function ErrorScreen({ errorMessage, backendLogs, onRetry }: ErrorScreenP
           </div>
           <div>
             <h1 className="text-base font-medium text-foreground">
-              Backend Process Error
+              Database Error
             </h1>
             <p className="text-xs text-muted-foreground">
-              The local backend service terminated unexpectedly during bootstrap.
+              The local database could not be opened or upgraded. Your data was not changed.
             </p>
           </div>
         </div>

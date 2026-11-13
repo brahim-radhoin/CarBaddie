@@ -2,7 +2,7 @@ import { useNavigate, Link } from "react-router-dom";
 import { useAddVehicle } from "../api";
 import { VehicleCreate } from "../types";
 import { VehicleForm } from "@/components/VehicleForm";
-import { AxiosError } from "axios";
+import { ValidationError } from "@carbaddie/core";
 import { ChevronLeft } from "lucide-react";
 
 export function AddVehiclePage() {
@@ -17,17 +17,9 @@ export function AddVehiclePage() {
     });
   };
 
-  const getBackendErrors = () => {
-    const axiosError = error as AxiosError<{ detail: any }>;
-    if (axiosError?.response?.status === 422 && axiosError.response.data.detail) {
-      return axiosError.response.data.detail.reduce((acc: Record<string, string[]>, err: any) => {
-        const fieldKey = err.loc[1] || "general";
-        acc[fieldKey] = acc[fieldKey] ? [...acc[fieldKey], err.msg] : [err.msg];
-        return acc;
-      }, {});
-    }
-    return {};
-  };
+  // Field errors from the repository's input checks (@carbaddie/core validation.ts).
+  const getBackendErrors = (): Record<string, string[]> =>
+    error instanceof ValidationError ? error.fieldErrors : {};
 
   const backendErrors = getBackendErrors();
 

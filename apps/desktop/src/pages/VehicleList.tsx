@@ -45,8 +45,8 @@ export function VehicleList() {
       case "make_desc": result.sort((a, b) => b.make.localeCompare(a.make)); break;
       case "model_asc": result.sort((a, b) => a.model.localeCompare(b.model)); break;
       case "model_desc": result.sort((a, b) => b.model.localeCompare(a.model)); break;
-      case "newest": result.sort((a, b) => b.id - a.id); break;
-      case "oldest": result.sort((a, b) => a.id - b.id); break;
+      case "newest": result.sort((a, b) => b.id.localeCompare(a.id)); break;
+      case "oldest": result.sort((a, b) => a.id.localeCompare(b.id)); break;
     }
     return result;
   }, [allVehicles, searchTerm, sortBy]);

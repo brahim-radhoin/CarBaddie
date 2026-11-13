@@ -1,7 +1,5 @@
 // ====================================================================
-// CORE DATA TYPES - shared by the apps that store data locally (mobile now, desktop from
-// roadmap step 4). Ids are UUIDs (see ids/uuid.ts). The desktop still uses the integer-id
-// types in legacy/types.ts while it talks to the Python backend.
+// CORE DATA TYPES - shared by the desktop and mobile apps. Ids are UUIDs (see ids/uuid.ts).
 // ====================================================================
 
 import type { BackupFile } from "./backup/format";

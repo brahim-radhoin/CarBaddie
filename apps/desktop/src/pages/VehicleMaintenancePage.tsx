@@ -70,7 +70,7 @@ export function VehicleMaintenancePage() {
     return daysSince > 365;
   }).length;
 
-  const handleDeleteLog = async (logId: number) => {
+  const handleDeleteLog = async (logId: string) => {
     if (!vehicleId) return;
     await deleteLogMutation.mutateAsync({ logId, vehicleId });
   };

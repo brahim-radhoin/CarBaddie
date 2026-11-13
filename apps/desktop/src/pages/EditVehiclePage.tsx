@@ -2,7 +2,7 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import { useVehicle, useUpdateVehicle } from "../api";
 import { VehicleUpdate } from "../types";
 import { VehicleForm } from "@/components/VehicleForm";
-import { AxiosError } from "axios";
+import { ValidationError } from "@carbaddie/core";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ChevronLeft } from "lucide-react";
 import { toast } from "sonner";
@@ -26,7 +26,7 @@ export function EditVehiclePage() {
     }
 
     updateVehicle(
-      { id: Number(vehicleId), vehicleData: payload },
+      { id: vehicleId!, vehicleData: payload },
       {
         onSuccess: () => {
           navigate(`/vehicles/${vehicleId}`);
@@ -35,17 +35,9 @@ export function EditVehiclePage() {
     );
   };
 
-  const getBackendErrors = () => {
-    const axiosError = mutationError as AxiosError<{ detail: any }>;
-    if (axiosError?.response?.status === 422 && axiosError.response.data.detail) {
-      return axiosError.response.data.detail.reduce((acc: Record<string, string[]>, err: any) => {
-        const fieldKey = err.loc[1] || "general";
-        acc[fieldKey] = acc[fieldKey] ? [...acc[fieldKey], err.msg] : [err.msg];
-        return acc;
-      }, {});
-    }
-    return {};
-  };
+  // Field errors from the repository's input checks (@carbaddie/core validation.ts).
+  const getBackendErrors = (): Record<string, string[]> =>
+    mutationError instanceof ValidationError ? mutationError.fieldErrors : {};
 
   if (isLoading) {
     return (

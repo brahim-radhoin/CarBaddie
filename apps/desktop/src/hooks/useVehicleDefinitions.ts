@@ -1,18 +1,26 @@
 import { useQuery } from "@tanstack/react-query";
-import axios from "axios";
 
-// Assume BASE_URL is defined somewhere or use relative path if proxy is set up.
-// For now, hardcoding based on existing patterns or using the same base as other api calls.
-const API_BASE_URL = "http://localhost:8000";
+// The make/model/year catalog (19.7k rows) is a read-only asset bundled with the app, not part of
+// the user's database. It is loaded on first use as a separate chunk.
+interface CatalogEntry {
+  year: number;
+  make: string;
+  model: string;
+}
+
+let catalog: Promise<CatalogEntry[]> | null = null;
+const loadCatalog = () => (catalog ??= import("../data/vehicle-catalog.json").then((m) => m.default as CatalogEntry[]));
+
+const distinct = <T,>(values: T[]) => [...new Set(values)];
 
 export const useGetMakes = (year?: number) => {
   return useQuery({
     queryKey: ["makes", year],
     queryFn: async () => {
-      const params = year ? { year } : {};
-      const { data } = await axios.get(`${API_BASE_URL}/vehicle-definitions/makes`, { params });
-      return data as string[];
+      const rows = (await loadCatalog()).filter((r) => !year || r.year === year);
+      return distinct(rows.map((r) => r.make)).sort();
     },
+    staleTime: Infinity,
   });
 };
 
@@ -20,11 +28,11 @@ export const useGetModels = (make: string, year?: number) => {
   return useQuery({
     queryKey: ["models", make, year],
     queryFn: async () => {
-      const params = { make, ...(year ? { year } : {}) };
-      const { data } = await axios.get(`${API_BASE_URL}/vehicle-definitions/models`, { params });
-      return data as string[];
+      const rows = (await loadCatalog()).filter((r) => r.make === make && (!year || r.year === year));
+      return distinct(rows.map((r) => r.model)).sort();
     },
-    enabled: !!make, // Only fetch if make is selected
+    enabled: !!make,
+    staleTime: Infinity,
   });
 };
 
@@ -32,12 +40,9 @@ export const useGetYears = (make?: string, model?: string) => {
   return useQuery({
     queryKey: ["years", make, model],
     queryFn: async () => {
-      const params = {
-        ...(make ? { make } : {}),
-        ...(model ? { model } : {}),
-      };
-      const { data } = await axios.get(`${API_BASE_URL}/vehicle-definitions/years`, { params });
-      return data as number[];
+      const rows = (await loadCatalog()).filter((r) => (!make || r.make === make) && (!model || r.model === model));
+      return distinct(rows.map((r) => r.year)).sort((a, b) => b - a);
     },
+    staleTime: Infinity,
   });
 };

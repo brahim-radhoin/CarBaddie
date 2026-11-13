@@ -2,8 +2,8 @@
 //
 // Ids inside the file are small integers that are only meaningful within the file: they
 // link logs to service types, values to fields, and so on. Importers always create fresh
-// local ids. Keeping integers keeps the file readable by the desktop's Python backend
-// (apps/backend/app/schemas.py `FullBackupData`) until roadmap step 4 removes it.
+// local ids. The integer format is the one older desktop (Python backend) and mobile versions
+// wrote and read, so files stay interchangeable with them.
 //
 // Parsing is lenient on purpose: it accepts files written by older desktop and mobile
 // versions (string numbers, `resets` as objects, unknown field types) and normalises them.

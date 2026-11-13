@@ -75,7 +75,7 @@ test(
     const db = openTestDb(copy);
     const ctx = testContext();
     assert.deepEqual(await migrate(db, ctx), { from: 0, to: LATEST_SCHEMA_VERSION });
-    assert.equal(await getSchemaVersion(db), 2);
+    assert.equal(await getSchemaVersion(db), LATEST_SCHEMA_VERSION);
 
     const vehicles = await db.all<any>("SELECT * FROM vehicles ORDER BY id");
     assert.equal(vehicles.length, 2);
@@ -143,7 +143,7 @@ test(
     assert.ok(honda.id);
 
     // Running again is a no-op.
-    assert.deepEqual(await migrate(db, ctx), { from: 2, to: 2 });
+    assert.deepEqual(await migrate(db, ctx), { from: LATEST_SCHEMA_VERSION, to: LATEST_SCHEMA_VERSION });
     db.close();
 
     const untouched = openTestDb(original);
@@ -177,7 +177,7 @@ test(
 test("a fresh database migrates and seeds the built-ins once", async () => {
   const db = openTestDb();
   const ctx = testContext();
-  assert.deepEqual(await migrate(db, ctx), { from: 0, to: 2 });
+  assert.deepEqual(await migrate(db, ctx), { from: 0, to: LATEST_SCHEMA_VERSION });
   assert.equal(await seedBuiltinServiceTypes(db, ctx), BUILTIN_SERVICE_TYPES.length);
   assert.equal(await seedBuiltinServiceTypes(db, ctx), 0);
 
@@ -214,6 +214,8 @@ test(
       await migrate(db, testContext());
       const after = Object.fromEntries(await Promise.all(tables.map(async (t) => [t, await count(t)])));
       assert.deepEqual(after, before, `${source}: every row carried over`);
+      const dropped = await db.all("SELECT name FROM sqlite_master WHERE name IN ('vehicle_definitions', 'alembic_version')");
+      assert.deepEqual(dropped, [], "backend-only tables are dropped by v3");
       assert.deepEqual(await db.all("PRAGMA foreign_key_check"), []);
       db.close();
     }

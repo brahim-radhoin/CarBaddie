@@ -24,11 +24,11 @@ interface ExportSectionProps {
 export function ExportSection({ allVehicles }: ExportSectionProps) {
   const exportMutation = useExportBackup();
 
-  const [selectedVehicleIds, setSelectedVehicleIds] = useState<number[]>([]);
+  const [selectedVehicleIds, setSelectedVehicleIds] = useState<string[]>([]);
   const [includeLogs, setIncludeLogs] = useState(true);
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
 
-  const handleVehicleSelect = (vehicleId: number) => {
+  const handleVehicleSelect = (vehicleId: string) => {
     setSelectedVehicleIds((prev) =>
       prev.includes(vehicleId) ? prev.filter((id) => id !== vehicleId) : [...prev, vehicleId]
     );

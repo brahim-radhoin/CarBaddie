@@ -1,6 +1,6 @@
 # CarBaddie 🚗
 
-A comprehensive desktop vehicle maintenance tracking application built with Tauri, React, and Python. CarBaddie helps you manage your vehicle fleet, track maintenance schedules, and monitor service history with a beautiful, modern interface.
+A comprehensive desktop vehicle maintenance tracking application built with Tauri, React, and SQLite. CarBaddie helps you manage your vehicle fleet, track maintenance schedules, and monitor service history with a beautiful, modern interface.
 
 ![CarBaddie](https://img.shields.io/badge/version-0.1.0-blue)
 ![Tauri](https://img.shields.io/badge/Tauri-2.8.0-blue)
@@ -53,296 +53,87 @@ A comprehensive desktop vehicle maintenance tracking application built with Taur
 - **Charts**: Recharts
 - **Build Tool**: Vite 6
 
-### Backend
+### Data
 
-- **Framework**: Python FastAPI
-- **Database**: SQLite with async support (aiosqlite)
-- **ORM**: SQLAlchemy 2.0 with async
-- **Migrations**: Alembic
-- **Packaging**: PyInstaller (for standalone executable)
+- **Database**: SQLite in the app data directory, one connection owned by the Rust shell (`rusqlite`)
+- **Domain and queries**: `@carbaddie/core` (shared with the mobile app): repository, migrations,
+  due-date engine, backup format
+- **Vehicle catalog**: read-only JSON asset (`src/data/vehicle-catalog.json`), loaded on first use
 
 ### Development Tools
 
 - **Linting**: ESLint with TypeScript support
 - **Type Checking**: TypeScript strict mode
-- **Testing**: Pytest (backend)
+- **Testing**: `node --test` in `packages/core`
 
 ## 📋 Prerequisites
 
-Before you begin, ensure you have the following installed:
-
-### Required
-
-- **Node.js** (v18 or higher) - [Download here](https://nodejs.org/)
-- **npm** (comes with Node.js)
-- **Rust** (latest stable) - [Install here](https://www.rust-lang.org/tools/install)
-- **Python** (3.11 or higher) - [Download here](https://www.python.org/)
-
-### Platform-Specific Requirements
-
-#### Windows
-
-- **Microsoft C++ Build Tools** - [Download here](https://visualstudio.microsoft.com/visual-cpp-build-tools/)
-- **WebView2** (usually pre-installed on Windows 10/11)
-
-#### macOS
-
-- **Xcode Command Line Tools**: `xcode-select --install`
-
-#### Linux
-
-- **System dependencies**:
-  ```bash
-  sudo apt-get update
-  sudo apt-get install -y libwebkit2gtk-4.1-dev \
-    build-essential \
-    curl \
-    wget \
-    file \
-    libssl-dev \
-    libayatana-appindicator3-dev \
-    librsvg2-dev
-  ```
+- **Node.js** 22.18+ and **pnpm** 12 (the repo pins it via `packageManager`)
+- **Rust** (stable) - [Install here](https://www.rust-lang.org/tools/install)
+- Platform requirements for Tauri:
+  - **Windows**: [Microsoft C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) and WebView2
+  - **macOS**: `xcode-select --install`
+  - **Linux**: `sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libssl-dev libayatana-appindicator3-dev librsvg2-dev`
 
 ## 🚀 Getting Started
 
-### 1. Clone the Repository
+This app lives in the CarBaddie monorepo. From the repository root:
 
 ```bash
-git clone https://github.com/yourusername/carBaddie_frontend_SAA.git
-cd carBaddie_frontend_SAA
+pnpm install
+pnpm desktop        # runs `tauri dev`
 ```
 
-### 2. Install Frontend Dependencies
-
-```bash
-npm install
-```
-
-### 3. Set Up Backend
-
-The backend is located in a separate repository but needs to be built before running the app.
-
-#### Clone the Backend Repository
-
-```bash
-cd ..
-git clone https://github.com/yourusername/CarBaddie_backend_SAA.git
-cd CarBaddie_backend_SAA
-```
-
-#### Create Python Virtual Environment
-
-```bash
-python -m venv .venv
-```
-
-#### Activate Virtual Environment
-
-- **Windows**: `.venv\Scripts\activate`
-- **macOS/Linux**: `source .venv/bin/activate`
-
-#### Install Backend Dependencies
-
-```bash
-pip install -r requirements.txt
-```
-
-### 4. Configure Environment Variables
-
-Create a `.env` file in the frontend root directory:
-
-```env
-VITE_API_URL=http://localhost:8000
-```
-
-Backend `.env` (in the backend directory):
-
-```env
-DATABASE_URL=sqlite+aiosqlite:///./car_baddie.db
-```
-
-## 🏗️ Building the Application
-
-### Development Build
-
-#### Option 1: Run Everything Together (Recommended)
-
-```bash
-# From the frontend directory
-npm run dev:all
-```
-
-This runs both the Tauri app and the backend simultaneously.
-
-#### Option 2: Run Separately
-
-Terminal 1 (Backend):
-
-```bash
-cd CarBaddie_backend_SAA
-.venv\Scripts\activate  # Windows
-# source .venv/bin/activate  # macOS/Linux
-python run_server.py
-```
-
-Terminal 2 (Frontend):
-
-```bash
-cd carBaddie_frontend_SAA
-npm run tauri dev
-```
+There is no separate backend to start: the app opens its SQLite database directly.
 
 ### Production Build
 
-#### Step 1: Build the Backend Executable
-
-From the backend directory:
-
 ```bash
-# Windows
-pyinstaller carbaddie-backend-x86_64-pc-windows-msvc.spec
-
-# Copy the built executable to the frontend's src-tauri directory
-copy dist\carbaddie-backend-x86_64-pc-windows-msvc.exe ..\carBaddie_frontend_SAA\src-tauri\carbaddie-backend-x86_64-pc-windows-msvc.exe
+pnpm --filter @carbaddie/desktop run tauri build
 ```
 
-```bash
-# macOS
-pyinstaller carbaddie-backend.spec
-
-# Copy the built executable
-cp dist/carbaddie-backend ../carBaddie_frontend_SAA/src-tauri/carbaddie-backend-aarch64-apple-darwin
-```
-
-```bash
-# Linux
-pyinstaller carbaddie-backend.spec
-
-# Copy the built executable
-cp dist/carbaddie-backend ../carBaddie_frontend_SAA/src-tauri/carbaddie-backend-x86_64-unknown-linux-gnu
-```
-
-#### Step 2: Build the Tauri Application
-
-From the frontend directory:
-
-```bash
-npm run tauri build
-```
-
-The built application will be in `src-tauri/target/release/bundle/`:
-
-- **Windows**: `.msi` installer in `msi/` subfolder
-- **macOS**: `.dmg` in `dmg/` subfolder or `.app` in `macos/` subfolder
-- **Linux**: `.deb`, `.AppImage` in their respective subfolders
+The built application is in `src-tauri/target/release/bundle/` (`.msi` on Windows, `.dmg`/`.app` on
+macOS, `.deb`/`.AppImage` on Linux).
 
 ## 📁 Project Structure
 
 ```
-carBaddie_frontend_SAA/
+apps/desktop/
 ├── src/
-│   ├── components/          # Reusable React components
-│   │   ├── ui/             # UI primitive components (buttons, dialogs, etc.)
-│   │   ├── ExportSection.tsx
-│   │   ├── ModeToggle.tsx
-│   │   └── ...
+│   ├── api.ts              # React Query hooks over the repository
+│   ├── db.ts               # Opens the database and the @carbaddie/core repository
+│   ├── data/               # Read-only assets (vehicle catalog)
+│   ├── components/         # React components (ui/ holds the primitives)
 │   ├── pages/              # Application pages/routes
-│   │   ├── AddVehiclePage.tsx
-│   │   ├── VehicleDetailPage.tsx
-│   │   ├── VehicleMaintenancePage.tsx
-│   │   ├── SettingsPage.tsx
-│   │   └── ...
-│   ├── lib/                # Utilities and helpers
-│   │   ├── api.ts          # API client
-│   │   └── utils.ts        # Utility functions
-│   ├── App.tsx             # Main application component
-│   ├── main.tsx            # Application entry point
-│   └── index.css           # Global styles
-├── src-tauri/              # Tauri backend
-│   ├── src/
-│   │   ├── lib.rs          # Rust commands and backend spawning
-│   │   └── main.rs         # Tauri entry point
-│   ├── icons/              # Application icons
-│   ├── Cargo.toml          # Rust dependencies
-│   └── tauri.conf.json     # Tauri configuration
-├── public/                 # Static assets
-├── scripts/                # Build and dev scripts
-├── package.json            # Node dependencies and scripts
-├── vite.config.ts          # Vite configuration
-├── tsconfig.json           # TypeScript configuration
-└── README.md               # This file
+│   ├── hooks/              # useDatabaseBootstrap, useVehicleDefinitions, ...
+│   └── services/           # Google Drive backup
+└── src-tauri/
+    ├── src/db.rs           # SQLite commands: db_open, db_exec, db_run, db_all
+    ├── src/lib.rs          # Plugins, OAuth loopback listener, command registration
+    └── tauri.conf.json
 ```
 
-## 🧪 Development Scripts
+## 💾 Your Data
 
-```bash
-# Start development server (frontend only)
-npm run dev
-
-# Start full development environment (frontend + backend)
-npm run dev:all
-
-# Build frontend for production
-npm run build
-
-# Preview production build
-npm run preview
-
-# Run linter
-npm run lint
-
-# Start Tauri in development mode
-npm run tauri dev
-
-# Build Tauri application
-npm run tauri build
-```
-
-## 🔧 Configuration
-
-### Tauri Configuration
-
-Edit `src-tauri/tauri.conf.json` to customize:
-
-- Application name and identifier
-- Window dimensions and behavior
-- Bundled resources
-- Icons and metadata
-
-### Build Configuration
-
-The application bundles:
-
-- Python backend executable as an external binary
-- SQLite database (`car_baddie.db`) as a resource
-- Application icons for all platforms
+- The database is `car_baddie.db` in the app data directory
+  (Windows: `%APPDATA%\com.carbaddie.app\`). It is created on first run; nothing is bundled.
+- On start the schema is migrated to the latest version (`packages/core/src/db/migrations.ts`).
+  Before any upgrade the previous file is copied to `car_baddie.before-v<N>-<timestamp>.db` next to it.
+- Settings → Export writes a JSON backup that the mobile app can also restore.
 
 ## 🐛 Troubleshooting
 
-### Backend Won't Start
+### "Database Error" on start
 
-- Ensure Python virtual environment is activated
-- Check that all Python dependencies are installed
-- Verify the database path in the `.env` file
+- The error screen shows the message and the database path. The original file is untouched if a
+  migration fails (each migration runs in a transaction), and a pre-upgrade copy sits next to it.
+- To start fresh, close the app and move `car_baddie.db` out of the app data directory.
 
 ### Build Fails on Windows
 
-- Install Microsoft C++ Build Tools
+- Install Microsoft C++ Build Tools (also needed to compile the bundled SQLite)
 - Ensure Rust is properly installed and in PATH
 - Try running in a fresh terminal after installing dependencies
-
-### Database Errors
-
-- Delete `car_baddie.db` and restart (will create a fresh database)
-- Check that migrations have run successfully
-- Verify database file permissions
-
-### PyInstaller Issues
-
-- Ensure all hidden imports are specified in the `.spec` file
-- Check that `aiosqlite` is explicitly imported in `run_server.py`
-- Verify the correct architecture-specific spec file is used
 
 ## 📝 License
 

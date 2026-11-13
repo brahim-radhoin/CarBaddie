@@ -75,12 +75,8 @@ export function GoogleDriveSyncSection() {
       // 1. Download latest from Google Drive
       const { backupData } = await downloadBackupFromGoogleDrive();
 
-      // 2. Prepare FormData for analyze
-      const formData = new FormData();
-      const jsonBlob = new Blob([JSON.stringify(backupData)], { type: "application/json" });
-      formData.append("backup_file", jsonBlob, "carbaddie_backup.json");
-
-      const analysis = await analyzeBackup(formData);
+      // 2. Compare it with local data
+      const analysis = await analyzeBackup(backupData);
       const newCount = analysis.new_vehicles.length;
       const conflictCount = analysis.conflicting_vehicles.length;
 

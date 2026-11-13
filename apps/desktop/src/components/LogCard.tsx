@@ -23,7 +23,7 @@ import { useNavigate } from "react-router-dom";
 
 interface LogCardProps {
   log: MaintenanceLog;
-  onDelete: (logId: number) => Promise<void>;
+  onDelete: (logId: string) => Promise<void>;
 }
 
 export function LogCard({ log, onDelete }: LogCardProps) {

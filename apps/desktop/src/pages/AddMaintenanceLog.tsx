@@ -9,7 +9,6 @@ import {
   useUpdateMaintenanceLog,
 } from "../api";
 import { MaintenanceLogCreate, CustomFieldValueCreate } from "../types";
-import { AxiosError } from "axios";
 import { toast } from "sonner";
 import { Checkbox } from "@/components/ui/checkbox";
 
@@ -45,10 +44,10 @@ export function AddMaintenanceLogPage() {
   const [notes, setNotes] = useState("");
   const [customFieldValues, setCustomFieldValues] = useState<Record<string, string>>({});
   const isFormReady = !isEditMode || (!!logToEdit && serviceTypes.length > 0);
-  const [checkedSuggestions, setCheckedSuggestions] = useState<number[]>([]);
+  const [checkedSuggestions, setCheckedSuggestions] = useState<string[]>([]);
 
   const selectedServiceType = useMemo(
-    () => serviceTypes?.find((st) => st.id === Number(serviceTypeId)),
+    () => serviceTypes?.find((st) => st.id === serviceTypeId),
     [serviceTypes, serviceTypeId]
   );
 
@@ -86,12 +85,12 @@ export function AddMaintenanceLogPage() {
     const customFieldsPayload: CustomFieldValueCreate[] = Object.entries(customFieldValues)
       .filter(([_, value]) => value !== undefined && value !== "")
       .map(([fieldId, value]) => ({
-        field_id: Number(fieldId),
+        field_id: fieldId,
         value: String(value),
       }));
 
     const payload: MaintenanceLogCreate = {
-      service_type_id: Number(serviceTypeId),
+      service_type_id: serviceTypeId,
       date,
       mileage: parseInt(mileage, 10),
       cost: cost ? parseFloat(cost) : 0,
@@ -101,7 +100,7 @@ export function AddMaintenanceLogPage() {
 
     if (isEditMode && logId) {
       updateMutation.mutate(
-        { logId: Number(logId), logData: payload },
+        { logId: logId!, logData: payload },
         {
           onSuccess: () => {
             navigate(`/vehicles/${vehicleId}`);
@@ -110,14 +109,14 @@ export function AddMaintenanceLogPage() {
       );
     } else {
       addMutation.mutate(
-        { vehicleId: Number(vehicleId), logData: payload },
+        { vehicleId: vehicleId!, logData: payload },
         {
           onSuccess: async () => {
             if (checkedSuggestions.length > 0) {
               for (const sugId of checkedSuggestions) {
                 try {
                   await addMutation.mutateAsync({
-                    vehicleId: Number(vehicleId),
+                    vehicleId: vehicleId!,
                     logData: {
                       service_type_id: sugId,
                       date,
@@ -155,7 +154,7 @@ export function AddMaintenanceLogPage() {
     return (
       <div className="max-w-2xl space-y-4">
         <div className="rounded-lg border border-destructive/20 bg-destructive/10 p-4 text-xs text-destructive">
-          {(vehicleError as AxiosError<{ detail: string }>)?.response?.data?.detail || "Could not load vehicle data."}
+          {(vehicleError as Error | null)?.message || "Could not load vehicle data."}
         </div>
       </div>
     );
@@ -193,7 +192,7 @@ export function AddMaintenanceLogPage() {
 
       {mutationError && (
         <div className="rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-xs text-destructive">
-          {(mutationError as AxiosError<{ detail: string }>)?.response?.data?.detail || "An error occurred."}
+          {(mutationError as Error | null)?.message || "An error occurred."}
         </div>
       )}
 
