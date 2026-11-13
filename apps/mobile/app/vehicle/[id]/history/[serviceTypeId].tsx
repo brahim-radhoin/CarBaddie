@@ -12,10 +12,10 @@ export default function ServiceHistoryScreen() {
   const { data: serviceType } = useServiceType(serviceTypeId);
   const deleteMutation = useDeleteMaintenanceLog();
 
-  const handleDelete = (logId: number) => {
+  const handleDelete = (logId: string) => {
     Alert.alert("Delete Log", "Are you sure?", [
       { text: "Cancel", style: "cancel" },
-      { text: "Delete", style: "destructive", onPress: () => deleteMutation.mutate({ logId, vehicleId: Number(vehicleId) }) },
+      { text: "Delete", style: "destructive", onPress: () => deleteMutation.mutate({ logId, vehicleId: vehicleId! }) },
     ]);
   };
 

@@ -8,7 +8,7 @@ import type {
   UpcomingMaintenanceItemData,
   VehicleRead,
   VehicleServiceIntervalOverrideRead,
-} from "../src/types.ts";
+} from "../src/legacy/types.ts";
 
 // Fixed "today" so results don't depend on the clock. Dates in these tests stay in the
 // same half of the year as TODAY so daylight-saving shifts can't change day counts.

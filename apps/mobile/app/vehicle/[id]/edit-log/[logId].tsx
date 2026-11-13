@@ -21,12 +21,12 @@ export default function EditLogScreen() {
   const updateMutation = useUpdateMaintenanceLog();
   const deleteMutation = useDeleteMaintenanceLog();
 
-  const [serviceTypeId, setServiceTypeId] = useState<number | null>(null);
+  const [serviceTypeId, setServiceTypeId] = useState<string | null>(null);
   const [date, setDate] = useState("");
   const [mileage, setMileage] = useState("");
   const [cost, setCost] = useState("");
   const [notes, setNotes] = useState("");
-  const [fieldValues, setFieldValues] = useState<Record<number, string>>({});
+  const [fieldValues, setFieldValues] = useState<Record<string, string>>({});
 
   const { data: customFields } = useCustomFieldsForServiceType(serviceTypeId ?? undefined);
 
@@ -42,7 +42,7 @@ export default function EditLogScreen() {
       setMileage(String(log.mileage));
       setCost(log.cost != null ? String(log.cost) : "");
       setNotes(log.notes ?? "");
-      const fv: Record<number, string> = {};
+      const fv: Record<string, string> = {};
       (log.custom_field_values || []).forEach((cfv) => {
         fv[cfv.field_id] = cfv.value;
       });
@@ -75,11 +75,11 @@ export default function EditLogScreen() {
 
     const cfv: CustomFieldValueCreate[] = Object.entries(fieldValues)
       .filter(([_, v]) => v != null && v.trim().length > 0)
-      .map(([fId, value]) => ({ field_id: Number(fId), value }));
+      .map(([fId, value]) => ({ field_id: fId, value }));
 
     updateMutation.mutate(
       {
-        logId: Number(logId),
+        logId: logId!,
         data: {
           date: date.trim(),
           mileage: numMileage,
@@ -104,7 +104,7 @@ export default function EditLogScreen() {
         style: "destructive",
         onPress: () => {
           deleteMutation.mutate(
-            { logId: Number(logId), vehicleId: Number(vehicleId) },
+            { logId: logId!, vehicleId: vehicleId! },
             {
               onSuccess: () => router.back(),
               onError: (err) => Alert.alert("Error", err.message || "Failed to delete log."),

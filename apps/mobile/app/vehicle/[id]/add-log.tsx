@@ -1,8 +1,7 @@
 import { StyleSheet, ScrollView, TextInput, TouchableOpacity, View, Alert } from "react-native";
 import { useLocalSearchParams, useRouter, useTheme } from "expo-router";
 import { useVehicle, useServiceTypes, useAddMaintenanceLog, useCustomFieldsForServiceType } from "@/src/hooks/useDatabase";
-import { getDatabase } from "@/src/db/schema";
-import { seedDefaultServiceTypes } from "@/src/db/seed";
+import { restoreDefaultServiceTypes } from "@/src/db/seed";
 import { useQueryClient } from "@tanstack/react-query";
 import { Text } from "@/components/Themed";
 import { useState, useEffect } from "react";
@@ -11,7 +10,7 @@ import type { CustomFieldValueCreate } from "@/src/types";
 export default function AddLogScreen() {
   const params = useLocalSearchParams<{ id: string; serviceTypeId?: string }>();
   const vehicleId = params.id;
-  const initialServiceTypeId = params.serviceTypeId ? Number(params.serviceTypeId) : null;
+  const initialServiceTypeId = params.serviceTypeId || null;
 
   const { colors } = useTheme();
   const router = useRouter();
@@ -24,21 +23,20 @@ export default function AddLogScreen() {
   const handleSeedDefaults = async () => {
     try {
       setIsSeeding(true);
-      const db = await getDatabase();
-      await seedDefaultServiceTypes(db, true);
+      await restoreDefaultServiceTypes();
       queryClient.invalidateQueries();
     } finally {
       setIsSeeding(false);
     }
   };
 
-  const [serviceTypeId, setServiceTypeId] = useState<number | null>(initialServiceTypeId);
+  const [serviceTypeId, setServiceTypeId] = useState<string | null>(initialServiceTypeId);
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [mileage, setMileage] = useState("");
   const [cost, setCost] = useState("");
   const [notes, setNotes] = useState("");
-  const [fieldValues, setFieldValues] = useState<Record<number, string>>({});
-  const [checkedSuggestions, setCheckedSuggestions] = useState<number[]>([]);
+  const [fieldValues, setFieldValues] = useState<Record<string, string>>({});
+  const [checkedSuggestions, setCheckedSuggestions] = useState<string[]>([]);
 
   useEffect(() => {
     if (initialServiceTypeId && serviceTypes?.length) {
@@ -66,7 +64,7 @@ export default function AddLogScreen() {
     setDate(y.toISOString().slice(0, 10));
   };
 
-  const toggleSuggestion = (id: number) => {
+  const toggleSuggestion = (id: string) => {
     setCheckedSuggestions((prev) =>
       prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
     );
@@ -87,11 +85,11 @@ export default function AddLogScreen() {
       setIsSaving(true);
       const cfv: CustomFieldValueCreate[] = Object.entries(fieldValues)
         .filter(([_, v]) => v != null && v.trim().length > 0)
-        .map(([fieldId, value]) => ({ field_id: Number(fieldId), value }));
+        .map(([fieldId, value]) => ({ field_id: fieldId, value }));
 
       // 1. Add primary log
       await addMutation.mutateAsync({
-        vehicleId: Number(vehicleId),
+        vehicleId: vehicleId!,
         data: {
           date: date.trim(),
           mileage: numMileage,
@@ -106,7 +104,7 @@ export default function AddLogScreen() {
       if (checkedSuggestions.length > 0) {
         for (const sugId of checkedSuggestions) {
           await addMutation.mutateAsync({
-            vehicleId: Number(vehicleId),
+            vehicleId: vehicleId!,
             data: {
               date: date.trim(),
               mileage: numMileage,

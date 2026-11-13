@@ -41,7 +41,7 @@ export default function EditVehicleScreen() {
     }
     updateMutation.mutate(
       {
-        id: Number(id),
+        id: id!,
         data: {
           make: make.trim(),
           model: model.trim(),
@@ -65,7 +65,7 @@ export default function EditVehicleScreen() {
           text: "Delete Vehicle",
           style: "destructive",
           onPress: () => {
-            deleteMutation.mutate(Number(id), {
+            deleteMutation.mutate(id!, {
               onSuccess: () => {
                 router.dismissAll();
                 router.replace("/(tabs)");

@@ -14,3 +14,26 @@ export {
 export type { ComputeUpcomingMaintenanceInput } from "./maintenance/upcoming";
 
 export { vehicleIdentityKey } from "./vehicles/identity";
+
+export { uuidv7, uuidv5, isUuid, intervalOverrideId, setRandomSource, ID_NAMESPACES } from "./ids/uuid";
+export type { RandomBytes } from "./ids/uuid";
+
+export { HlcClock, formatHlc, parseHlc, tickHlc, receiveHlc } from "./sync/hlc";
+export type { Hlc } from "./sync/hlc";
+
+export {
+  BUILTIN_SERVICE_TYPES,
+  BUILTIN_RESETS,
+  BUILTIN_SUGGESTIONS,
+  builtinServiceTypeId,
+  findBuiltinServiceTypeByName,
+} from "./service-types/builtin";
+export type { BuiltinServiceType } from "./service-types/builtin";
+
+export { backupFileSchema, parseBackup, encodeBackup } from "./backup/format";
+export type { BackupFile, EncodeBackupInput } from "./backup/format";
+
+export type { SqlDriver, SqlValue, WriteContext } from "./db/driver";
+export { migrate, getSchemaVersion, MIGRATIONS, LATEST_SCHEMA_VERSION } from "./db/migrations";
+export { seedBuiltinServiceTypes } from "./db/seed";
+export type { SeedOptions } from "./db/seed";

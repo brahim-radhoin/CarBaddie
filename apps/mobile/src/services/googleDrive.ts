@@ -1,6 +1,7 @@
 import * as WebBrowser from "expo-web-browser";
 import * as Linking from "expo-linking";
 import * as repo from "../db/repository";
+import { parseBackup } from "@carbaddie/core";
 import { exportBackupData, analyzeBackup, executeImport } from "../db/backup";
 import type { FullBackupData } from "../types";
 
@@ -246,10 +247,11 @@ export async function downloadBackupFromGoogleDrive(): Promise<{
   }
 
   const content = await dlRes.text();
-  const backupData: FullBackupData = JSON.parse(content);
-
-  if (!backupData.metadata || !backupData.vehicles || !backupData.service_types) {
-    throw new Error("The backup file retrieved from Google Drive is invalid or corrupted.");
+  let backupData: FullBackupData;
+  try {
+    backupData = parseBackup(JSON.parse(content));
+  } catch (e: any) {
+    throw new Error(`The backup file retrieved from Google Drive is invalid or corrupted. ${e?.message ?? ""}`.trim());
   }
 
   return {

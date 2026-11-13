@@ -1,12 +1,37 @@
-import { getDatabase } from "./schema";
+import type { SQLiteDatabase } from "expo-sqlite";
+import { intervalOverrideId, type WriteContext } from "@carbaddie/core";
+import { getDatabase, getWriteContext } from "./schema";
 import type {
+  Id,
   VehicleCreate, VehicleUpdate, VehicleRead,
   ServiceTypeCreate, ServiceTypeUpdate, ServiceTypeRead,
-  CustomFieldRead, CustomFieldValueRead,
+  CustomFieldCreate, CustomFieldRead, CustomFieldValueCreate, CustomFieldValueRead,
   MaintenanceLogCreate, MaintenanceLogUpdate, MaintenanceLogRead,
   VehicleServiceIntervalOverrideCreate, VehicleServiceIntervalOverrideRead,
   ServiceTypeLogSummary, MaintenanceSummary,
 } from "../types";
+
+// Sync model (see packages/core/src/db/migrations.ts, v2):
+// - every write stamps `updated_at` (HLC) and `device_id`
+// - rows are never deleted: `deleted_at` marks a tombstone, and every read filters on it
+// - deleting a parent tombstones its children the way the ON DELETE rules used to
+
+type Db = SQLiteDatabase;
+
+async function open(): Promise<{ db: Db; w: WriteContext }> {
+  return { db: await getDatabase(), w: await getWriteContext() };
+}
+
+/** `SET` clause fragment and values that mark a row as written now. */
+function touched(w: WriteContext): [string, string[]] {
+  return ["updated_at = ?, device_id = ?", [w.stamp(), w.deviceId]];
+}
+
+/** `SET` clause fragment and values that tombstone a row now. */
+function tombstoned(w: WriteContext): [string, string[]] {
+  const stamp = w.stamp();
+  return ["deleted_at = ?, updated_at = ?, device_id = ?", [stamp, stamp, w.deviceId]];
+}
 
 // ====================================================================
 // VEHICLE CRUD
@@ -14,50 +39,88 @@ import type {
 
 export async function getAllVehicles(): Promise<VehicleRead[]> {
   const db = await getDatabase();
-  const rows = await db.getAllAsync<any>("SELECT * FROM vehicles ORDER BY id DESC");
+  // UUIDv7 ids sort by creation time, so this keeps "newest first".
+  const rows = await db.getAllAsync<any>("SELECT * FROM vehicles WHERE deleted_at IS NULL ORDER BY id DESC");
   const vehicles: VehicleRead[] = [];
   for (const row of rows) {
-    vehicles.push(await buildVehicleRead(row));
+    vehicles.push(await buildVehicleRead(db, row));
   }
   return vehicles;
 }
 
-export async function getVehicleById(id: number): Promise<VehicleRead | null> {
+export async function getVehicleById(id: Id): Promise<VehicleRead | null> {
   const db = await getDatabase();
-  const row = await db.getFirstAsync<any>("SELECT * FROM vehicles WHERE id = ?", [id]);
+  const row = await db.getFirstAsync<any>("SELECT * FROM vehicles WHERE id = ? AND deleted_at IS NULL", [id]);
   if (!row) return null;
-  return buildVehicleRead(row);
+  return buildVehicleRead(db, row);
+}
+
+export async function insertVehicle(db: Db, w: WriteContext, data: VehicleCreate): Promise<Id> {
+  const id = w.newId();
+  const vin = data.vin && data.vin.trim() ? data.vin.trim() : null;
+  await db.runAsync(
+    `INSERT INTO vehicles (id, make, model, year, vin, initial_mileage, acquisition_date, updated_at, deleted_at, device_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)`,
+    [id, data.make, data.model, data.year ?? null, vin, data.initial_mileage ?? null, data.acquisition_date ?? null,
+      w.stamp(), w.deviceId]
+  );
+  return id;
 }
 
 export async function createVehicle(data: VehicleCreate): Promise<VehicleRead> {
-  const db = await getDatabase();
-  const result = await db.runAsync(
-    "INSERT INTO vehicles (make, model, year, vin, initial_mileage, acquisition_date) VALUES (?, ?, ?, ?, ?, ?)",
-    [data.make, data.model, data.year ?? null, data.vin ?? null, data.initial_mileage ?? null, data.acquisition_date ?? null]
-  );
-  return (await getVehicleById(result.lastInsertRowId))!;
+  const { db, w } = await open();
+  const id = await insertVehicle(db, w, data);
+  return (await getVehicleById(id))!;
 }
 
-export async function updateVehicle(id: number, data: VehicleUpdate): Promise<VehicleRead> {
-  const db = await getDatabase();
+export async function updateVehicle(id: Id, data: VehicleUpdate): Promise<VehicleRead> {
+  const { db, w } = await open();
   const sets: string[] = [];
   const vals: any[] = [];
   if (data.make !== undefined) { sets.push("make = ?"); vals.push(data.make); }
   if (data.model !== undefined) { sets.push("model = ?"); vals.push(data.model); }
   if (data.year !== undefined) { sets.push("year = ?"); vals.push(data.year); }
-  if (data.vin !== undefined) { sets.push("vin = ?"); vals.push(data.vin); }
+  if (data.vin !== undefined) { sets.push("vin = ?"); vals.push(data.vin && data.vin.trim() ? data.vin.trim() : null); }
   if (data.initial_mileage !== undefined) { sets.push("initial_mileage = ?"); vals.push(data.initial_mileage); }
   if (data.acquisition_date !== undefined) { sets.push("acquisition_date = ?"); vals.push(data.acquisition_date); }
   if (sets.length > 0) {
-    vals.push(id);
-    await db.runAsync(`UPDATE vehicles SET ${sets.join(", ")} WHERE id = ?`, vals);
+    const [touch, touchVals] = touched(w);
+    await db.runAsync(
+      `UPDATE vehicles SET ${sets.join(", ")}, ${touch} WHERE id = ? AND deleted_at IS NULL`,
+      [...vals, ...touchVals, id]
+    );
   }
   return (await getVehicleById(id))!;
 }
 
-export async function deleteVehicle(id: number): Promise<void> {
-  const db = await getDatabase();
-  await db.runAsync("DELETE FROM vehicles WHERE id = ?", [id]);
+/** Tombstones a vehicle with its logs, their values and its interval overrides. No transaction. */
+export async function tombstoneVehicle(db: Db, w: WriteContext, id: Id): Promise<void> {
+  const [del, delVals] = tombstoned(w);
+  await db.runAsync(
+    `UPDATE custom_field_values SET ${del} WHERE deleted_at IS NULL
+       AND log_id IN (SELECT id FROM maintenance_logs WHERE vehicle_id = ?)`,
+    [...delVals, id]
+  );
+  await db.runAsync(`UPDATE maintenance_logs SET ${del} WHERE deleted_at IS NULL AND vehicle_id = ?`, [...delVals, id]);
+  await db.runAsync(
+    `UPDATE vehicle_service_interval_overrides SET ${del} WHERE deleted_at IS NULL AND vehicle_id = ?`,
+    [...delVals, id]
+  );
+  await db.runAsync(`UPDATE vehicles SET ${del} WHERE deleted_at IS NULL AND id = ?`, [...delVals, id]);
+}
+
+export async function deleteVehicle(id: Id): Promise<void> {
+  const { db, w } = await open();
+  await db.withTransactionAsync(() => tombstoneVehicle(db, w, id));
+}
+
+/** Deletes every vehicle with its logs and overrides. Service types are kept. */
+export async function deleteAllVehicles(): Promise<void> {
+  const { db, w } = await open();
+  await db.withTransactionAsync(async () => {
+    const rows = await db.getAllAsync<{ id: Id }>("SELECT id FROM vehicles WHERE deleted_at IS NULL");
+    for (const { id } of rows) await tombstoneVehicle(db, w, id);
+  });
 }
 
 // ====================================================================
@@ -65,105 +128,224 @@ export async function deleteVehicle(id: number): Promise<void> {
 // ====================================================================
 
 export async function getAllServiceTypes(): Promise<ServiceTypeRead[]> {
+  return listServiceTypes(false);
+}
+
+/** Every service type with archived fields included (flagged `archived`), for backups. */
+export async function getAllServiceTypesForExport(): Promise<ServiceTypeRead[]> {
+  return listServiceTypes(true);
+}
+
+async function listServiceTypes(includeArchivedFields: boolean): Promise<ServiceTypeRead[]> {
   const db = await getDatabase();
-  const rows = await db.getAllAsync<any>("SELECT * FROM service_types ORDER BY name ASC");
+  const rows = await db.getAllAsync<any>("SELECT * FROM service_types WHERE deleted_at IS NULL ORDER BY name ASC");
   const types: ServiceTypeRead[] = [];
   for (const row of rows) {
-    types.push(await buildServiceTypeRead(row));
+    types.push(await buildServiceTypeRead(db, row, includeArchivedFields));
   }
   return types;
 }
 
-export async function getServiceTypeById(id: number): Promise<ServiceTypeRead | null> {
+export async function getServiceTypeById(id: Id): Promise<ServiceTypeRead | null> {
   const db = await getDatabase();
-  const row = await db.getFirstAsync<any>("SELECT * FROM service_types WHERE id = ?", [id]);
+  const row = await db.getFirstAsync<any>("SELECT * FROM service_types WHERE id = ? AND deleted_at IS NULL", [id]);
   if (!row) return null;
-  return buildServiceTypeRead(row);
+  return buildServiceTypeRead(db, row, false);
 }
 
 export async function createServiceType(data: ServiceTypeCreate): Promise<ServiceTypeRead> {
-  const db = await getDatabase();
-  const result = await db.runAsync(
-    "INSERT INTO service_types (name, recommended_interval_km, recommended_interval_days) VALUES (?, ?, ?)",
-    [data.name, data.recommended_interval_km ?? null, data.recommended_interval_days ?? null]
-  );
-  const newId = result.lastInsertRowId;
-  // Create custom fields
-  for (const field of data.fields) {
+  const { db, w } = await open();
+  const id = w.newId();
+  await db.withTransactionAsync(async () => {
     await db.runAsync(
-      "INSERT INTO custom_fields (service_type_id, name, field_type, unit) VALUES (?, ?, ?, ?)",
-      [newId, field.name, field.field_type, field.unit ?? null]
+      `INSERT INTO service_types (id, slug, name, recommended_interval_km, recommended_interval_days, updated_at, deleted_at, device_id)
+       VALUES (?, NULL, ?, ?, ?, ?, NULL, ?)`,
+      [id, data.name, data.recommended_interval_km ?? null, data.recommended_interval_days ?? null, w.stamp(), w.deviceId]
     );
-  }
-  // Create resets
-  for (const resetId of (data.resets ?? [])) {
-    await db.runAsync("INSERT OR IGNORE INTO service_type_resets (parent_id, reset_id) VALUES (?, ?)", [newId, resetId]);
-  }
-  // Create suggestions
-  for (const sugId of (data.suggestions ?? [])) {
-    await db.runAsync("INSERT OR IGNORE INTO service_type_suggestions (parent_id, suggestion_id) VALUES (?, ?)", [newId, sugId]);
-  }
-  return (await getServiceTypeById(newId))!;
-}
-
-export async function updateServiceType(id: number, data: ServiceTypeUpdate): Promise<ServiceTypeRead> {
-  const db = await getDatabase();
-  const sets: string[] = [];
-  const vals: any[] = [];
-  if (data.name !== undefined) { sets.push("name = ?"); vals.push(data.name); }
-  if (data.recommended_interval_km !== undefined) { sets.push("recommended_interval_km = ?"); vals.push(data.recommended_interval_km); }
-  if (data.recommended_interval_days !== undefined) { sets.push("recommended_interval_days = ?"); vals.push(data.recommended_interval_days); }
-  if (sets.length > 0) {
-    vals.push(id);
-    await db.runAsync(`UPDATE service_types SET ${sets.join(", ")} WHERE id = ?`, vals);
-  }
-  // Replace custom fields if provided
-  if (data.fields !== undefined) {
-    await db.runAsync("DELETE FROM custom_fields WHERE service_type_id = ?", [id]);
-    for (const field of data.fields) {
-      await db.runAsync(
-        "INSERT INTO custom_fields (service_type_id, name, field_type, unit) VALUES (?, ?, ?, ?)",
-        [id, field.name, field.field_type, field.unit ?? null]
-      );
-    }
-  }
-  // Replace resets if provided
-  if (data.resets !== undefined) {
-    await db.runAsync("DELETE FROM service_type_resets WHERE parent_id = ?", [id]);
-    for (const resetId of data.resets) {
-      await db.runAsync("INSERT OR IGNORE INTO service_type_resets (parent_id, reset_id) VALUES (?, ?)", [id, resetId]);
-    }
-  }
-  // Replace suggestions if provided
-  if (data.suggestions !== undefined) {
-    await db.runAsync("DELETE FROM service_type_suggestions WHERE parent_id = ?", [id]);
-    for (const sugId of data.suggestions) {
-      await db.runAsync("INSERT OR IGNORE INTO service_type_suggestions (parent_id, suggestion_id) VALUES (?, ?)", [id, sugId]);
-    }
-  }
+    await syncFields(db, w, id, data.fields);
+    await setLinks(db, w, "service_type_resets", "reset_id", id, data.resets ?? []);
+    await setLinks(db, w, "service_type_suggestions", "suggestion_id", id, data.suggestions ?? []);
+  });
   return (await getServiceTypeById(id))!;
 }
 
-export async function deleteServiceType(id: number): Promise<void> {
-  const db = await getDatabase();
-  await db.runAsync("DELETE FROM service_types WHERE id = ?", [id]);
+export async function updateServiceType(id: Id, data: ServiceTypeUpdate): Promise<ServiceTypeRead> {
+  const { db, w } = await open();
+  await db.withTransactionAsync(async () => {
+    const sets: string[] = [];
+    const vals: any[] = [];
+    if (data.name !== undefined) { sets.push("name = ?"); vals.push(data.name); }
+    if (data.recommended_interval_km !== undefined) { sets.push("recommended_interval_km = ?"); vals.push(data.recommended_interval_km); }
+    if (data.recommended_interval_days !== undefined) { sets.push("recommended_interval_days = ?"); vals.push(data.recommended_interval_days); }
+    if (sets.length > 0) {
+      const [touch, touchVals] = touched(w);
+      await db.runAsync(
+        `UPDATE service_types SET ${sets.join(", ")}, ${touch} WHERE id = ? AND deleted_at IS NULL`,
+        [...vals, ...touchVals, id]
+      );
+    }
+    if (data.fields !== undefined) await syncFields(db, w, id, data.fields);
+    if (data.resets !== undefined) await setLinks(db, w, "service_type_resets", "reset_id", id, data.resets);
+    if (data.suggestions !== undefined) {
+      await setLinks(db, w, "service_type_suggestions", "suggestion_id", id, data.suggestions);
+    }
+  });
+  return (await getServiceTypeById(id))!;
 }
 
-export async function getCustomFieldsForServiceType(serviceTypeId: number): Promise<CustomFieldRead[]> {
+/**
+ * Tombstones a service type with its fields, their values, its links and its overrides.
+ * Its logs are kept with `service_type_id` cleared (what ON DELETE SET NULL used to do).
+ */
+export async function deleteServiceType(id: Id): Promise<void> {
+  const { db, w } = await open();
+  await db.withTransactionAsync(async () => {
+    const [del, delVals] = tombstoned(w);
+    await db.runAsync(
+      `UPDATE custom_field_values SET ${del} WHERE deleted_at IS NULL
+         AND field_id IN (SELECT id FROM custom_fields WHERE service_type_id = ?)`,
+      [...delVals, id]
+    );
+    await db.runAsync(`UPDATE custom_fields SET ${del} WHERE deleted_at IS NULL AND service_type_id = ?`, [...delVals, id]);
+    await db.runAsync(
+      `UPDATE service_type_resets SET ${del} WHERE deleted_at IS NULL AND (parent_id = ? OR reset_id = ?)`,
+      [...delVals, id, id]
+    );
+    await db.runAsync(
+      `UPDATE service_type_suggestions SET ${del} WHERE deleted_at IS NULL AND (parent_id = ? OR suggestion_id = ?)`,
+      [...delVals, id, id]
+    );
+    await db.runAsync(
+      `UPDATE vehicle_service_interval_overrides SET ${del} WHERE deleted_at IS NULL AND service_type_id = ?`,
+      [...delVals, id]
+    );
+    const [touch, touchVals] = touched(w);
+    await db.runAsync(
+      `UPDATE maintenance_logs SET service_type_id = NULL, ${touch} WHERE deleted_at IS NULL AND service_type_id = ?`,
+      [...touchVals, id]
+    );
+    await db.runAsync(`UPDATE service_types SET ${del} WHERE deleted_at IS NULL AND id = ?`, [...delVals, id]);
+  });
+}
+
+export async function getCustomFieldsForServiceType(serviceTypeId: Id): Promise<CustomFieldRead[]> {
   const db = await getDatabase();
-  return db.getAllAsync<CustomFieldRead>(
-    "SELECT id, name, field_type, unit FROM custom_fields WHERE service_type_id = ? ORDER BY sort_order ASC",
+  return getFields(db, serviceTypeId, false);
+}
+
+async function getFields(db: Db, serviceTypeId: Id, includeArchived: boolean): Promise<CustomFieldRead[]> {
+  const rows = await db.getAllAsync<any>(
+    `SELECT id, name, field_type, unit, archived_at FROM custom_fields
+     WHERE service_type_id = ? AND deleted_at IS NULL ${includeArchived ? "" : "AND archived_at IS NULL"}
+     ORDER BY archived_at IS NOT NULL, sort_order ASC, name ASC`,
     [serviceTypeId]
   );
+  return rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    field_type: r.field_type,
+    unit: r.unit,
+    ...(r.archived_at ? { archived: true } : {}),
+  }));
+}
+
+/**
+ * Makes `incoming` the service type's active field list. Existing fields are matched by id,
+ * then by name, and updated in place. Fields left out, or whose type changed, are archived
+ * (never deleted) so values already recorded with them keep their definition.
+ */
+export async function syncFields(db: Db, w: WriteContext, serviceTypeId: Id, incoming: CustomFieldCreate[]): Promise<void> {
+  const existing = await db.getAllAsync<{ id: Id; name: string; field_type: string; unit: string | null; sort_order: number }>(
+    `SELECT id, name, field_type, unit, sort_order FROM custom_fields
+     WHERE service_type_id = ? AND archived_at IS NULL AND deleted_at IS NULL`,
+    [serviceTypeId]
+  );
+  const claimed = new Map<Id, CustomFieldCreate>();
+  const matches = incoming.map((field) => {
+    const match =
+      (field.id ? existing.find((e) => e.id === field.id && !claimed.has(e.id)) : undefined) ??
+      existing.find((e) => e.name === field.name && !claimed.has(e.id));
+    if (match && match.field_type === field.field_type) {
+      claimed.set(match.id, field);
+      return match;
+    }
+    return undefined; // new field, or a type change: values of the old type stay with the archived field
+  });
+
+  // Archive first so the names they free can be reused below.
+  for (const e of existing) {
+    if (claimed.has(e.id)) continue;
+    const stamp = w.stamp();
+    await db.runAsync(
+      "UPDATE custom_fields SET archived_at = ?, updated_at = ?, device_id = ? WHERE id = ?",
+      [stamp, stamp, w.deviceId, e.id]
+    );
+  }
+
+  for (const [index, field] of incoming.entries()) {
+    const unit = field.unit && field.unit.trim() ? field.unit.trim() : null;
+    const match = matches[index];
+    if (match) {
+      if (match.name !== field.name || match.unit !== unit || match.sort_order !== index) {
+        const [touch, touchVals] = touched(w);
+        await db.runAsync(
+          `UPDATE custom_fields SET name = ?, unit = ?, sort_order = ?, ${touch} WHERE id = ?`,
+          [field.name, unit, index, ...touchVals, match.id]
+        );
+      }
+    } else {
+      await db.runAsync(
+        `INSERT INTO custom_fields (id, service_type_id, name, field_type, unit, required, sort_order, default_value,
+                                    archived_at, updated_at, deleted_at, device_id)
+         VALUES (?, ?, ?, ?, ?, 0, ?, NULL, NULL, ?, NULL, ?)`,
+        [w.newId(), serviceTypeId, field.name, field.field_type, unit, index, w.stamp(), w.deviceId]
+      );
+    }
+  }
+}
+
+/** Makes `childIds` the parent's live links in a reset/suggestion join table. */
+export async function setLinks(
+  db: Db,
+  w: WriteContext,
+  table: "service_type_resets" | "service_type_suggestions",
+  column: "reset_id" | "suggestion_id",
+  parentId: Id,
+  childIds: Id[]
+): Promise<void> {
+  const wanted = new Set(childIds);
+  const live = await db.getAllAsync<{ child: Id }>(
+    `SELECT ${column} AS child FROM ${table} WHERE parent_id = ? AND deleted_at IS NULL`,
+    [parentId]
+  );
+  for (const { child } of live) {
+    if (wanted.has(child)) continue;
+    const [del, delVals] = tombstoned(w);
+    await db.runAsync(`UPDATE ${table} SET ${del} WHERE parent_id = ? AND ${column} = ?`, [...delVals, parentId, child]);
+  }
+  const liveSet = new Set(live.map((l) => l.child));
+  for (const child of wanted) {
+    if (liveSet.has(child)) continue;
+    await db.runAsync(
+      `INSERT INTO ${table} (parent_id, ${column}, updated_at, deleted_at, device_id) VALUES (?, ?, ?, NULL, ?)
+       ON CONFLICT(parent_id, ${column}) DO UPDATE SET deleted_at = NULL, updated_at = excluded.updated_at,
+         device_id = excluded.device_id`,
+      [parentId, child, w.stamp(), w.deviceId]
+    );
+  }
 }
 
 // ====================================================================
 // MAINTENANCE LOG CRUD
 // ====================================================================
 
-export async function getLogsForVehicle(vehicleId: number, serviceTypeId?: number): Promise<MaintenanceLogRead[]> {
+export async function getLogsForVehicle(vehicleId: Id, serviceTypeId?: Id): Promise<MaintenanceLogRead[]> {
   const db = await getDatabase();
-  let sql = "SELECT * FROM maintenance_logs WHERE vehicle_id = ?";
+  return listLogs(db, vehicleId, serviceTypeId);
+}
+
+async function listLogs(db: Db, vehicleId: Id, serviceTypeId?: Id): Promise<MaintenanceLogRead[]> {
+  let sql = "SELECT * FROM maintenance_logs WHERE vehicle_id = ? AND deleted_at IS NULL";
   const params: any[] = [vehicleId];
   if (serviceTypeId !== undefined) {
     sql += " AND service_type_id = ?";
@@ -173,102 +355,171 @@ export async function getLogsForVehicle(vehicleId: number, serviceTypeId?: numbe
   const rows = await db.getAllAsync<any>(sql, params);
   const logs: MaintenanceLogRead[] = [];
   for (const row of rows) {
-    logs.push(await buildMaintenanceLogRead(row));
+    logs.push(await buildMaintenanceLogRead(db, row));
   }
   return logs;
 }
 
-export async function getLogById(logId: number): Promise<MaintenanceLogRead | null> {
+export async function getLogById(logId: Id): Promise<MaintenanceLogRead | null> {
   const db = await getDatabase();
-  const row = await db.getFirstAsync<any>("SELECT * FROM maintenance_logs WHERE id = ?", [logId]);
+  const row = await db.getFirstAsync<any>("SELECT * FROM maintenance_logs WHERE id = ? AND deleted_at IS NULL", [logId]);
   if (!row) return null;
-  return buildMaintenanceLogRead(row);
+  return buildMaintenanceLogRead(db, row);
 }
 
-export async function createMaintenanceLog(vehicleId: number, data: MaintenanceLogCreate): Promise<MaintenanceLogRead> {
-  const db = await getDatabase();
-  const result = await db.runAsync(
-    "INSERT INTO maintenance_logs (vehicle_id, service_type_id, date, mileage, cost, notes) VALUES (?, ?, ?, ?, ?, ?)",
-    [vehicleId, data.service_type_id ?? null, data.date, data.mileage, data.cost, data.notes ?? null]
+export async function insertMaintenanceLog(db: Db, w: WriteContext, vehicleId: Id, data: MaintenanceLogCreate): Promise<Id> {
+  const id = w.newId();
+  await db.runAsync(
+    `INSERT INTO maintenance_logs (id, vehicle_id, service_type_id, date, mileage, cost, notes, updated_at, deleted_at, device_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)`,
+    [id, vehicleId, data.service_type_id ?? null, data.date, data.mileage, data.cost, data.notes ?? null, w.stamp(), w.deviceId]
   );
-  const newId = result.lastInsertRowId;
-  // Create custom field values
-  for (const cfv of (data.custom_field_values ?? [])) {
-    await db.runAsync(
-      "INSERT INTO custom_field_values (log_id, field_id, value) VALUES (?, ?, ?)",
-      [newId, cfv.field_id, cfv.value]
-    );
+  for (const cfv of data.custom_field_values ?? []) {
+    await insertFieldValue(db, w, id, cfv);
   }
-  return (await getLogById(newId))!;
+  return id;
 }
 
-export async function updateMaintenanceLog(logId: number, data: MaintenanceLogUpdate): Promise<MaintenanceLogRead> {
-  const db = await getDatabase();
-  const sets: string[] = [];
-  const vals: any[] = [];
-  if (data.date !== undefined) { sets.push("date = ?"); vals.push(data.date); }
-  if (data.mileage !== undefined) { sets.push("mileage = ?"); vals.push(data.mileage); }
-  if (data.cost !== undefined) { sets.push("cost = ?"); vals.push(data.cost); }
-  if (data.notes !== undefined) { sets.push("notes = ?"); vals.push(data.notes); }
-  if (data.service_type_id !== undefined) { sets.push("service_type_id = ?"); vals.push(data.service_type_id); }
-  if (sets.length > 0) {
-    vals.push(logId);
-    await db.runAsync(`UPDATE maintenance_logs SET ${sets.join(", ")} WHERE id = ?`, vals);
-  }
-  // Replace custom field values if provided
-  if (data.custom_field_values !== undefined) {
-    await db.runAsync("DELETE FROM custom_field_values WHERE log_id = ?", [logId]);
-    for (const cfv of data.custom_field_values) {
+export async function insertFieldValue(db: Db, w: WriteContext, logId: Id, cfv: CustomFieldValueCreate): Promise<void> {
+  await db.runAsync(
+    `INSERT INTO custom_field_values (id, log_id, field_id, value, updated_at, deleted_at, device_id)
+     VALUES (?, ?, ?, ?, ?, NULL, ?)`,
+    [w.newId(), logId, cfv.field_id, cfv.value, w.stamp(), w.deviceId]
+  );
+}
+
+export async function createMaintenanceLog(vehicleId: Id, data: MaintenanceLogCreate): Promise<MaintenanceLogRead> {
+  const { db, w } = await open();
+  let id!: Id;
+  await db.withTransactionAsync(async () => {
+    id = await insertMaintenanceLog(db, w, vehicleId, data);
+  });
+  return (await getLogById(id))!;
+}
+
+export async function updateMaintenanceLog(logId: Id, data: MaintenanceLogUpdate): Promise<MaintenanceLogRead> {
+  const { db, w } = await open();
+  await db.withTransactionAsync(async () => {
+    const sets: string[] = [];
+    const vals: any[] = [];
+    if (data.date !== undefined) { sets.push("date = ?"); vals.push(data.date); }
+    if (data.mileage !== undefined) { sets.push("mileage = ?"); vals.push(data.mileage); }
+    if (data.cost !== undefined) { sets.push("cost = ?"); vals.push(data.cost); }
+    if (data.notes !== undefined) { sets.push("notes = ?"); vals.push(data.notes); }
+    if (data.service_type_id !== undefined) { sets.push("service_type_id = ?"); vals.push(data.service_type_id); }
+    if (sets.length > 0) {
+      const [touch, touchVals] = touched(w);
       await db.runAsync(
-        "INSERT INTO custom_field_values (log_id, field_id, value) VALUES (?, ?, ?)",
-        [logId, cfv.field_id, cfv.value]
+        `UPDATE maintenance_logs SET ${sets.join(", ")}, ${touch} WHERE id = ? AND deleted_at IS NULL`,
+        [...vals, ...touchVals, logId]
       );
     }
-  }
+    if (data.custom_field_values !== undefined) {
+      await syncFieldValues(db, w, logId, data.custom_field_values);
+    }
+  });
   return (await getLogById(logId))!;
 }
 
-export async function deleteMaintenanceLog(logId: number): Promise<void> {
-  const db = await getDatabase();
-  await db.runAsync("DELETE FROM maintenance_logs WHERE id = ?", [logId]);
+/**
+ * Applies the values of the log's current fields. A current field left out is cleared;
+ * values recorded against archived fields are kept, since the form can't show them.
+ */
+async function syncFieldValues(db: Db, w: WriteContext, logId: Id, incoming: CustomFieldValueCreate[]): Promise<void> {
+  const wanted = new Map(incoming.map((v) => [v.field_id, v.value]));
+  const existing = await db.getAllAsync<{ id: Id; field_id: Id; value: string; archived: number }>(
+    `SELECT c.id, c.field_id, c.value, (f.archived_at IS NOT NULL OR f.deleted_at IS NOT NULL) AS archived
+     FROM custom_field_values c JOIN custom_fields f ON f.id = c.field_id
+     WHERE c.log_id = ? AND c.deleted_at IS NULL ORDER BY c.id`,
+    [logId]
+  );
+  const kept = new Set<Id>();
+  for (const e of existing) {
+    if (wanted.has(e.field_id) && !kept.has(e.field_id)) {
+      kept.add(e.field_id);
+      const value = wanted.get(e.field_id)!;
+      if (value !== e.value) {
+        const [touch, touchVals] = touched(w);
+        await db.runAsync(`UPDATE custom_field_values SET value = ?, ${touch} WHERE id = ?`, [value, ...touchVals, e.id]);
+      }
+    } else if (wanted.has(e.field_id) || !e.archived) {
+      const [del, delVals] = tombstoned(w);
+      await db.runAsync(`UPDATE custom_field_values SET ${del} WHERE id = ?`, [...delVals, e.id]);
+    }
+  }
+  for (const v of incoming) {
+    if (!kept.has(v.field_id)) {
+      kept.add(v.field_id);
+      await insertFieldValue(db, w, logId, v);
+    }
+  }
+}
+
+export async function deleteMaintenanceLog(logId: Id): Promise<void> {
+  const { db, w } = await open();
+  await db.withTransactionAsync(async () => {
+    const [del, delVals] = tombstoned(w);
+    await db.runAsync(`UPDATE custom_field_values SET ${del} WHERE deleted_at IS NULL AND log_id = ?`, [...delVals, logId]);
+    await db.runAsync(`UPDATE maintenance_logs SET ${del} WHERE deleted_at IS NULL AND id = ?`, [...delVals, logId]);
+  });
 }
 
 // ====================================================================
 // VEHICLE SERVICE INTERVAL OVERRIDES
 // ====================================================================
 
-export async function getOverridesForVehicle(vehicleId: number): Promise<VehicleServiceIntervalOverrideRead[]> {
+export async function getOverridesForVehicle(vehicleId: Id): Promise<VehicleServiceIntervalOverrideRead[]> {
   const db = await getDatabase();
+  return listOverrides(db, vehicleId);
+}
+
+async function listOverrides(db: Db, vehicleId: Id): Promise<VehicleServiceIntervalOverrideRead[]> {
   return db.getAllAsync<VehicleServiceIntervalOverrideRead>(
-    "SELECT * FROM vehicle_service_interval_overrides WHERE vehicle_id = ?",
+    `SELECT id, vehicle_id, service_type_id, override_interval_km, override_interval_days
+     FROM vehicle_service_interval_overrides WHERE vehicle_id = ? AND deleted_at IS NULL`,
     [vehicleId]
   );
 }
 
-export async function upsertIntervalOverride(
-  vehicleId: number, serviceTypeId: number, data: VehicleServiceIntervalOverrideCreate
-): Promise<VehicleServiceIntervalOverrideRead> {
-  const db = await getDatabase();
+/** One override row per vehicle and service type, with the same id on every device. */
+export async function writeIntervalOverride(
+  db: Db, w: WriteContext, vehicleId: Id, serviceTypeId: Id, data: VehicleServiceIntervalOverrideCreate
+): Promise<void> {
   await db.runAsync(
-    `INSERT INTO vehicle_service_interval_overrides (vehicle_id, service_type_id, override_interval_km, override_interval_days)
-     VALUES (?, ?, ?, ?)
+    `INSERT INTO vehicle_service_interval_overrides (id, vehicle_id, service_type_id, override_interval_km,
+                                                     override_interval_days, updated_at, deleted_at, device_id)
+     VALUES (?, ?, ?, ?, ?, ?, NULL, ?)
      ON CONFLICT(vehicle_id, service_type_id) DO UPDATE SET
        override_interval_km = excluded.override_interval_km,
-       override_interval_days = excluded.override_interval_days`,
-    [vehicleId, serviceTypeId, data.override_interval_km ?? null, data.override_interval_days ?? null]
+       override_interval_days = excluded.override_interval_days,
+       deleted_at = NULL,
+       updated_at = excluded.updated_at,
+       device_id = excluded.device_id`,
+    [intervalOverrideId(vehicleId, serviceTypeId), vehicleId, serviceTypeId,
+      data.override_interval_km ?? null, data.override_interval_days ?? null, w.stamp(), w.deviceId]
   );
+}
+
+export async function upsertIntervalOverride(
+  vehicleId: Id, serviceTypeId: Id, data: VehicleServiceIntervalOverrideCreate
+): Promise<VehicleServiceIntervalOverrideRead> {
+  const { db, w } = await open();
+  await writeIntervalOverride(db, w, vehicleId, serviceTypeId, data);
   const row = await db.getFirstAsync<VehicleServiceIntervalOverrideRead>(
-    "SELECT * FROM vehicle_service_interval_overrides WHERE vehicle_id = ? AND service_type_id = ?",
+    `SELECT id, vehicle_id, service_type_id, override_interval_km, override_interval_days
+     FROM vehicle_service_interval_overrides WHERE vehicle_id = ? AND service_type_id = ?`,
     [vehicleId, serviceTypeId]
   );
   return row!;
 }
 
-export async function deleteIntervalOverride(vehicleId: number, serviceTypeId: number): Promise<void> {
-  const db = await getDatabase();
+export async function deleteIntervalOverride(vehicleId: Id, serviceTypeId: Id): Promise<void> {
+  const { db, w } = await open();
+  const [del, delVals] = tombstoned(w);
   await db.runAsync(
-    "DELETE FROM vehicle_service_interval_overrides WHERE vehicle_id = ? AND service_type_id = ?",
-    [vehicleId, serviceTypeId]
+    `UPDATE vehicle_service_interval_overrides SET ${del}
+     WHERE vehicle_id = ? AND service_type_id = ? AND deleted_at IS NULL`,
+    [...delVals, vehicleId, serviceTypeId]
   );
 }
 
@@ -276,7 +527,7 @@ export async function deleteIntervalOverride(vehicleId: number, serviceTypeId: n
 // SUMMARY QUERIES
 // ====================================================================
 
-export async function getMaintenanceSummary(vehicleId: number): Promise<MaintenanceSummary> {
+export async function getMaintenanceSummary(vehicleId: Id): Promise<MaintenanceSummary> {
   const db = await getDatabase();
   const row = await db.getFirstAsync<any>(
     `SELECT
@@ -285,7 +536,7 @@ export async function getMaintenanceSummary(vehicleId: number): Promise<Maintena
        COALESCE(AVG(cost), 0) as average_cost,
        MAX(date) as last_service_date,
        MAX(mileage) as last_mileage
-     FROM maintenance_logs WHERE vehicle_id = ?`,
+     FROM maintenance_logs WHERE vehicle_id = ? AND deleted_at IS NULL`,
     [vehicleId]
   );
   const daysSince = row?.last_service_date
@@ -302,7 +553,7 @@ export async function getMaintenanceSummary(vehicleId: number): Promise<Maintena
   };
 }
 
-export async function getServiceTypeSummaries(vehicleId: number): Promise<ServiceTypeLogSummary[]> {
+export async function getServiceTypeSummaries(vehicleId: Id): Promise<ServiceTypeLogSummary[]> {
   const db = await getDatabase();
   return db.getAllAsync<ServiceTypeLogSummary>(
     `SELECT
@@ -313,8 +564,8 @@ export async function getServiceTypeSummaries(vehicleId: number): Promise<Servic
        MAX(ml.mileage) as last_log_mileage,
        COALESCE(SUM(ml.cost), 0) as total_cost_for_service_type
      FROM maintenance_logs ml
-     JOIN service_types st ON ml.service_type_id = st.id
-     WHERE ml.vehicle_id = ? AND ml.service_type_id IS NOT NULL
+     JOIN service_types st ON ml.service_type_id = st.id AND st.deleted_at IS NULL
+     WHERE ml.vehicle_id = ? AND ml.service_type_id IS NOT NULL AND ml.deleted_at IS NULL
      GROUP BY ml.service_type_id
      ORDER BY last_log_date DESC`,
     [vehicleId]
@@ -325,9 +576,7 @@ export async function getServiceTypeSummaries(vehicleId: number): Promise<Servic
 // HYDRATION HELPERS - Build full "Read" objects with nested relations
 // ====================================================================
 
-async function buildVehicleRead(row: any): Promise<VehicleRead> {
-  const logs = await getLogsForVehicle(row.id);
-  const overrides = await getOverridesForVehicle(row.id);
+async function buildVehicleRead(db: Db, row: any): Promise<VehicleRead> {
   return {
     id: row.id,
     make: row.make,
@@ -336,44 +585,46 @@ async function buildVehicleRead(row: any): Promise<VehicleRead> {
     vin: row.vin,
     initial_mileage: row.initial_mileage,
     acquisition_date: row.acquisition_date,
-    maintenance_logs: logs,
-    interval_overrides: overrides,
+    maintenance_logs: await listLogs(db, row.id),
+    interval_overrides: await listOverrides(db, row.id),
   };
 }
 
-async function buildServiceTypeRead(row: any): Promise<ServiceTypeRead> {
-  const db = await getDatabase();
-  const fields = await db.getAllAsync<CustomFieldRead>(
-    "SELECT id, name, field_type, unit FROM custom_fields WHERE service_type_id = ? ORDER BY sort_order ASC",
+async function buildServiceTypeRead(db: Db, row: any, includeArchivedFields: boolean): Promise<ServiceTypeRead> {
+  const resets = await db.getAllAsync<{ reset_id: Id }>(
+    `SELECT r.reset_id FROM service_type_resets r JOIN service_types c ON c.id = r.reset_id AND c.deleted_at IS NULL
+     WHERE r.parent_id = ? AND r.deleted_at IS NULL`,
     [row.id]
   );
-  const resets = await db.getAllAsync<{ reset_id: number }>(
-    "SELECT reset_id FROM service_type_resets WHERE parent_id = ?", [row.id]
-  );
-  const suggestions = await db.getAllAsync<{ suggestion_id: number }>(
-    "SELECT suggestion_id FROM service_type_suggestions WHERE parent_id = ?", [row.id]
+  const suggestions = await db.getAllAsync<{ suggestion_id: Id }>(
+    `SELECT s.suggestion_id FROM service_type_suggestions s
+     JOIN service_types c ON c.id = s.suggestion_id AND c.deleted_at IS NULL
+     WHERE s.parent_id = ? AND s.deleted_at IS NULL`,
+    [row.id]
   );
   return {
     id: row.id,
+    slug: row.slug ?? null,
     name: row.name,
     recommended_interval_km: row.recommended_interval_km,
     recommended_interval_days: row.recommended_interval_days,
-    fields,
-    resets: resets.map(r => r.reset_id),
-    suggestions: suggestions.map(s => s.suggestion_id),
+    fields: await getFields(db, row.id, includeArchivedFields),
+    resets: resets.map((r) => r.reset_id),
+    suggestions: suggestions.map((s) => s.suggestion_id),
   };
 }
 
-async function buildMaintenanceLogRead(row: any): Promise<MaintenanceLogRead> {
-  const db = await getDatabase();
-  const serviceType = row.service_type_id
-    ? await getServiceTypeById(row.service_type_id)
+async function buildMaintenanceLogRead(db: Db, row: any): Promise<MaintenanceLogRead> {
+  const stRow = row.service_type_id
+    ? await db.getFirstAsync<any>("SELECT * FROM service_types WHERE id = ? AND deleted_at IS NULL", [row.service_type_id])
     : null;
   const cfvRows = await db.getAllAsync<any>(
-    `SELECT cfv.id, cfv.field_id, cfv.value, cf.id as cf_id, cf.name as cf_name, cf.field_type as cf_field_type, cf.unit as cf_unit
+    `SELECT cfv.id, cfv.field_id, cfv.value, cf.name AS cf_name, cf.field_type AS cf_field_type, cf.unit AS cf_unit,
+            cf.archived_at AS cf_archived_at
      FROM custom_field_values cfv
      JOIN custom_fields cf ON cfv.field_id = cf.id
-     WHERE cfv.log_id = ?`,
+     WHERE cfv.log_id = ? AND cfv.deleted_at IS NULL
+     ORDER BY cf.sort_order, cf.name`,
     [row.id]
   );
   const customFieldValues: CustomFieldValueRead[] = cfvRows.map((cfv: any) => ({
@@ -381,10 +632,11 @@ async function buildMaintenanceLogRead(row: any): Promise<MaintenanceLogRead> {
     field_id: cfv.field_id,
     value: cfv.value,
     custom_field: {
-      id: cfv.cf_id,
+      id: cfv.field_id,
       name: cfv.cf_name,
       field_type: cfv.cf_field_type,
       unit: cfv.cf_unit,
+      ...(cfv.cf_archived_at ? { archived: true } : {}),
     },
   }));
   return {
@@ -395,13 +647,13 @@ async function buildMaintenanceLogRead(row: any): Promise<MaintenanceLogRead> {
     mileage: row.mileage,
     cost: row.cost,
     notes: row.notes,
-    service_type: serviceType,
+    service_type: stRow ? await buildServiceTypeRead(db, stRow, false) : null,
     custom_field_values: customFieldValues,
   };
 }
 
 // ====================================================================
-// APP SETTINGS / PREFERENCES
+// APP SETTINGS / PREFERENCES (device-local, not synced)
 // ====================================================================
 
 export async function getSetting(key: string): Promise<string | null> {

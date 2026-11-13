@@ -18,7 +18,13 @@ CI (.github/workflows/ci.yml): frozen install, typecheck, core tests.
 
 ## Conventions
 
-- Data types live only in `packages/core/src/types.ts`; each app's `src/types.ts` re-exports them.
+- Data types live only in `packages/core/src/types.ts` (UUID ids); each app's `src/types.ts` re-exports them.
+  Exception until step 4: desktop re-exports `@carbaddie/core/legacy` (integer ids, mirrors the Python backend).
+- Schema changes go in `packages/core/src/db/migrations.ts` as a new version (`PRAGMA user_version`); never
+  edit a shipped migration. Every synced row: UUID `id`, `updated_at` (HLC string), `deleted_at` tombstone,
+  `device_id`. Reads filter `deleted_at IS NULL`; deletes tombstone and cascade by hand (mobile repository.ts).
+- Backup/Drive JSON keeps file-local integer ids (`packages/core/src/backup/format.ts`, zod) so the desktop
+  backend can still restore mobile backups; importers always create fresh local ids.
 - Core source files must not have runtime imports between each other unless they use a `.ts`
   extension (type-only imports are fine). Tests run with plain `node --test` + type stripping.
 - Core tests: `packages/core/test/*.test.ts`, node:test + node:assert, inject a fixed `today`.
@@ -39,14 +45,13 @@ native layer — SQLite via tauri-plugin-sql, OAuth loopback, keychain, notifica
 1. DONE — snapshot, CI, crash fixes (restore form field `backup_file`, mobile QueryClient
    order, SQLite `PRAGMA foreign_keys=ON`, VIN-less duplicate skipping, mobile import in one transaction).
 2. DONE — monorepo + `@carbaddie/core` (types, `computeUpcomingMaintenance`, `vehicleIdentityKey`, 14 tests).
-3. NEXT — sync-ready data model in both DBs, with data-preserving migrations tested on DB copies:
-   UUIDv7 primary keys; `updated_at` (hybrid logical clock), `deleted_at` tombstones, `device_id`;
-   built-in service types get a stable slug + deterministic UUID; custom fields archived, never
-   deleted (editing a service type currently deletes all its custom field values — fix here);
-   versioned migrations on mobile (today it only has CREATE TABLE IF NOT EXISTS); zod schemas for
-   the data/backup format.
-4. Replace the Python sidecar: desktop talks to SQLite directly through a core repository layer
-   (port apps/mobile/src/db/repository.ts). Removes PyInstaller, port 8000, PID handling.
+3. DONE (mobile + core) — sync-ready data model: migration v2 (UUIDv7 ids, HLC `updated_at`,
+   tombstones, `device_id`, built-in slugs + UUIDv5, archivable custom fields), versioned migrations,
+   zod backup schema. Tested on copies of a fixture DB and the committed desktop DBs. The desktop
+   backend was deliberately left on integer ids: step 4 runs the same core migration on its DB.
+4. NEXT — Replace the Python sidecar: desktop talks to SQLite directly through a core repository layer
+   (port apps/mobile/src/db/repository.ts; run `migrate()` from core on the existing desktop DB, then delete
+   `packages/core/src/legacy/`). Removes PyInstaller, port 8000, PID handling.
    Vehicle catalog (19.7k rows) becomes a read-only asset, not part of the user DB; stop shipping
    the dev DB (it contains test vehicles) — create the DB via migrations on first run.
 5. Sync engine: each device appends its own change files to Drive `appDataFolder`
@@ -58,6 +63,10 @@ native layer — SQLite via tauri-plugin-sql, OAuth loopback, keychain, notifica
    units, local notifications from the engine.
 
 ## Known open issues
+
+- `pnpm typecheck` fails in apps/desktop `VehicleStatistics.tsx` (recharts Tooltip formatter types); predates step 3.
+- Step 5 must handle two devices creating the same VIN (partial unique index on live VINs) and name
+  collisions of custom service types; built-ins and interval overrides already share ids across devices.
 
 - Drive sync is still snapshot-restore: VIN matches are replaced by the incoming copy (remote wins),
   mobile pushes its whole DB on every foreground. Replaced by step 5.

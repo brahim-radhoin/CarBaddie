@@ -1,74 +1,89 @@
 // ====================================================================
-// CORE DATA TYPES - shared by the desktop and mobile apps.
-// They mirror the backend Pydantic schemas (apps/backend/app/schemas.py)
-// and define the backup file format both apps read and write.
+// CORE DATA TYPES - shared by the apps that store data locally (mobile now, desktop from
+// roadmap step 4). Ids are UUIDs (see ids/uuid.ts). The desktop still uses the integer-id
+// types in legacy/types.ts while it talks to the Python backend.
 // ====================================================================
+
+import type { BackupFile } from "./backup/format";
+
+/** A row id: UUIDv7 for user-created rows, UUIDv5 for built-in service types and overrides. */
+export type Id = string;
 
 // ----------------------------------------
 // Custom Fields
 // ----------------------------------------
 
-/** Base properties for creating a custom field. Mirrors `CustomFieldCreate`. */
+/** A custom field definition as submitted from a service type form. */
 export interface CustomFieldCreate {
+  /** Set when editing an existing field so it is updated in place instead of replaced. */
+  id?: Id;
   name: string;
   field_type: "text" | "number" | "date" | "boolean";
   unit?: string;
 }
 
-/** A custom field as returned by the API. Mirrors `CustomFieldRead`. */
-export interface CustomFieldRead extends CustomFieldCreate {
-  id: number;
+export interface CustomFieldRead {
+  id: Id;
+  name: string;
+  field_type: CustomFieldCreate["field_type"];
+  unit?: string | null;
+  /**
+   * The field was removed from its service type. Archived fields are never deleted, so values
+   * recorded with them keep their definition. Only present on export and on log values.
+   */
+  archived?: boolean;
 }
 
 // ----------------------------------------
 // Service Types
 // ----------------------------------------
 
-/** Base properties for a service type. */
 export interface ServiceTypeBase {
   name: string;
   recommended_interval_km?: number | null;
   recommended_interval_days?: number | null;
 }
 
-/** Data needed to create a new service type. Mirrors `ServiceTypeCreate`. */
 export interface ServiceTypeCreate extends ServiceTypeBase {
   fields: CustomFieldCreate[];
-  resets?: number[];
-  suggestions?: number[];
+  resets?: Id[];
+  suggestions?: Id[];
 }
 
-/** A service type as returned by the API. Mirrors `ServiceTypeRead`. */
 export interface ServiceTypeRead extends ServiceTypeBase {
-  id: number;
+  id: Id;
+  /** Stable key of a built-in service type (see service-types/builtin.ts); null for custom ones. */
+  slug: string | null;
+  /** Active fields only. */
   fields: CustomFieldRead[];
-  resets: number[];
-  suggestions: number[];
+  resets: Id[];
+  suggestions: Id[];
 }
 
-/** Data needed to update a service type. Mirrors `ServiceTypeUpdate`. */
 export interface ServiceTypeUpdate {
   name?: string;
   recommended_interval_km?: number | null;
   recommended_interval_days?: number | null;
+  /**
+   * The complete new field list. Fields matched by `id` (or, failing that, by name) are kept;
+   * existing fields left out are archived, never deleted.
+   */
   fields?: CustomFieldCreate[];
-  resets?: number[];
-  suggestions?: number[];
+  resets?: Id[];
+  suggestions?: Id[];
 }
 
 // ----------------------------------------
 // Custom Field Values
 // ----------------------------------------
 
-/** Data needed to create a value for a custom field. Mirrors `CustomFieldValueCreate`. */
 export interface CustomFieldValueCreate {
-  field_id: number;
+  field_id: Id;
   value: string;
 }
 
-/** A custom field value as returned by the API. Mirrors `CustomFieldValueRead`. */
 export interface CustomFieldValueRead extends CustomFieldValueCreate {
-  id: number;
+  id: Id;
   custom_field: CustomFieldRead;
 }
 
@@ -76,35 +91,35 @@ export interface CustomFieldValueRead extends CustomFieldValueCreate {
 // Maintenance Logs
 // ----------------------------------------
 
-/** Base properties for a maintenance log. */
 export interface MaintenanceLogBase {
   date: string; // ISO format: "YYYY-MM-DD"
   mileage: number;
   cost: number;
   notes?: string | null;
-  service_type_id?: number | null; // Can be null if service type is deleted
+  service_type_id?: Id | null; // Null if the service type was deleted
 }
 
-/** Data needed to create a new maintenance log. Mirrors `MaintenanceLogCreate`. */
 export interface MaintenanceLogCreate extends MaintenanceLogBase {
   custom_field_values?: CustomFieldValueCreate[];
 }
 
-/** A maintenance log as returned by the API. Mirrors `MaintenanceLogRead`. */
 export interface MaintenanceLogRead extends MaintenanceLogBase {
-  id: number;
-  vehicle_id: number;
-  service_type: ServiceTypeRead | null; // Can be null
+  id: Id;
+  vehicle_id: Id;
+  service_type: ServiceTypeRead | null;
   custom_field_values: CustomFieldValueRead[];
 }
 
-/** Data needed to update a maintenance log. Mirrors `MaintenanceLogUpdate`. */
 export interface MaintenanceLogUpdate {
   date?: string;
   mileage?: number;
   cost?: number;
   notes?: string | null;
-  service_type_id?: number | null;
+  service_type_id?: Id | null;
+  /**
+   * Values for the log's current fields. Values recorded against archived fields are kept
+   * even when not listed here.
+   */
   custom_field_values?: CustomFieldValueCreate[];
 }
 
@@ -112,27 +127,23 @@ export interface MaintenanceLogUpdate {
 // Vehicle Interval Overrides
 // ----------------------------------------
 
-/** Base properties for a vehicle-specific service interval. */
 export interface VehicleServiceIntervalOverrideBase {
   override_interval_km?: number | null;
   override_interval_days?: number | null;
 }
 
-/** Data needed to create/update an override. Mirrors `VehicleServiceIntervalOverrideCreate/Update`. */
 export interface VehicleServiceIntervalOverrideCreate extends VehicleServiceIntervalOverrideBase {}
 
-/** An interval override as returned by the API. Mirrors `VehicleServiceIntervalOverrideRead`. */
 export interface VehicleServiceIntervalOverrideRead extends VehicleServiceIntervalOverrideBase {
-  id: number;
-  vehicle_id: number;
-  service_type_id: number;
+  id: Id;
+  vehicle_id: Id;
+  service_type_id: Id;
 }
 
 // ----------------------------------------
 // Vehicles
 // ----------------------------------------
 
-/** Base properties for a vehicle. */
 export interface VehicleBase {
   make: string;
   model: string;
@@ -142,26 +153,22 @@ export interface VehicleBase {
   acquisition_date?: string | null; // ISO format: "YYYY-MM-DD"
 }
 
-/** Data needed to create a new vehicle. Mirrors `VehicleCreate`. */
 export interface VehicleCreate extends VehicleBase {}
 
-/** Data needed to update a vehicle. Mirrors `VehicleUpdate`. */
 export interface VehicleUpdate extends Partial<VehicleBase> {}
 
-/** A vehicle as returned by the API, including nested data. Mirrors `VehicleRead`. */
 export interface VehicleRead extends VehicleBase {
-  id: number;
+  id: Id;
   maintenance_logs: MaintenanceLogRead[];
   interval_overrides: VehicleServiceIntervalOverrideRead[];
 }
 
 // ====================================================================
-// DERIVED & CLIENT-SIDE TYPES - These are used for UI state, etc.
+// DERIVED & CLIENT-SIDE TYPES
 // ====================================================================
 
-/** Summary statistics for a vehicle. Mirrors `MaintenanceSummary`. */
 export interface MaintenanceSummary {
-  vehicle_id: number;
+  vehicle_id: Id;
   total_logs: number;
   total_cost: number;
   average_cost: number;
@@ -170,9 +177,8 @@ export interface MaintenanceSummary {
   last_mileage?: number | null;
 }
 
-/** Log summary grouped by service type. Mirrors `ServiceTypeLogSummary`. */
 export interface ServiceTypeLogSummary {
-  service_type_id: number;
+  service_type_id: Id;
   service_type_name: string;
   log_count: number;
   last_log_date?: string | null;
@@ -180,9 +186,9 @@ export interface ServiceTypeLogSummary {
   total_cost_for_service_type: number;
 }
 
-/** Represents the calculated status of a single upcoming maintenance item. */
-export interface UpcomingMaintenanceItemData {
-  serviceTypeId: number;
+/** The calculated status of a single upcoming maintenance item. */
+export interface UpcomingMaintenanceItemData<TId extends string | number = Id> {
+  serviceTypeId: TId;
   serviceTypeName: string;
   status: "Overdue" | "Upcoming" | "OK" | "NoInterval" | "NeverDone";
   message: string;
@@ -203,37 +209,31 @@ export interface UpcomingMaintenanceItemData {
 }
 
 // ====================================================================
-// BACKUP & RESTORE API TYPES
+// BACKUP & RESTORE
 // ====================================================================
 
-/** Configuration for an export request. Mirrors `BackupConfiguration`. */
 export interface BackupConfiguration {
-  vehicle_ids?: number[];
+  vehicle_ids?: Id[];
   start_date?: string;
   end_date?: string;
   include_maintenance_logs?: boolean;
 }
 
-/** The structure of the final backup JSON file. Mirrors `FullBackupData`. */
-export interface FullBackupData {
-  metadata: {
-    export_date_utc: string;
-    config_used: BackupConfiguration;
-  };
-  service_types: ServiceTypeRead[];
-  vehicles: VehicleRead[];
+/** A parsed backup file. Ids inside it are file-local integers (see backup/format.ts). */
+export type FullBackupData = BackupFile;
+
+export interface BackupVehicleInfo {
+  /** The vehicle's id within the backup file. */
+  id_in_backup: number;
+  make: string;
+  model: string;
+  year?: number | null;
+  vin?: string | null;
+  log_count: number;
 }
 
-/** The response from the analysis endpoint. Mirrors `BackupAnalysisResponse`. */
 export interface BackupAnalysisResponse {
-  new_vehicles: {
-    id_in_backup: number;
-    make: string;
-    model: string;
-    year?: number | null;
-    vin?: string | null;
-    log_count: number;
-  }[];
+  new_vehicles: BackupVehicleInfo[];
   conflicting_vehicles: {
     vin: string;
     backup_vehicle: {
@@ -242,22 +242,17 @@ export interface BackupAnalysisResponse {
       year?: number | null;
       vin?: string | null;
     };
-    existing_vehicle_id: number;
+    existing_vehicle_id: Id;
   }[];
   /** VIN-less vehicles matching a local one (make/model/year); not imported. */
-  skipped_duplicates?: BackupAnalysisResponse["new_vehicles"];
+  skipped_duplicates?: BackupVehicleInfo[];
 }
 
-/** The restore plan sent to the execution endpoint. Mirrors `RestorePlan`. */
 export interface RestorePlan {
+  /** File-local ids of the backup vehicles to add. */
   vehicles_to_add: number[];
   conflict_resolutions: {
     vin: string;
     action: "skip" | "replace";
   }[];
-}
-
-/** A generic API error response from FastAPI. */
-export interface ErrorResponse {
-  detail: string | { loc: (string | number)[]; msg: string }[];
 }

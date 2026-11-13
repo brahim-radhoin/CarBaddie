@@ -1,9 +1,4 @@
-import type {
-  ServiceTypeLogSummary,
-  ServiceTypeRead,
-  UpcomingMaintenanceItemData,
-  VehicleRead,
-} from "../types";
+import type { Id, UpcomingMaintenanceItemData } from "../types";
 
 /** A service becomes "Upcoming" this many days before its due date. */
 export const UPCOMING_THRESHOLD_DAYS = 30;
@@ -30,10 +25,38 @@ function formatDate(date: Date): string {
   return date.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 }
 
-export interface ComputeUpcomingMaintenanceInput {
-  vehicle: VehicleRead | null | undefined;
-  serviceTypeSummaries: ServiceTypeLogSummary[];
-  allServiceTypes: ServiceTypeRead[];
+// The engine only needs these fields, so it accepts both the UUID types and the desktop's
+// legacy integer-id types (`TId` = number) until roadmap step 4.
+interface EngineVehicle<TId> {
+  initial_mileage?: number | null;
+  acquisition_date?: string | null;
+  /** Newest first. */
+  maintenance_logs?: { mileage: number }[];
+  interval_overrides?: {
+    service_type_id: TId;
+    override_interval_km?: number | null;
+    override_interval_days?: number | null;
+  }[];
+}
+
+interface EngineServiceType<TId> {
+  id: TId;
+  name: string;
+  recommended_interval_km?: number | null;
+  recommended_interval_days?: number | null;
+  resets?: TId[];
+}
+
+interface EngineServiceTypeSummary<TId> {
+  service_type_id: TId;
+  last_log_date?: string | null;
+  last_log_mileage?: number | null;
+}
+
+export interface ComputeUpcomingMaintenanceInput<TId extends string | number = Id> {
+  vehicle: EngineVehicle<TId> | null | undefined;
+  serviceTypeSummaries: EngineServiceTypeSummary<TId>[];
+  allServiceTypes: EngineServiceType<TId>[];
   /** The day to compute against. Defaults to now; tests pass a fixed date. */
   today?: Date;
 }
@@ -49,12 +72,12 @@ export interface ComputeUpcomingMaintenanceInput {
  *   falling back to the vehicle's initial mileage.
  * - Never-performed services are measured from the acquisition date / initial mileage.
  */
-export function computeUpcomingMaintenance({
+export function computeUpcomingMaintenance<TId extends string | number = Id>({
   vehicle,
   serviceTypeSummaries,
   allServiceTypes,
   today: todayInput,
-}: ComputeUpcomingMaintenanceInput): UpcomingMaintenanceItemData[] {
+}: ComputeUpcomingMaintenanceInput<TId>): UpcomingMaintenanceItemData<TId>[] {
   if (!vehicle || !allServiceTypes.length) {
     return [];
   }
@@ -67,7 +90,7 @@ export function computeUpcomingMaintenance({
   today.setHours(0, 0, 0, 0);
 
   const items = allServiceTypes
-    .map((st): UpcomingMaintenanceItemData | null => {
+    .map((st): UpcomingMaintenanceItemData<TId> | null => {
       const summary = serviceTypeSummaries.find((s) => s.service_type_id === st.id);
       let lastPerformedDate = summary?.last_log_date ? parseLocalDate(summary.last_log_date) : null;
       let lastPerformedMileage = summary?.last_log_mileage ?? null;
@@ -177,7 +200,7 @@ export function computeUpcomingMaintenance({
         },
       };
     })
-    .filter((item): item is UpcomingMaintenanceItemData => item !== null);
+    .filter((item): item is UpcomingMaintenanceItemData<TId> => item !== null);
 
   return items.sort((a, b) => STATUS_PRIORITY[a.status] - STATUS_PRIORITY[b.status]);
 }

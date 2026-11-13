@@ -17,8 +17,10 @@ import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import * as DocumentPicker from "expo-document-picker";
 import { exportBackupData, analyzeBackup, executeImport } from "@/src/db/backup";
-import { getDatabase } from "@/src/db/schema";
-import { seedDefaultServiceTypes } from "@/src/db/seed";
+import { parseBackup } from "@carbaddie/core";
+import { deleteAllVehicles } from "@/src/db/repository";
+import { restoreDefaultServiceTypes } from "@/src/db/seed";
+import type { FullBackupData } from "@/src/types";
 import {
   useVehicles,
   useServiceTypes,
@@ -241,8 +243,7 @@ export default function SettingsScreen() {
       }
 
       if (!content || !content.trim()) throw new Error("File is empty.");
-      const backupData = JSON.parse(content);
-      await processRestorePlan(backupData);
+      await processRestorePlan(parseBackup(JSON.parse(content)));
     } catch (e: any) {
       Alert.alert("Import Failed", e.message ?? "Unknown error");
     } finally {
@@ -250,11 +251,7 @@ export default function SettingsScreen() {
     }
   };
 
-  const processRestorePlan = async (backupData: any) => {
-    if (!backupData.metadata || !backupData.vehicles || !backupData.service_types) {
-      throw new Error("Invalid backup file: missing metadata, vehicles, or service_types.");
-    }
-
+  const processRestorePlan = async (backupData: FullBackupData) => {
     const analysis = await analyzeBackup(backupData);
     const newCount = analysis.new_vehicles.length;
     const conflictCount = analysis.conflicting_vehicles.length;
@@ -292,8 +289,7 @@ export default function SettingsScreen() {
   const handleSeedDefaults = async () => {
     try {
       setIsSeeding(true);
-      const db = await getDatabase();
-      const count = await seedDefaultServiceTypes(db, true);
+      const count = await restoreDefaultServiceTypes();
       queryClient.invalidateQueries();
       Alert.alert("Success", `Loaded ${count} factory automotive service types.`);
     } catch (e: any) {
@@ -315,12 +311,7 @@ export default function SettingsScreen() {
           onPress: async () => {
             try {
               setIsWiping(true);
-              const db = await getDatabase();
-              await db.execAsync(`
-                DELETE FROM maintenance_logs;
-                DELETE FROM vehicles;
-                DELETE FROM vehicle_service_interval_overrides;
-              `);
+              await deleteAllVehicles();
               queryClient.invalidateQueries();
               Alert.alert("Wiped", "All garage records have been cleared.");
             } catch (err: any) {

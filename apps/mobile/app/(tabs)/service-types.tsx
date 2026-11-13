@@ -1,8 +1,7 @@
 import { StyleSheet, FlatList, TouchableOpacity, View, TextInput, Alert } from "react-native";
 import { useRouter, useTheme } from "expo-router";
 import { useServiceTypes, useDeleteServiceType } from "@/src/hooks/useDatabase";
-import { getDatabase } from "@/src/db/schema";
-import { seedDefaultServiceTypes } from "@/src/db/seed";
+import { restoreDefaultServiceTypes } from "@/src/db/seed";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState, useMemo } from "react";
 import { Text } from "@/components/Themed";
@@ -16,8 +15,7 @@ export default function ServiceTypesScreen() {
   const handleSeedDefaults = async () => {
     try {
       setIsSeeding(true);
-      const db = await getDatabase();
-      const count = await seedDefaultServiceTypes(db, true);
+      const count = await restoreDefaultServiceTypes();
       queryClient.invalidateQueries();
       Alert.alert("Success", `Loaded ${count} default service types.`);
     } catch (e: any) {
@@ -38,7 +36,7 @@ export default function ServiceTypesScreen() {
     return serviceTypes.filter((st) => st.name.toLowerCase().includes(q));
   }, [serviceTypes, search]);
 
-  const handleDelete = (id: number, name: string) => {
+  const handleDelete = (id: string, name: string) => {
     Alert.alert("Delete Service Type", `Delete "${name}"? Existing logs will keep their records.`, [
       { text: "Cancel", style: "cancel" },
       { text: "Delete", style: "destructive", onPress: () => deleteMutation.mutate(id) },

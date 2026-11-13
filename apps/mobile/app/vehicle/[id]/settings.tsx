@@ -14,13 +14,13 @@ export default function VehicleSettingsScreen() {
   const deleteMutation = useDeleteIntervalOverride();
   const deleteVehicleMutation = useDeleteVehicle();
 
-  const [overrides, setOverrides] = useState<Record<number, { km: string; days: string }>>({});
-  const [savedRowId, setSavedRowId] = useState<number | null>(null);
+  const [overrides, setOverrides] = useState<Record<string, { km: string; days: string }>>({});
+  const [savedRowId, setSavedRowId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
 
   useEffect(() => {
     if (vehicle) {
-      const ov: Record<number, { km: string; days: string }> = {};
+      const ov: Record<string, { km: string; days: string }> = {};
       (vehicle.interval_overrides || []).forEach((o) => {
         ov[o.service_type_id] = {
           km: o.override_interval_km != null ? String(o.override_interval_km) : "",
@@ -42,7 +42,7 @@ export default function VehicleSettingsScreen() {
     { backgroundColor: colors.card, color: colors.text, borderColor: colors.border },
   ];
 
-  const handleSave = (serviceTypeId: number) => {
+  const handleSave = (serviceTypeId: string) => {
     const ov = overrides[serviceTypeId];
     if (!ov || (!ov.km.trim() && !ov.days.trim())) {
       handleReset(serviceTypeId);
@@ -63,7 +63,7 @@ export default function VehicleSettingsScreen() {
 
     upsertMutation.mutate(
       {
-        vehicleId: Number(id),
+        vehicleId: id!,
         serviceTypeId,
         data: { override_interval_km: km, override_interval_days: days },
       },
@@ -77,9 +77,9 @@ export default function VehicleSettingsScreen() {
     );
   };
 
-  const handleReset = (serviceTypeId: number) => {
+  const handleReset = (serviceTypeId: string) => {
     deleteMutation.mutate(
-      { vehicleId: Number(id), serviceTypeId },
+      { vehicleId: id!, serviceTypeId },
       {
         onSuccess: () => {
           setOverrides((prev) => ({
@@ -102,7 +102,7 @@ export default function VehicleSettingsScreen() {
           text: "Delete Vehicle",
           style: "destructive",
           onPress: () => {
-            deleteVehicleMutation.mutate(Number(id), {
+            deleteVehicleMutation.mutate(id!, {
               onSuccess: () => {
                 router.dismissAll();
                 router.replace("/(tabs)");

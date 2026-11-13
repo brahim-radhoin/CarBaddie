@@ -22,8 +22,8 @@ const FIELD_TYPES: Array<{ type: CustomFieldCreate["field_type"]; label: string 
   { type: "boolean", label: "Yes / No" },
 ];
 
-export default function ServiceTypeForm({ serviceTypeId }: { serviceTypeId?: number }) {
-  const isEdit = typeof serviceTypeId === "number" && !isNaN(serviceTypeId);
+export default function ServiceTypeForm({ serviceTypeId }: { serviceTypeId?: string }) {
+  const isEdit = !!serviceTypeId;
   const { colors } = useTheme();
   const router = useRouter();
 
@@ -37,8 +37,8 @@ export default function ServiceTypeForm({ serviceTypeId }: { serviceTypeId?: num
   const [intervalKm, setIntervalKm] = useState("");
   const [intervalDays, setIntervalDays] = useState("");
   const [fields, setFields] = useState<FormField[]>([]);
-  const [resets, setResets] = useState<number[]>([]);
-  const [suggestions, setSuggestions] = useState<number[]>([]);
+  const [resets, setResets] = useState<string[]>([]);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
 
   useEffect(() => {
     if (existing) {
@@ -48,6 +48,7 @@ export default function ServiceTypeForm({ serviceTypeId }: { serviceTypeId?: num
       setFields(
         (existing.fields || []).map((f) => ({
           _key: `f-${f.id}-${Math.random()}`,
+          id: f.id,
           name: f.name,
           field_type: f.field_type,
           unit: f.unit ?? undefined,
@@ -78,11 +79,11 @@ export default function ServiceTypeForm({ serviceTypeId }: { serviceTypeId?: num
     setFields((prev) => prev.map((f) => (f._key === _key ? { ...f, ...updates } : f)));
   };
 
-  const toggleReset = (id: number) => {
+  const toggleReset = (id: string) => {
     setResets((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   };
 
-  const toggleSuggestion = (id: number) => {
+  const toggleSuggestion = (id: string) => {
     setSuggestions((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   };
 
@@ -95,6 +96,7 @@ export default function ServiceTypeForm({ serviceTypeId }: { serviceTypeId?: num
     const cleanedFields: CustomFieldCreate[] = fields
       .filter((f) => f.name.trim().length > 0)
       .map((f) => ({
+        id: f.id,
         name: f.name.trim(),
         field_type: f.field_type,
         unit: f.unit?.trim() ? f.unit.trim() : undefined,
