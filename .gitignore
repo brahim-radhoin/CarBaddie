@@ -12,3 +12,8 @@ node_modules/
 *.log
 .DS_Store
 Thumbs.db
+
+# Local dev databases (contain test data) and the PyInstaller sidecar build output.
+# The desktop still bundles both at build time until roadmap step 4 removes them.
+car_baddie.db
+apps/desktop/src-tauri/carbaddie-backend-*
