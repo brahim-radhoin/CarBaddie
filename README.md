@@ -13,7 +13,7 @@ packages/
 
 ## Setup
 
-Requires Node 22.18+ and pnpm 10 (`npm install -g pnpm`).
+Requires Node 22.18+ (Node 24 LTS recommended) and pnpm 11 (`npm install -g pnpm`).
 
 ```sh
 pnpm install          # once, from the repo root

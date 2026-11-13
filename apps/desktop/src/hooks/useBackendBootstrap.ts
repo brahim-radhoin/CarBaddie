@@ -43,6 +43,11 @@ export function useBackendBootstrap() {
           console.log("✗ Backend not responding, spawning new instance", err instanceof Error ? err.message : String(err));
         }
 
+        // React StrictMode runs effects twice in development: the first run is aborted by its
+        // cleanup straight away. It must not spawn a backend, or two get started and only the
+        // second one's PID is stored, leaving the first running after the window closes.
+        if (controller.signal.aborted) return;
+
         const dataDir = await appDataDir();
         const dbFileName = "car_baddie.db";
         const dbPathInDataDir = await join(dataDir, dbFileName);
@@ -96,6 +101,7 @@ export function useBackendBootstrap() {
           setBackendLogs((prev) => [...prev.slice(-49), `ERR: ${line}`]);
         });
 
+        if (controller.signal.aborted) return;
         const child = await command.spawn();
         console.log("Sidecar spawned with PID:", child.pid);
 
