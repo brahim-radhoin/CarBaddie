@@ -90,11 +90,12 @@ fn store_backend_pid(state: tauri::State<BackendPid>, pid: u32) {
 #[tauri::command]
 fn cleanup_backend(state: tauri::State<BackendPid>) {
     log::info!("Cleanup backend command called");
-    if let Some(pid) = *state.0.lock().unwrap() {
+    // take() so the backend is only killed once; close triggers this from several places.
+    if let Some(pid) = state.0.lock().unwrap().take() {
         log::info!("Killing backend process tree for PID: {}", pid);
         kill_process_tree(pid);
     } else {
-        log::warn!("No backend PID stored - skipping cleanup");
+        log::info!("Backend already stopped - nothing to clean up");
     }
 }
 
@@ -168,7 +169,7 @@ pub fn run() {
             window.on_window_event(move |event| {
                 if let WindowEvent::CloseRequested { .. } = event {
                     log::info!("Window close requested (Rust fallback) - cleaning up backend process");
-                    if let Some(pid) = *pid_arc.lock().unwrap() {
+                    if let Some(pid) = pid_arc.lock().unwrap().take() {
                         // Call cleanup directly (frontend should have already done this)
                         log::info!("Rust fallback: Killing backend process tree for PID: {}", pid);
                         kill_process_tree(pid);

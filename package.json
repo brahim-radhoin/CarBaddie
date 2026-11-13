@@ -1,6 +1,7 @@
 {
   "name": "carbaddie",
   "private": true,
+  "packageManager": "pnpm@12.18.0",
   "description": "CarBaddie vehicle maintenance tracker: desktop (Tauri), mobile (Expo) and shared core.",
   "engines": {
     "node": ">=22.18"
