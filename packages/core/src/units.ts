@@ -22,8 +22,13 @@ export function toDisplayDistance(km: number, unit: DistanceUnit): number {
   return Math.round(unit === "mi" ? km / KM_PER_MILE : km);
 }
 
-/** A distance typed in the unit shown → whole km. */
-export function fromDisplayDistance(value: number, unit: DistanceUnit): number {
+/**
+ * A distance typed in the unit shown → whole km. Pass the stored km the field started from:
+ * when the typed value is still what that showed, it comes back unchanged (whole miles can't
+ * hold every whole km, so converting back would otherwise move it by up to a kilometre).
+ */
+export function fromDisplayDistance(value: number, unit: DistanceUnit, previousKm?: number | null): number {
+  if (previousKm != null && toDisplayDistance(previousKm, unit) === value) return previousKm;
   return Math.round(unit === "mi" ? value * KM_PER_MILE : value);
 }
 

@@ -88,7 +88,8 @@ export function VehicleServiceIntervalsManager({
     const data = formData[serviceTypeId.toString()];
     if (!data) return;
 
-    const km = data.km ? units.fromDisplay(parseInt(data.km, 10)) : undefined;
+    const previousKm = currentOverrides.find((ov) => ov.service_type_id === serviceTypeId)?.override_interval_km;
+    const km = data.km ? units.fromDisplay(parseInt(data.km, 10), previousKm) : undefined;
     const days = data.days ? parseInt(data.days, 10) : undefined;
 
     if (km === undefined && days === undefined) {

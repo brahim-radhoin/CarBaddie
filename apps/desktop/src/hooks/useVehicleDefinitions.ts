@@ -12,6 +12,8 @@ let catalog: Promise<CatalogEntry[]> | null = null;
 const loadCatalog = () => (catalog ??= import("../data/vehicle-catalog.json").then((m) => m.default as CatalogEntry[]));
 
 const distinct = <T,>(values: T[]) => [...new Set(values)];
+/** The catalog writes makes and models in capitals; vehicles may not. */
+const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
 
 export const useGetMakes = (year?: number) => {
   return useQuery({
@@ -28,7 +30,7 @@ export const useGetModels = (make: string, year?: number) => {
   return useQuery({
     queryKey: ["models", make, year],
     queryFn: async () => {
-      const rows = (await loadCatalog()).filter((r) => r.make === make && (!year || r.year === year));
+      const rows = (await loadCatalog()).filter((r) => same(r.make, make) && (!year || r.year === year));
       return distinct(rows.map((r) => r.model)).sort();
     },
     enabled: !!make,
@@ -40,7 +42,7 @@ export const useGetYears = (make?: string, model?: string) => {
   return useQuery({
     queryKey: ["years", make, model],
     queryFn: async () => {
-      const rows = (await loadCatalog()).filter((r) => (!make || r.make === make) && (!model || r.model === model));
+      const rows = (await loadCatalog()).filter((r) => (!make || same(r.make, make)) && (!model || same(r.model, model)));
       return distinct(rows.map((r) => r.year)).sort((a, b) => b - a);
     },
     staleTime: Infinity,

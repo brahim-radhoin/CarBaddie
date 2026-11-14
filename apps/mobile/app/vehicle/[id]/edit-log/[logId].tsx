@@ -90,7 +90,7 @@ export default function EditLogScreen() {
         logId: logId!,
         data: {
           date: date.trim(),
-          mileage: units.fromDisplay(numMileage),
+          mileage: units.fromDisplay(numMileage, log?.mileage),
           cost_cents: costCents,
           notes: notes.trim() || null,
           service_type_id: serviceTypeId,

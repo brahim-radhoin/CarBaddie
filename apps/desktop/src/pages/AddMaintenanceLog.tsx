@@ -149,7 +149,7 @@ export function AddMaintenanceLogPage() {
         custom_field_values: filledValues(item.values),
       });
     }
-    const mileageKm = units.fromDisplay(parseInt(mileage, 10));
+    const mileageKm = units.fromDisplay(parseInt(mileage, 10), visitToEdit?.mileage ?? logToEdit?.mileage);
     const done = { onSuccess: () => navigate(`/vehicles/${vehicleId}`) };
 
     if (mode === "log" && logId) {

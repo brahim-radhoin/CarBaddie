@@ -58,7 +58,8 @@ export default function VehicleSettingsScreen() {
       Alert.alert("Invalid Interval", `Interval ${units.unit} must be a positive number.`);
       return;
     }
-    const km = typedKm !== undefined ? units.fromDisplay(typedKm) : undefined;
+    const previousKm = vehicle?.interval_overrides.find((o) => o.service_type_id === serviceTypeId)?.override_interval_km;
+    const km = typedKm !== undefined ? units.fromDisplay(typedKm, previousKm) : undefined;
     if (days !== undefined && (isNaN(days) || days <= 0)) {
       Alert.alert("Invalid Interval", "Interval days must be a positive number.");
       return;

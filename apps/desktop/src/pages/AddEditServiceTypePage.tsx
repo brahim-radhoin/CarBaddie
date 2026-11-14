@@ -134,7 +134,7 @@ export function AddEditServiceTypePage() {
         unit: fieldData.unit?.trim() || undefined,
       }));
 
-    const km = recommendedIntervalKm ? units.fromDisplay(parseInt(recommendedIntervalKm, 10)) : undefined;
+    const km = recommendedIntervalKm ? units.fromDisplay(parseInt(recommendedIntervalKm, 10), serviceType?.recommended_interval_km) : undefined;
     const days = recommendedIntervalDays ? parseInt(recommendedIntervalDays, 10) : undefined;
 
     if (isEditMode && serviceTypeId) {

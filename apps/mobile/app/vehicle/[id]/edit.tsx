@@ -49,7 +49,7 @@ export default function EditVehicleScreen() {
           model: model.trim(),
           year: year ? Number(year) : undefined,
           vin: vin.trim() || null,
-          initial_mileage: mileage ? units.fromDisplay(Number(mileage)) : undefined,
+          initial_mileage: mileage ? units.fromDisplay(Number(mileage), vehicle?.initial_mileage) : undefined,
           acquisition_date: acquisitionDate.trim() || null,
         },
       },

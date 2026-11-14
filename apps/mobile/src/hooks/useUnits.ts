@@ -25,8 +25,8 @@ export function useUnits() {
       distance: (km: number) => formatDistance(km, unit),
       /** km → number in the shown unit */
       toDisplay: (km: number) => toDisplayDistance(km, unit),
-      /** number typed in the shown unit → km */
-      fromDisplay: (value: number) => fromDisplayDistance(value, unit),
+      /** number typed in the shown unit → km; pass the stored km an edit form started from */
+      fromDisplay: (value: number, previousKm?: number | null) => fromDisplayDistance(value, unit, previousKm),
     };
   }, [prefs.currency, prefs.distance_unit]);
 }

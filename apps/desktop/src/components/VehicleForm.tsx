@@ -25,6 +25,10 @@ interface VehicleFormProps {
   mode: "add" | "edit";
 }
 
+function withCurrent<T>(options: T[], current: T | undefined): T[] {
+  return current !== undefined && current !== "" && !options.includes(current) ? [current, ...options] : options;
+}
+
 export function VehicleForm({ initialData, isSubmitting, backendErrors, onSubmit, mode }: VehicleFormProps) {
   const navigate = useNavigate();
   const units = useUnits();
@@ -39,9 +43,14 @@ export function VehicleForm({ initialData, isSubmitting, backendErrors, onSubmit
   });
 
   const selectedYear = formData.year ? parseInt(formData.year) : undefined;
-  const { data: makes = [] } = useGetMakes(selectedYear);
-  const { data: models = [], isFetching: modelsLoading } = useGetModels(formData.make, selectedYear);
-  const { data: years = [], isFetching: yearsLoading } = useGetYears(formData.make, formData.model);
+  const { data: catalogMakes = [] } = useGetMakes(selectedYear);
+  const { data: catalogModels = [], isFetching: modelsLoading } = useGetModels(formData.make, selectedYear);
+  const { data: catalogYears = [], isFetching: yearsLoading } = useGetYears(formData.make, formData.model);
+  // A select only shows a value that is one of its options; keep the vehicle's own values listed
+  // even when the catalog spells them differently or doesn't have them.
+  const makes = withCurrent(catalogMakes, formData.make);
+  const models = withCurrent(catalogModels, formData.model);
+  const years = withCurrent(catalogYears, selectedYear);
 
   useEffect(() => {
     if (initialData) {
@@ -79,7 +88,7 @@ export function VehicleForm({ initialData, isSubmitting, backendErrors, onSubmit
       model: formData.model.trim(),
       year: formData.year ? parseInt(formData.year, 10) : undefined,
       vin: formData.vin ? formData.vin.trim() || undefined : undefined,
-      initial_mileage: formData.initial_mileage ? units.fromDisplay(parseInt(formData.initial_mileage, 10)) : undefined,
+      initial_mileage: formData.initial_mileage ? units.fromDisplay(parseInt(formData.initial_mileage, 10), initialData?.initial_mileage) : undefined,
       acquisition_date: formData.acquisition_date || undefined,
     };
     onSubmit(payload);

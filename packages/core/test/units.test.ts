@@ -58,6 +58,10 @@ test("distances are stored in km and shown in km or miles", () => {
   assert.equal(fromDisplayDistance(100000, "mi"), 160934);
   assert.equal(toDisplayDistance(12345, "km"), 12345);
   assert.equal(formatDistance(1609, "mi"), `${(1000).toLocaleString()} mi`);
+  // An unchanged value in an edit form keeps the stored km exactly.
+  assert.equal(fromDisplayDistance(toDisplayDistance(287700, "mi"), "mi"), 287699, "plain conversion drifts");
+  assert.equal(fromDisplayDistance(toDisplayDistance(287700, "mi"), "mi", 287700), 287700);
+  assert.equal(fromDisplayDistance(178770, "mi", 287700), fromDisplayDistance(178770, "mi"), "an edited value converts");
   // Round trip stays within a kilometre.
   for (const km of [0, 1, 999, 8000, 123457]) {
     assert.ok(Math.abs(fromDisplayDistance(toDisplayDistance(km, "mi"), "mi") - km) <= 1);

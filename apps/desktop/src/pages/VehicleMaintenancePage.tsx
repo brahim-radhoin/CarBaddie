@@ -35,7 +35,7 @@ export function VehicleMaintenancePage() {
 
   const { data: allLogs = [], isLoading: isLoadingLogs } = useAllLogsForVehicle(vehicleId);
   const { data: serviceTypeSummaries = [], isLoading: isLoadingSummaries } = useServiceTypeSummaries(vehicleId);
-  const { data: allServiceTypes = [] } = useServiceTypes();
+  const { data: allServiceTypes = [], isLoading: isLoadingTypes } = useServiceTypes();
   const { data: visits = [], isLoading: isLoadingVisits } = useVisitsForVehicle(vehicleId);
   const deleteLogMutation = useDeleteMaintenanceLog();
   const deleteVisitMutation = useDeleteServiceEvent();
@@ -187,10 +187,12 @@ export function VehicleMaintenancePage() {
                 Fleet Health
               </span>
               <div className="mt-2">
-                {overdueCount > 0 ? (
+                {isLoading || isLoadingTypes ? (
+                  <Skeleton className="h-5 w-32" />
+                ) : overdueCount > 0 ? (
                   <span className="status-overdue">
                     <AlertTriangle className="h-3 w-3" />
-                    {overdueCount} Service Overdue
+                    {overdueCount} {overdueCount === 1 ? "Service" : "Services"} Overdue
                   </span>
                 ) : (
                   <span className="status-ok">

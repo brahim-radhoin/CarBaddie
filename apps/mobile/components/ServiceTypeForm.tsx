@@ -106,7 +106,7 @@ export default function ServiceTypeForm({ serviceTypeId }: { serviceTypeId?: str
 
     const payload = {
       name: name.trim(),
-      recommended_interval_km: intervalKm ? units.fromDisplay(Number(intervalKm)) : undefined,
+      recommended_interval_km: intervalKm ? units.fromDisplay(Number(intervalKm), existing?.recommended_interval_km) : undefined,
       recommended_interval_days: intervalDays ? Number(intervalDays) : undefined,
       fields: cleanedFields,
       resets,

@@ -146,7 +146,7 @@ export function VisitForm({ vehicleId, initial, initialServiceTypeId, saveLabel,
       setIsSaving(true);
       await onSubmit({
         date: date.trim(),
-        mileage: units.fromDisplay(numMileage),
+        mileage: units.fromDisplay(numMileage, initial?.mileage),
         shop: shop.trim() || null,
         notes: notes.trim() || null,
         items: parsed,
