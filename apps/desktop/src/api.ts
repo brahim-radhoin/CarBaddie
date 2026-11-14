@@ -23,6 +23,9 @@ import type {
   OdometerReadingCreate,
   OdometerReadingRead,
   Preferences,
+  ServiceEventRead,
+  ServiceEventCreate,
+  ServiceEventUpdate,
 } from "./types";
 import { getRepository } from "./db";
 import { queryKeys } from "./queryKeys";
@@ -368,6 +371,68 @@ export function useDeleteMaintenanceLog() {
       queryClient.invalidateQueries({ queryKey: queryKeys.logs.all() });
     },
     onError: (error) => toast.error(message(error, "Failed to delete log.")),
+  });
+}
+
+// --- GARAGE VISIT HOOKS (service events; their items are maintenance logs) ---
+
+/** Newest first; logs recorded on their own come back as single-item visits (`standalone: true`). */
+export const useVisitsForVehicle = (vehicleId?: Id) => {
+  return useQuery<ServiceEventRead[]>({
+    queryKey: queryKeys.visits.forVehicle(vehicleId as string),
+    queryFn: async () => (await getRepository()).getVisitsForVehicle(vehicleId!),
+    enabled: !!vehicleId,
+  });
+};
+
+export const useServiceEvent = (visitId?: Id) => {
+  return useQuery<ServiceEventRead | null, Error>({
+    queryKey: queryKeys.visits.one(visitId as string),
+    queryFn: async () => (await getRepository()).getServiceEvent(visitId!),
+    enabled: !!visitId,
+  });
+};
+
+/** Visits change logs: refresh everything that shows a vehicle's logs (visit keys sit under logs.all()). */
+function invalidateVehicleLogs(queryClient: ReturnType<typeof useQueryClient>, vehicleId: Id) {
+  queryClient.invalidateQueries({ queryKey: queryKeys.vehicles.one(vehicleId) });
+  queryClient.invalidateQueries({ queryKey: queryKeys.summaries.forVehicle(vehicleId) });
+  queryClient.invalidateQueries({ queryKey: queryKeys.logs.all() });
+}
+
+export function useAddServiceEvent() {
+  const queryClient = useQueryClient();
+  return useMutation<ServiceEventRead, Error, { vehicleId: Id; visitData: ServiceEventCreate }>({
+    mutationFn: async ({ vehicleId, visitData }) => (await getRepository()).createServiceEvent(vehicleId, visitData),
+    onSuccess: (visit) => {
+      toast.success(visit.items.length === 1 ? "Visit recorded." : `Visit recorded with ${visit.items.length} services.`);
+      invalidateVehicleLogs(queryClient, visit.vehicle_id);
+    },
+    onError: (error) => toast.error(message(error, "Failed to record visit.")),
+  });
+}
+
+export function useUpdateServiceEvent() {
+  const queryClient = useQueryClient();
+  return useMutation<ServiceEventRead, Error, { visitId: Id; visitData: ServiceEventUpdate }>({
+    mutationFn: async ({ visitId, visitData }) => (await getRepository()).updateServiceEvent(visitId, visitData),
+    onSuccess: (visit) => {
+      toast.success("Visit updated.");
+      invalidateVehicleLogs(queryClient, visit.vehicle_id);
+    },
+    onError: (error) => toast.error(message(error, "Failed to update visit.")),
+  });
+}
+
+export function useDeleteServiceEvent() {
+  const queryClient = useQueryClient();
+  return useMutation<void, Error, { visitId: Id; vehicleId: Id }>({
+    mutationFn: async ({ visitId }) => (await getRepository()).deleteServiceEvent(visitId),
+    onSuccess: (_, { vehicleId }) => {
+      toast.success("Visit deleted.");
+      invalidateVehicleLogs(queryClient, vehicleId);
+    },
+    onError: (error) => toast.error(message(error, "Failed to delete visit.")),
   });
 }
 

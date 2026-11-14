@@ -105,6 +105,8 @@ export interface MaintenanceLogCreate extends MaintenanceLogBase {
 export interface MaintenanceLogRead extends MaintenanceLogBase {
   id: Id;
   vehicle_id: Id;
+  /** The garage visit this log is an item of; null for a log that is a visit of its own. */
+  event_id: Id | null;
   service_type: ServiceTypeRead | null;
   custom_field_values: CustomFieldValueRead[];
 }
@@ -120,6 +122,58 @@ export interface MaintenanceLogUpdate {
    * even when not listed here.
    */
   custom_field_values?: CustomFieldValueCreate[];
+}
+
+// ----------------------------------------
+// Service Events (garage visits)
+// ----------------------------------------
+
+/**
+ * One service done during a visit. It is stored as a maintenance log, so the due-date engine
+ * sees it like any other log; its date and mileage are the visit's.
+ */
+export interface ServiceItemCreate {
+  service_type_id: Id | null;
+  /** Hundredths of the currency unit. */
+  cost_cents: number;
+  notes?: string | null;
+  custom_field_values?: CustomFieldValueCreate[];
+}
+
+export interface ServiceItemUpdate extends ServiceItemCreate {
+  /** An existing item of the visit, updated in place. Without it the item is added. */
+  id?: Id;
+}
+
+export interface ServiceEventCreate {
+  date: string; // ISO format: "YYYY-MM-DD"
+  mileage: number; // km
+  shop?: string | null;
+  notes?: string | null;
+  items: ServiceItemCreate[];
+}
+
+export interface ServiceEventUpdate {
+  date?: string;
+  mileage?: number;
+  shop?: string | null;
+  notes?: string | null;
+  /** The complete new item list: items matched by `id` are updated, others added, existing ones left out deleted. */
+  items?: ServiceItemUpdate[];
+}
+
+export interface ServiceEventRead {
+  /** The visit's id, or for a standalone visit the id of its only log. */
+  id: Id;
+  vehicle_id: Id;
+  date: string;
+  mileage: number;
+  shop: string | null;
+  notes: string | null;
+  total_cost_cents: number;
+  items: MaintenanceLogRead[];
+  /** A log recorded on its own (no service event); `id` is the log's id. */
+  standalone?: boolean;
 }
 
 // ----------------------------------------

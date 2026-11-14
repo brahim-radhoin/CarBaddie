@@ -34,7 +34,8 @@ export function VehicleDetailPage() {
   const isSettings = location.pathname.endsWith("/settings");
   const isAddLog = location.pathname.endsWith("/add-log") || location.pathname.includes("/add-log?");
   const isEditLog = matchPath({ path: "/vehicles/:vehicleId/logs/:logId/edit" }, location.pathname);
-  const isChildPage = serviceTypeId || isSettings || isAddLog || isEditLog;
+  const isEditVisit = matchPath({ path: "/vehicles/:vehicleId/visits/:visitId/edit" }, location.pathname);
+  const isChildPage = serviceTypeId || isSettings || isAddLog || isEditLog || isEditVisit;
 
   if (isLoading) {
     return (
@@ -90,13 +91,19 @@ export function VehicleDetailPage() {
           {isAddLog && (
             <>
               <span className="opacity-40">/</span>
-              <span>New Log</span>
+              <span>New Visit</span>
             </>
           )}
           {isEditLog && (
             <>
               <span className="opacity-40">/</span>
               <span>Edit Log</span>
+            </>
+          )}
+          {isEditVisit && (
+            <>
+              <span className="opacity-40">/</span>
+              <span>Edit Visit</span>
             </>
           )}
         </div>
@@ -111,7 +118,7 @@ export function VehicleDetailPage() {
                 onClick={() => navigate(`/vehicles/${vehicle.id}/add-log`)}
               >
                 <Plus className="h-3.5 w-3.5" />
-                Add Log
+                Add Visit
               </Button>
               <Button
                 variant="outline"

@@ -97,6 +97,23 @@ export function validateOdometerReading(data: { date?: string; mileage?: number 
   c.done();
 }
 
+/** `partial`: only check header fields that are present (updates); `items`, when present, must not be empty. */
+export function validateServiceEvent(
+  data: { date?: string; mileage?: number; items?: { cost_cents?: number }[] },
+  partial = false,
+): void {
+  const c = new Checker();
+  if (!partial || data.date !== undefined) c.required("date", data.date);
+  if (!partial && data.mileage === undefined) c.add("mileage", "This field is required.");
+  c.nonNegativeInt("mileage", data.mileage);
+  if ((!partial || data.items !== undefined) && !data.items?.length) c.add("items", "Add at least one service.");
+  data.items?.forEach((item, i) => {
+    if (item.cost_cents === undefined) c.add(`items.${i}.cost_cents`, "This field is required.");
+    c.nonNegativeInt(`items.${i}.cost_cents`, item.cost_cents);
+  });
+  c.done();
+}
+
 export function validatePreference(key: string, value: string): void {
   const c = new Checker();
   if (key === "currency" && !/^[A-Z]{3}$/.test(value)) c.add(key, "Use a three-letter currency code, e.g. EUR.");

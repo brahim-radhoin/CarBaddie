@@ -33,6 +33,11 @@ export const getOdometerReadings = call("getOdometerReadings");
 export const addOdometerReading = call("addOdometerReading");
 export const updateOdometerReading = call("updateOdometerReading");
 export const deleteOdometerReading = call("deleteOdometerReading");
+export const getVisitsForVehicle = call("getVisitsForVehicle");
+export const getServiceEvent = call("getServiceEvent");
+export const createServiceEvent = call("createServiceEvent");
+export const updateServiceEvent = call("updateServiceEvent");
+export const deleteServiceEvent = call("deleteServiceEvent");
 
 export const getOverridesForVehicle = call("getOverridesForVehicle");
 export const upsertIntervalOverride = call("upsertIntervalOverride");

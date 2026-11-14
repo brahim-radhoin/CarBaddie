@@ -27,6 +27,7 @@ export const ID_NAMESPACES = {
   builtinServiceType: "19a1b14e-2ce9-44cd-9aa2-7883bba75f69",
   intervalOverride: "1d2a5110-fb3f-4064-a951-4802026e86b9",
   builtinField: "468f311e-1f4d-4040-a391-9a05b40eefbb",
+  serviceEvent: "503125ef-e4c4-4d4d-8eaa-de5ac75d1944",
 } as const;
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -79,6 +80,14 @@ export function uuidv5(name: string, namespace: string): string {
 /** Id of a vehicle's interval override for a service type: one row per pair on every device. */
 export function intervalOverrideId(vehicleId: string, serviceTypeId: string): string {
   return uuidv5(`${vehicleId}/${serviceTypeId}`, ID_NAMESPACES.intervalOverride);
+}
+
+/**
+ * Id of the visit migration v7 makes of a vehicle's logs sharing a date and odometer reading,
+ * so every device groups them under the same id.
+ */
+export function serviceEventId(vehicleId: string, date: string, mileage: number): string {
+  return uuidv5(`${vehicleId}/${date}/${mileage}`, ID_NAMESPACES.serviceEvent);
 }
 
 // Plain SHA-1, only used for UUIDv5 (React Native has no synchronous digest API).

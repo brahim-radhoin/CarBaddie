@@ -90,11 +90,15 @@ function RootLayoutNav() {
           />
           <Stack.Screen
             name="vehicle/[id]/add-log"
-            options={{ title: "Add Log", presentation: "modal" }}
+            options={{ title: "Add Visit", presentation: "modal" }}
           />
           <Stack.Screen
             name="vehicle/[id]/edit-log/[logId]"
             options={{ title: "Edit Log", presentation: "modal" }}
+          />
+          <Stack.Screen
+            name="vehicle/[id]/edit-visit/[visitId]"
+            options={{ title: "Edit Visit", presentation: "modal" }}
           />
           <Stack.Screen
             name="vehicle/[id]/history/[serviceTypeId]"

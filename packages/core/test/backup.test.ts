@@ -39,6 +39,7 @@ const vehicles: VehicleRead[] = [
       {
         id: "log-1",
         vehicle_id: V1,
+        event_id: null,
         service_type_id: ST_OIL,
         service_type: null,
         date: "2025-06-01",
@@ -111,7 +112,9 @@ test("files from older desktop and mobile versions are normalised", () => {
   assert.equal(v.vin, null);
   assert.deepEqual(v.interval_overrides, []);
   assert.deepEqual(v.odometer_readings, [], "files from before odometer readings have none");
+  assert.equal(v.service_events, undefined, "files from before visits have none");
   const log = v.maintenance_logs[0];
+  assert.equal(log.event_id, undefined);
   assert.equal(log.mileage, 12000);
   assert.equal(log.cost, 45.1);
   assert.equal(log.custom_field_values[0].field_id, 3);

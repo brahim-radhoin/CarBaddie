@@ -4,8 +4,9 @@
 // own transaction with foreign keys off (needed to rebuild tables). Migrations that rewrite
 // data must leave `PRAGMA foreign_key_check` clean, otherwise they are rolled back.
 
-import { intervalOverrideId } from "../ids/uuid.ts";
+import { intervalOverrideId, serviceEventId } from "../ids/uuid.ts";
 import { builtinServiceTypeId, findBuiltinServiceTypeByName } from "../service-types/builtin.ts";
+import { SEED_STAMP } from "./seed.ts";
 import type { SqlDriver, WriteContext } from "./driver";
 
 interface Migration {
@@ -345,6 +346,49 @@ async function migrateV2(db: SqlDriver, ctx: WriteContext): Promise<void> {
   await db.exec("DROP TABLE temp.id_map");
 }
 
+/**
+ * v7: garage visits. A visit (service_events) holds several maintenance logs (its items) through
+ * maintenance_logs.event_id; a log without one is a visit of its own. Live logs of a vehicle that
+ * share a date and odometer reading (the old "co-performed services") become one visit. Every
+ * device runs this on its own copy, so the visits must come out identical everywhere: the id is
+ * derived from vehicle, date and mileage, and SEED_STAMP lets any real edit win. The logs keep
+ * their updated_at, so the grouping itself never needs to sync.
+ */
+async function migrateV7(db: SqlDriver, ctx: WriteContext): Promise<void> {
+  await db.exec(`
+    CREATE TABLE service_events (
+      id TEXT PRIMARY KEY NOT NULL,
+      vehicle_id TEXT NOT NULL REFERENCES vehicles(id) ON DELETE CASCADE,
+      date TEXT NOT NULL,
+      mileage INTEGER NOT NULL,
+      shop TEXT,
+      notes TEXT,
+      ${SYNC_COLUMNS}
+    );
+    CREATE INDEX idx_service_events_vehicle_id ON service_events(vehicle_id);
+    ALTER TABLE maintenance_logs ADD COLUMN event_id TEXT REFERENCES service_events(id);
+    CREATE INDEX idx_maintenance_logs_event_id ON maintenance_logs(event_id);
+  `);
+  const groups = await db.all<{ vehicle_id: string; date: string; mileage: number }>(
+    `SELECT l.vehicle_id, l.date, l.mileage FROM maintenance_logs l
+     JOIN vehicles v ON v.id = l.vehicle_id AND v.deleted_at IS NULL
+     WHERE l.deleted_at IS NULL
+     GROUP BY l.vehicle_id, l.date, l.mileage HAVING COUNT(*) > 1`,
+  );
+  for (const g of groups) {
+    const id = serviceEventId(g.vehicle_id, g.date, g.mileage);
+    await db.run(
+      `INSERT INTO service_events (id, vehicle_id, date, mileage, shop, notes, updated_at, deleted_at, device_id)
+       VALUES (?, ?, ?, ?, NULL, NULL, ?, NULL, ?)`,
+      [id, g.vehicle_id, g.date, g.mileage, SEED_STAMP, ctx.deviceId],
+    );
+    await db.run(
+      "UPDATE maintenance_logs SET event_id = ? WHERE vehicle_id = ? AND date = ? AND mileage = ? AND deleted_at IS NULL",
+      [id, g.vehicle_id, g.date, g.mileage],
+    );
+  }
+}
+
 export const MIGRATIONS: readonly Migration[] = [
   { version: 1, description: "legacy integer-id schema", checkForeignKeys: false, up: (db) => db.exec(V1_LEGACY_SCHEMA) },
   { version: 2, description: "UUID ids, sync columns, archivable custom fields", checkForeignKeys: true, up: migrateV2 },
@@ -402,6 +446,12 @@ export const MIGRATIONS: readonly Migration[] = [
         );
         CREATE INDEX idx_odometer_readings_vehicle_id ON odometer_readings(vehicle_id);
       `),
+  },
+  {
+    version: 7,
+    description: "service_events: garage visits with several items",
+    checkForeignKeys: true,
+    up: migrateV7,
   },
 ];
 

@@ -1,7 +1,14 @@
 import { useState, useMemo, useRef } from "react";
 import { useParams, useNavigate, useOutletContext } from "react-router-dom";
 import { VehicleDetailContext } from "./VehicleDetailPage";
-import { useAllLogsForVehicle, useServiceTypeSummaries, useServiceTypes, useDeleteMaintenanceLog } from "../api";
+import {
+  useAllLogsForVehicle,
+  useServiceTypeSummaries,
+  useServiceTypes,
+  useDeleteMaintenanceLog,
+  useVisitsForVehicle,
+  useDeleteServiceEvent,
+} from "../api";
 import { ActivityTimeline } from "../components/ActivityTimeline";
 import { LogHistoryList } from "../components/LogHistoryList";
 import { VehicleStatistics, VehicleStatsData } from "../components/VehicleStatistics";
@@ -29,14 +36,16 @@ export function VehicleMaintenancePage() {
   const { data: allLogs = [], isLoading: isLoadingLogs } = useAllLogsForVehicle(vehicleId);
   const { data: serviceTypeSummaries = [], isLoading: isLoadingSummaries } = useServiceTypeSummaries(vehicleId);
   const { data: allServiceTypes = [] } = useServiceTypes();
+  const { data: visits = [], isLoading: isLoadingVisits } = useVisitsForVehicle(vehicleId);
   const deleteLogMutation = useDeleteMaintenanceLog();
+  const deleteVisitMutation = useDeleteServiceEvent();
   const units = useUnits();
 
   const [activeTab, setActiveTab] = useState<"dashboard" | "statistics" | "calendar">("dashboard");
   const [dateFilter, setDateFilter] = useState<string | null>(null);
   const historySectionRef = useRef<HTMLDivElement>(null);
 
-  const isLoading = isLoadingLogs || isLoadingSummaries;
+  const isLoading = isLoadingLogs || isLoadingSummaries || isLoadingVisits;
 
   const vehicleStats = useMemo<VehicleStatsData | null>(() => {
     if (!vehicle || !allLogs) return null;
@@ -77,6 +86,11 @@ export function VehicleMaintenancePage() {
   const handleDeleteLog = async (logId: string) => {
     if (!vehicleId) return;
     await deleteLogMutation.mutateAsync({ logId, vehicleId });
+  };
+
+  const handleDeleteVisit = async (visitId: string) => {
+    if (!vehicleId) return;
+    await deleteVisitMutation.mutateAsync({ visitId, vehicleId });
   };
 
   if (isLoading) {
@@ -262,15 +276,16 @@ export function VehicleMaintenancePage() {
                 onClick={() => navigate(`/vehicles/${vehicle.id}/add-log`)}
               >
                 <Plus className="h-3 w-3" />
-                Add Record
+                Add Visit
               </Button>
             </div>
 
             <LogHistoryList
-              allLogs={allLogs}
+              visits={visits}
               vehicleName={`${vehicle.make} ${vehicle.model}`}
               isLoading={isLoading}
               onDeleteLog={handleDeleteLog}
+              onDeleteVisit={handleDeleteVisit}
               vehicleId={String(vehicle.id)}
               externalDateFilter={dateFilter}
               onClearExternalDateFilter={() => setDateFilter(null)}
@@ -294,7 +309,7 @@ export function VehicleMaintenancePage() {
       {activeTab === "calendar" && (
         <div className="space-y-4">
           <div className="rounded-lg border border-border bg-card p-4">
-            <ActivityTimeline logs={allLogs} onSelectDate={(date) => setDateFilter(date)} />
+            <ActivityTimeline visits={visits} onSelectDate={(date) => setDateFilter(date)} />
           </div>
         </div>
       )}

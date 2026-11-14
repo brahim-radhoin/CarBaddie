@@ -87,7 +87,8 @@ its connection pool can't keep BEGIN/COMMIT on one connection).
       symbol / unit settings are adopted once). Verified on a copy of the real DB (costs exact).
    b. DONE — odometer readings (migration v6 `odometer_readings`: synced, moved on VIN merge, in backups);
       `VehicleRead.current_mileage` = max(initial, logs, readings) feeds the engine and every odometer display.
-   c. NEXT — garage visits with multiple service items (`service_events` + items).
+   c. DONE — garage visits: migration v7 `service_events` (date, mileage, shop, notes) + `maintenance_logs.event_id`;
+      each item is a log, so the engine is unchanged; logs without event_id are single-item visits.
    d. DONE — reminders (core `maintenance/reminders.ts`, one key per due occurrence, app_settings `reminders.*`):
       desktop tauri-plugin-notification; mobile expo-notifications + 09:00 due-date ones (new EAS build needed).
 
@@ -98,6 +99,11 @@ its connection pool can't keep BEGIN/COMMIT on one connection).
 - The engine (`upcoming.ts`) rounds day gaps up, so across the autumn DST change `remainingDays` is one too
   many (`Math.round` would fix it); reminders.ts compensates for its keys and due dates.
 - No iOS sign-in yet (needs an iOS OAuth client and the plugin's `iosUrlScheme`).
+- Visits made by migration v7 (co-performed logs grouped by vehicle+date+mileage) keep the logs'
+  `updated_at`, so a grouping only one device could make (it held unsynced logs) stays local until those
+  logs are edited.
+- The phone needs a new EAS development build for expo-notifications (reminders); step 6 UIs are only
+  typechecked/built, not yet tried on screen.
 - Sync stalls silently if a device's change file is missing from Drive with no snapshot covering it
   (e.g. files deleted by hand): `engine.ts` stops at the gap and reports nothing.
 - Tauri capability allows writing text files anywhere (`"**"`).

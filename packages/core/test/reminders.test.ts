@@ -40,6 +40,7 @@ function log(date: string, mileage: number, serviceTypeId: string): MaintenanceL
     notes: null,
     service_type_id: serviceTypeId,
     service_type: null,
+    event_id: null,
     custom_field_values: [],
   };
 }

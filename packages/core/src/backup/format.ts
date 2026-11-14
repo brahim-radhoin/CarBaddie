@@ -13,6 +13,7 @@ import type {
   BackupConfiguration,
   CustomFieldRead,
   Id,
+  ServiceEventRead,
   ServiceTypeRead,
   VehicleRead,
 } from "../types";
@@ -75,6 +76,17 @@ const backupLogSchema = z.object({
   notes: optionalString,
   service_type_id: optionalInt,
   custom_field_values: z.array(backupFieldValueSchema).default([]),
+  /** The vehicle's service event (visit) this log is an item of. Absent in older files. */
+  event_id: fileId.nullish(),
+});
+
+/** A garage visit; its items are the logs whose `event_id` is this id. Absent in older files. */
+const backupServiceEventSchema = z.object({
+  id: fileId,
+  date: optionalString,
+  mileage: lenientNumber.transform(Math.trunc),
+  shop: optionalString,
+  notes: optionalString,
 });
 
 const backupOverrideSchema = z.object({
@@ -108,6 +120,7 @@ const backupVehicleSchema = z.object({
   maintenance_logs: z.array(backupLogSchema).default([]),
   interval_overrides: z.array(backupOverrideSchema).default([]),
   odometer_readings: z.array(backupOdometerReadingSchema).default([]),
+  service_events: z.array(backupServiceEventSchema).optional(),
 });
 
 const backupConfigSchema = z.object({
@@ -144,12 +157,14 @@ export interface EncodeBackupInput {
   serviceTypes: ServiceTypeRead[];
   /** The vehicles to include, already filtered by the export configuration. */
   vehicles: VehicleRead[];
+  /** Visit headers; only those of exported logs are written. */
+  serviceEvents?: Pick<ServiceEventRead, "id" | "vehicle_id" | "date" | "mileage" | "shop" | "notes">[];
   config: BackupConfiguration;
   exportedAt: Date;
 }
 
 /** Builds a backup file from local data, replacing UUIDs with file-local integer ids. */
-export function encodeBackup({ serviceTypes, vehicles, config, exportedAt }: EncodeBackupInput): BackupFile {
+export function encodeBackup({ serviceTypes, vehicles, serviceEvents = [], config, exportedAt }: EncodeBackupInput): BackupFile {
   const counters = new Map<string, number>();
   const maps = new Map<string, Map<Id, number>>();
   const fileIdFor = (kind: string, id: Id): number => {
@@ -184,6 +199,9 @@ export function encodeBackup({ serviceTypes, vehicles, config, exportedAt }: Enc
 
   const encodedVehicles = vehicles.map((v) => {
     const vehicleFileId = fileIdFor("vehicle", v.id);
+    const usedEvents = new Set(v.maintenance_logs.map((log) => log.event_id));
+    const events = serviceEvents.filter((ev) => ev.vehicle_id === v.id && usedEvents.has(ev.id));
+    const exportedEvents = new Set(events.map((ev) => ev.id));
     return {
       id: vehicleFileId,
       make: v.make,
@@ -209,7 +227,19 @@ export function encodeBackup({ serviceTypes, vehicles, config, exportedAt }: Enc
           custom_field: encodeField(cfv.custom_field),
           value: cfv.value,
         })),
+        ...(log.event_id && exportedEvents.has(log.event_id) ? { event_id: fileIdFor("event", log.event_id) } : {}),
       })),
+      ...(events.length
+        ? {
+            service_events: events.map((ev) => ({
+              id: fileIdFor("event", ev.id),
+              date: ev.date,
+              mileage: ev.mileage,
+              shop: ev.shop ?? null,
+              notes: ev.notes ?? null,
+            })),
+          }
+        : {}),
       interval_overrides: v.interval_overrides
         .filter((ov) => knownServiceTypes.has(ov.service_type_id))
         .map((ov) => ({

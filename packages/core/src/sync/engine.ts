@@ -4,8 +4,8 @@
 // Rules that keep every device converging on the same data:
 // - a row is replaced only by a copy with a newer `updated_at`
 // - two live vehicles with the same VIN are merged: the one with the smaller id stays, the
-//   other is tombstoned with `merged_into`, and its logs, odometer readings and overrides
-//   move to the survivor
+//   other is tombstoned with `merged_into`, and its visits, logs, odometer readings and
+//   overrides move to the survivor
 // - two live service types (or two active fields of one service type) with the same name:
 //   the one with the larger id is renamed "Name (2)"
 // - after merging, children of tombstoned parents are tombstoned too (a delete on one device
@@ -143,12 +143,20 @@ async function syncOnce(db: SqlDriver, w: WriteContext, transport: SyncTransport
     return count;
   });
 
-  // ---- Push: every row this device wrote since the last push.
+  // ---- Push: every row this device wrote since the last push. The first push (new device, or
+  // after resetSync, e.g. another account) sends every row, including rows other devices wrote:
+  // their own files may not be in this sync space, and receivers ignore copies they have.
   const own = devices.get(w.deviceId);
   const ownSeqs = [...(own?.changes.keys() ?? []), ...(own?.snapshot ? [own.snapshot.seq] : [])];
   let seq = Math.max(Number((await getSetting(db, SYNC_SETTING_KEYS.seq)) ?? 0), ...ownSeqs, 0);
   const cursor = (await getSetting(db, SYNC_SETTING_KEYS.cursor)) ?? "";
-  const changes = await transaction(db, () => readRows(db, "device_id = ? AND updated_at > ?", [w.deviceId, cursor]));
+  const changes = await transaction(db, async () => {
+    const rows = cursor
+      ? await readRows(db, "device_id = ? AND updated_at > ?", [w.deviceId, cursor])
+      : await readRows(db, "1 = 1", []);
+    await addReferencedEvents(db, rows.tables);
+    return rows;
+  });
 
   let ownChangeFiles = own?.changes.size ?? 0;
   if (changes.count > 0) {
@@ -198,6 +206,28 @@ async function readRows(db: SqlDriver, where: string, params: SqlValue[]) {
     for (const row of rows) if ((row.updated_at as string) > maxUpdatedAt) maxUpdatedAt = row.updated_at as string;
   }
   return { tables, count, maxUpdatedAt };
+}
+
+/**
+ * Visits made by migration v7 keep SEED_STAMP, so they never count as changed since the last
+ * push. A pushed log carries its visit along, or a device that didn't group that log itself
+ * (e.g. a fresh install) would receive a reference to a visit it doesn't have. Only added to the
+ * file: they don't count as uploaded rows and don't move the cursor.
+ */
+async function addReferencedEvents(db: SqlDriver, tables: Record<string, SyncRow[]>): Promise<void> {
+  const present = new Set((tables.service_events ?? []).map((row) => row.id));
+  const missing = [
+    ...new Set(
+      (tables.maintenance_logs ?? [])
+        .map((row) => row.event_id)
+        .filter((id): id is string => typeof id === "string" && !present.has(id)),
+    ),
+  ];
+  for (let i = 0; i < missing.length; i += 500) {
+    const chunk = missing.slice(i, i + 500);
+    const rows = await db.all<SyncRow>(`SELECT * FROM service_events WHERE id IN (${chunk.map(() => "?").join(", ")})`, chunk);
+    if (rows.length) tables.service_events = [...(tables.service_events ?? []), ...rows];
+  }
 }
 
 // ------------------------------------------------------------------
@@ -385,14 +415,16 @@ class MergeContext {
     };
     if (merged.size > 0) {
       const inMerged = `vehicle_id IN (SELECT id FROM vehicles WHERE merged_into IS NOT NULL)`;
-      for (const log of await db.all<{ id: string; vehicle_id: string }>(
-        `SELECT id, vehicle_id FROM maintenance_logs WHERE deleted_at IS NULL AND ${inMerged}`,
-      )) {
-        const t = touch();
-        await db.run("UPDATE maintenance_logs SET vehicle_id = ?, updated_at = ?, device_id = ? WHERE id = ?", [
-          survivor(log.vehicle_id), t.stamp, t.device, log.id,
-        ]);
-        changed++;
+      for (const table of ["service_events", "maintenance_logs"]) {
+        for (const row of await db.all<{ id: string; vehicle_id: string }>(
+          `SELECT id, vehicle_id FROM ${table} WHERE deleted_at IS NULL AND ${inMerged}`,
+        )) {
+          const t = touch();
+          await db.run(`UPDATE ${table} SET vehicle_id = ?, updated_at = ?, device_id = ? WHERE id = ?`, [
+            survivor(row.vehicle_id), t.stamp, t.device, row.id,
+          ]);
+          changed++;
+        }
       }
       for (const reading of await db.all<{ id: string; vehicle_id: string }>(
         `SELECT id, vehicle_id FROM odometer_readings WHERE deleted_at IS NULL AND ${inMerged}`,
@@ -439,7 +471,9 @@ class MergeContext {
     const deadType = "SELECT id FROM service_types WHERE deleted_at IS NOT NULL";
     const cascades: [string, string][] = [
       ["custom_fields", `service_type_id IN (${deadType})`],
-      ["maintenance_logs", `vehicle_id IN (${deadVehicle})`],
+      ["service_events", `vehicle_id IN (${deadVehicle})`],
+      ["maintenance_logs", `vehicle_id IN (${deadVehicle})
+                            OR event_id IN (SELECT id FROM service_events WHERE deleted_at IS NOT NULL)`],
       ["odometer_readings", `vehicle_id IN (${deadVehicle})`],
       ["custom_field_values", `log_id IN (SELECT id FROM maintenance_logs WHERE deleted_at IS NOT NULL)
                                OR field_id IN (SELECT id FROM custom_fields WHERE deleted_at IS NOT NULL)`],

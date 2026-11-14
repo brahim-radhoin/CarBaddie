@@ -286,3 +286,22 @@ test("a VIN merge moves odometer readings to the surviving vehicle", async () =>
   }
   assert.deepEqual(await liveState(a.db), await liveState(b.db));
 });
+
+test("after a reset, the first push carries rows other devices wrote, so a new account gets everything", async () => {
+  const first = memoryDrive();
+  const a = await device();
+  const b = await device();
+  const v = await b.repo.createVehicle({ make: "Skoda", model: "Fabia" });
+  await b.repo.createMaintenanceLog(v.id, { date: "2025-07-01", mileage: 9000, cost_cents: 5000 });
+  await b.sync(first.transport);
+  await a.sync(first.transport); // a now holds rows written by b
+
+  // a signs in to another account: b's files aren't there.
+  const second = memoryDrive();
+  await a.resetSync();
+  await a.sync(second.transport);
+  const c = await device();
+  await c.sync(second.transport);
+  assert.equal((await c.repo.getVehicleById(v.id))?.maintenance_logs.length, 1);
+  assert.deepEqual(await liveState(c.db), await liveState(a.db));
+});

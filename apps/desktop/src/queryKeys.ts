@@ -15,6 +15,11 @@ export const queryKeys = {
     forServiceType: (vehicleId: string | number, serviceTypeId: string | number) =>
       ["maintenance_logs", { vehicleId: String(vehicleId), serviceTypeId: String(serviceTypeId) }] as const,
   },
+  // Under "maintenance_logs" so every invalidation of logs.all() refreshes visits too.
+  visits: {
+    one: (id: string | number) => ["maintenance_logs", "visit", String(id)] as const,
+    forVehicle: (vehicleId: string | number) => ["maintenance_logs", "visits", { vehicleId: String(vehicleId) }] as const,
+  },
   summaries: {
     forVehicle: (vehicleId: string | number) => ["summaries", String(vehicleId)] as const,
   },
