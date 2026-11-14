@@ -8,6 +8,7 @@ export interface SyncedTable {
 
 export const SYNCED_TABLE_INFO = [
   { name: "vehicles", primaryKey: ["id"] },
+  { name: "service_events", primaryKey: ["id"] },
   { name: "service_types", primaryKey: ["id"] },
   { name: "custom_fields", primaryKey: ["id"] },
   { name: "maintenance_logs", primaryKey: ["id"] },

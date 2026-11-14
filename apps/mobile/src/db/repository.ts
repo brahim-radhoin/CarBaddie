@@ -29,6 +29,12 @@ export const createMaintenanceLog = call("createMaintenanceLog");
 export const updateMaintenanceLog = call("updateMaintenanceLog");
 export const deleteMaintenanceLog = call("deleteMaintenanceLog");
 
+export const getVisitsForVehicle = call("getVisitsForVehicle");
+export const getServiceEvent = call("getServiceEvent");
+export const createServiceEvent = call("createServiceEvent");
+export const updateServiceEvent = call("updateServiceEvent");
+export const deleteServiceEvent = call("deleteServiceEvent");
+
 export const getOverridesForVehicle = call("getOverridesForVehicle");
 export const upsertIntervalOverride = call("upsertIntervalOverride");
 export const deleteIntervalOverride = call("deleteIntervalOverride");

@@ -1,5 +1,5 @@
 import { StyleSheet, ScrollView, TextInput, TouchableOpacity, View, Alert, ActivityIndicator } from "react-native";
-import { useLocalSearchParams, useRouter, useTheme } from "expo-router";
+import { Redirect, useLocalSearchParams, useRouter, useTheme } from "expo-router";
 import {
   useMaintenanceLog,
   useUpdateMaintenanceLog,
@@ -132,6 +132,11 @@ export default function EditLogScreen() {
         <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
+  }
+
+  // A visit's item is edited with its visit.
+  if (log?.event_id) {
+    return <Redirect href={`/vehicle/${vehicleId}/edit-visit/${log.event_id}`} />;
   }
 
   return (

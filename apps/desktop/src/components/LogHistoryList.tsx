@@ -1,6 +1,6 @@
 import { useState, useMemo, ChangeEvent, useEffect } from "react";
-import { MaintenanceLogRead } from "../types";
-import { LogCard } from "./LogCard"; // Assuming LogCard is in the same components folder
+import { ServiceEventRead } from "../types";
+import { VisitCard } from "./VisitCard";
 import { save } from "@tauri-apps/plugin-dialog";
 import { writeTextFile } from "@tauri-apps/plugin-fs";
 
@@ -19,10 +19,12 @@ import { toast } from "sonner";
 import { useUnits } from "../hooks/useUnits";
 
 interface LogHistoryListProps {
-  allLogs: MaintenanceLogRead[];
+  /** Garage visits, newest first; standalone logs are single-item visits. */
+  visits: ServiceEventRead[];
   vehicleName: string;
   isLoading: boolean;
   onDeleteLog: (logId: string) => Promise<void>;
+  onDeleteVisit: (visitId: string) => Promise<void>;
   vehicleId: string; // Needed for "Add First Log" if list is empty
   externalDateFilter: string | null; // New prop
   onClearExternalDateFilter: () => void; // New prop
@@ -31,10 +33,11 @@ interface LogHistoryListProps {
 const ITEMS_PER_PAGE = 5; // Or your preferred number
 
 export function LogHistoryList({
-  allLogs,
+  visits,
   vehicleName,
   isLoading,
   onDeleteLog,
+  onDeleteVisit,
   vehicleId,
   externalDateFilter,
   onClearExternalDateFilter,
@@ -49,26 +52,34 @@ export function LogHistoryList({
     setCurrentPage(1);
   }, [externalDateFilter, searchTerm]);
 
+  // Every service record, for the CSV export.
+  const allLogs = useMemo(() => visits.flatMap((visit) => visit.items.map((log) => ({ log, shop: visit.shop }))), [visits]);
+
   const filteredLogs = useMemo(() => {
-    let processedLogs = [...allLogs];
+    let processedVisits = [...visits];
     // Apply external date filter first if present
     if (externalDateFilter) {
-      processedLogs = processedLogs.filter((log) => log.date.startsWith(externalDateFilter)); // Compare YYYY-MM-DD part
+      processedVisits = processedVisits.filter((visit) => visit.date.startsWith(externalDateFilter)); // Compare YYYY-MM-DD part
     }
 
     if (searchTerm) {
       const lowerSearchTerm = searchTerm.toLowerCase();
-      processedLogs = processedLogs.filter(
-        (log) =>
-          log.service_type?.name.toLowerCase().includes(lowerSearchTerm) ||
-          (log.notes && log.notes.toLowerCase().includes(lowerSearchTerm)) ||
-          log.custom_field_values.some(
-            (cfv) => cfv.custom_field.name.toLowerCase().includes(lowerSearchTerm) || cfv.value.toLowerCase().includes(lowerSearchTerm)
+      processedVisits = processedVisits.filter(
+        (visit) =>
+          visit.shop?.toLowerCase().includes(lowerSearchTerm) ||
+          visit.notes?.toLowerCase().includes(lowerSearchTerm) ||
+          visit.items.some(
+            (log) =>
+              log.service_type?.name.toLowerCase().includes(lowerSearchTerm) ||
+              (log.notes && log.notes.toLowerCase().includes(lowerSearchTerm)) ||
+              log.custom_field_values.some(
+                (cfv) => cfv.custom_field.name.toLowerCase().includes(lowerSearchTerm) || cfv.value.toLowerCase().includes(lowerSearchTerm)
+              )
           )
       );
     }
-    return processedLogs;
-  }, [allLogs, searchTerm, externalDateFilter]);
+    return processedVisits;
+  }, [visits, searchTerm, externalDateFilter]);
 
   const paginatedLogs = useMemo(() => {
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
@@ -94,7 +105,7 @@ export function LogHistoryList({
 
     try {
       const customFieldHeaders = new Set<string>();
-      allLogs.forEach((log) => {
+      allLogs.forEach(({ log }) => {
         if (log.custom_field_values) {
           // Check if the array exists
           log.custom_field_values.forEach((cfv) => {
@@ -110,13 +121,14 @@ export function LogHistoryList({
       const sortedCustomHeaders = Array.from(customFieldHeaders).sort();
 
       // 2. Now, map each log to a flat object, ensuring all possible columns are present.
-      const dataForCSV = allLogs.map((log) => {
+      const dataForCSV = allLogs.map(({ log, shop }) => {
         // Start with the base, static columns
         const row: Record<string, string | number> = {
           Date: log.date,
           "Service Type": log.service_type?.name || "Uncategorized",
           [`Mileage (${units.unit})`]: units.toDisplay(log.mileage),
           [`Cost (${units.currency})`]: (log.cost_cents / 100).toFixed(2),
+          Shop: shop || "",
           Notes: log.notes || "",
         };
 
@@ -237,7 +249,7 @@ export function LogHistoryList({
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             type="search"
-            placeholder="Search logs (service, notes, details)..."
+            placeholder="Search visits (service, shop, notes, details)..."
             value={searchTerm}
             onChange={handleSearchChange}
             className="pl-9 text-sm h-9"
@@ -249,8 +261,8 @@ export function LogHistoryList({
       {paginatedLogs.length > 0 ? (
         <div className="space-y-4">
           {/* Use space-y for cards */}
-          {paginatedLogs.map((log) => (
-            <LogCard key={log.id} log={log} onDelete={onDeleteLog} />
+          {paginatedLogs.map((visit) => (
+            <VisitCard key={visit.id} visit={visit} onDeleteLog={onDeleteLog} onDeleteVisit={onDeleteVisit} />
           ))}
         </div>
       ) : (

@@ -15,6 +15,7 @@ import {
   validateIntervalOverride,
   validateMaintenanceLog,
   validatePreference,
+  validateServiceEvent,
   validateServiceType,
   validateVehicle,
 } from "../validation.ts";
@@ -37,6 +38,10 @@ import type {
   MaintenanceSummary,
   Preferences,
   RestorePlan,
+  ServiceEventCreate,
+  ServiceEventRead,
+  ServiceEventUpdate,
+  ServiceItemCreate,
   ServiceTypeCreate,
   ServiceTypeLogSummary,
   ServiceTypeRead,
@@ -67,7 +72,9 @@ export function createRepository(db: SqlDriver, w: WriteContext) {
     const stamp = w.stamp();
     return ["deleted_at = ?, updated_at = ?, device_id = ?", [stamp, stamp, w.deviceId]];
   };
-  const cleanUnit = (unit: string | null | undefined) => (unit && unit.trim() ? unit.trim() : null);
+  /** Trimmed, or null when empty. */
+  const cleanText = (text: string | null | undefined) => (text && text.trim() ? text.trim() : null);
+  const cleanUnit = cleanText;
 
   // ==================================================================
   // Hydration
@@ -142,6 +149,7 @@ export function createRepository(db: SqlDriver, w: WriteContext) {
     return {
       id: row.id,
       vehicle_id: row.vehicle_id,
+      event_id: row.event_id ?? null,
       service_type_id: row.service_type_id,
       date: row.date,
       mileage: row.mileage,
@@ -163,6 +171,53 @@ export function createRepository(db: SqlDriver, w: WriteContext) {
     const logs: MaintenanceLogRead[] = [];
     for (const row of await all(sql, params)) logs.push(await buildLog(row));
     return logs;
+  }
+
+  async function buildEvent(row: Row): Promise<ServiceEventRead> {
+    const items: MaintenanceLogRead[] = [];
+    // UUIDv7 ids: items in the order they were added.
+    for (const log of await all("SELECT * FROM maintenance_logs WHERE event_id = ? AND deleted_at IS NULL ORDER BY id", [row.id])) {
+      items.push(await buildLog(log));
+    }
+    return {
+      id: row.id,
+      vehicle_id: row.vehicle_id,
+      date: row.date,
+      mileage: row.mileage,
+      shop: row.shop ?? null,
+      notes: row.notes ?? null,
+      total_cost_cents: items.reduce((sum, item) => sum + item.cost_cents, 0),
+      items,
+    };
+  }
+
+  /** A vehicle's visits, newest first: its service events, and each log outside one as a visit of its own. */
+  async function listVisits(vehicleId: Id): Promise<ServiceEventRead[]> {
+    const visits: ServiceEventRead[] = [];
+    for (const row of await all("SELECT * FROM service_events WHERE vehicle_id = ? AND deleted_at IS NULL", [vehicleId])) {
+      visits.push(await buildEvent(row));
+    }
+    const standalone = await all(
+      `SELECT * FROM maintenance_logs WHERE vehicle_id = ? AND deleted_at IS NULL
+         AND (event_id IS NULL OR event_id NOT IN (SELECT id FROM service_events WHERE deleted_at IS NULL))`,
+      [vehicleId],
+    );
+    for (const row of standalone) {
+      const log = await buildLog(row);
+      visits.push({
+        id: log.id,
+        vehicle_id: log.vehicle_id,
+        date: log.date,
+        mileage: log.mileage,
+        shop: null,
+        notes: null,
+        total_cost_cents: log.cost_cents,
+        items: [log],
+        standalone: true,
+      });
+    }
+    const desc = (a: string, b: string) => (a < b ? 1 : a > b ? -1 : 0);
+    return visits.sort((a, b) => desc(a.date, b.date) || desc(a.id, b.id));
   }
 
   async function listOverrides(vehicleId: Id): Promise<VehicleServiceIntervalOverrideRead[]> {
@@ -218,6 +273,7 @@ export function createRepository(db: SqlDriver, w: WriteContext) {
       [...delVals, id],
     );
     await run(`UPDATE maintenance_logs SET ${del} WHERE deleted_at IS NULL AND vehicle_id = ?`, [...delVals, id]);
+    await run(`UPDATE service_events SET ${del} WHERE deleted_at IS NULL AND vehicle_id = ?`, [...delVals, id]);
     await run(`UPDATE vehicle_service_interval_overrides SET ${del} WHERE deleted_at IS NULL AND vehicle_id = ?`, [...delVals, id]);
     await run(`UPDATE vehicles SET ${del} WHERE deleted_at IS NULL AND id = ?`, [...delVals, id]);
   }
@@ -323,15 +379,73 @@ export function createRepository(db: SqlDriver, w: WriteContext) {
     );
   }
 
-  async function insertLog(vehicleId: Id, data: MaintenanceLogCreate): Promise<Id> {
+  async function insertLog(vehicleId: Id, data: MaintenanceLogCreate, eventId: Id | null = null): Promise<Id> {
     const id = w.newId();
     await run(
-      `INSERT INTO maintenance_logs (id, vehicle_id, service_type_id, date, mileage, cost_cents, notes, updated_at, deleted_at, device_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)`,
-      [id, vehicleId, data.service_type_id ?? null, data.date, data.mileage, data.cost_cents, data.notes ?? null, w.stamp(), w.deviceId],
+      `INSERT INTO maintenance_logs (id, vehicle_id, event_id, service_type_id, date, mileage, cost_cents, notes,
+                                     updated_at, deleted_at, device_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)`,
+      [id, vehicleId, eventId, data.service_type_id ?? null, data.date, data.mileage, data.cost_cents, data.notes ?? null,
+        w.stamp(), w.deviceId],
     );
     for (const cfv of data.custom_field_values ?? []) await insertFieldValue(id, cfv);
     return id;
+  }
+
+  async function tombstoneLog(logId: Id): Promise<void> {
+    const [del, delVals] = tombstoned();
+    await run(`UPDATE custom_field_values SET ${del} WHERE deleted_at IS NULL AND log_id = ?`, [...delVals, logId]);
+    await run(`UPDATE maintenance_logs SET ${del} WHERE deleted_at IS NULL AND id = ?`, [...delVals, logId]);
+  }
+
+  async function insertEvent(
+    vehicleId: Id,
+    header: { date: string; mileage: number; shop?: string | null; notes?: string | null },
+  ): Promise<Id> {
+    const id = w.newId();
+    await run(
+      `INSERT INTO service_events (id, vehicle_id, date, mileage, shop, notes, updated_at, deleted_at, device_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?)`,
+      [id, vehicleId, header.date, header.mileage, cleanText(header.shop), cleanText(header.notes), w.stamp(), w.deviceId],
+    );
+    return id;
+  }
+
+  /** Writes an existing item's columns that changed (date and mileage come from its visit). */
+  async function updateItem(log: Row, changes: Record<string, SqlValue | undefined>) {
+    const changed = Object.entries(changes).filter(([column, value]) => value !== undefined && log[column] !== value);
+    if (changed.length === 0) return;
+    const [touch, touchVals] = touched();
+    await run(`UPDATE maintenance_logs SET ${changed.map(([column]) => `${column} = ?`).join(", ")}, ${touch} WHERE id = ?`, [
+      ...changed.map(([, value]) => value as SqlValue), ...touchVals, log.id,
+    ]);
+  }
+
+  /** Makes `items` the visit's live items: matched by id and updated, added, or deleted when left out. */
+  async function syncItems(event: Row, date: string, mileage: number, items: (ServiceItemCreate & { id?: Id })[]): Promise<void> {
+    const live = await all("SELECT * FROM maintenance_logs WHERE event_id = ? AND deleted_at IS NULL", [event.id]);
+    const claimed = new Set<Id>();
+    const matches = items.map((item) => {
+      const match = item.id ? live.find((l) => l.id === item.id && !claimed.has(l.id)) : undefined;
+      if (match) claimed.add(match.id);
+      return match;
+    });
+    for (const log of live) if (!claimed.has(log.id)) await tombstoneLog(log.id);
+    for (const [index, item] of items.entries()) {
+      const match = matches[index];
+      if (!match) {
+        await insertLog(event.vehicle_id, { ...item, date, mileage }, event.id);
+        continue;
+      }
+      await updateItem(match, {
+        date,
+        mileage,
+        cost_cents: item.cost_cents,
+        notes: item.notes ?? null,
+        service_type_id: item.service_type_id ?? null,
+      });
+      if (item.custom_field_values !== undefined) await syncFieldValues(match.id, item.custom_field_values);
+    }
   }
 
   /**
@@ -464,7 +578,13 @@ export function createRepository(db: SqlDriver, w: WriteContext) {
 
     for (const v of vehiclesToCreate) {
       const vehicleId = await insertVehicle(v);
-      for (const log of v.maintenance_logs) {
+      const eventIds = new Map<number, Id>();
+      for (const ev of v.service_events ?? []) {
+        eventIds.set(ev.id, await insertEvent(vehicleId, { ...ev, date: ev.date || new Date().toISOString().slice(0, 10) }));
+      }
+      // Files list logs newest first; insert oldest first so the new ids keep their order
+      // (and a visit's items theirs).
+      for (const log of [...v.maintenance_logs].reverse()) {
         await insertLog(vehicleId, {
           date: log.date || new Date().toISOString().slice(0, 10),
           mileage: log.mileage,
@@ -475,7 +595,7 @@ export function createRepository(db: SqlDriver, w: WriteContext) {
             const fieldId = fieldIds.get(cfv.field_id);
             return fieldId ? [{ field_id: fieldId, value: cfv.value }] : [];
           }),
-        });
+        }, log.event_id != null ? (eventIds.get(log.event_id) ?? null) : null);
       }
       for (const ov of v.interval_overrides) {
         const serviceTypeId = serviceTypeIds.get(ov.service_type_id);
@@ -527,7 +647,7 @@ export function createRepository(db: SqlDriver, w: WriteContext) {
       return (await repo.getVehicleById(id))!;
     },
 
-    /** Deletes a vehicle with its logs and interval overrides. */
+    /** Deletes a vehicle with its logs, visits and interval overrides. */
     deleteVehicle: (id: Id): Promise<void> => tx(() => tombstoneVehicle(id)),
 
     /** Deletes every vehicle with its logs and overrides. Service types are kept. */
@@ -643,11 +763,79 @@ export function createRepository(db: SqlDriver, w: WriteContext) {
       return (await repo.getLogById(logId))!;
     },
 
+    /** Deletes a log; a visit left without items is deleted with it. */
     deleteMaintenanceLog: (logId: Id): Promise<void> =>
       tx(async () => {
+        const log = await first<{ event_id: Id | null }>("SELECT event_id FROM maintenance_logs WHERE id = ? AND deleted_at IS NULL", [logId]);
+        await tombstoneLog(logId);
+        if (log?.event_id && !(await first("SELECT 1 FROM maintenance_logs WHERE event_id = ? AND deleted_at IS NULL", [log.event_id]))) {
+          const [del, delVals] = tombstoned();
+          await run(`UPDATE service_events SET ${del} WHERE deleted_at IS NULL AND id = ?`, [...delVals, log.event_id]);
+        }
+      }),
+
+    // --- Service events (garage visits) ---
+    /** Newest first; a log outside any visit is listed as a visit of its own (`standalone: true`, id = the log's). */
+    getVisitsForVehicle: (vehicleId: Id): Promise<ServiceEventRead[]> => listVisits(vehicleId),
+
+    async getServiceEvent(id: Id): Promise<ServiceEventRead | null> {
+      const row = await first("SELECT * FROM service_events WHERE id = ? AND deleted_at IS NULL", [id]);
+      return row ? buildEvent(row) : null;
+    },
+
+    /** Records a visit and its items (one maintenance log each, at the visit's date and mileage). */
+    async createServiceEvent(vehicleId: Id, data: ServiceEventCreate): Promise<ServiceEventRead> {
+      validateServiceEvent(data);
+      const id = await tx(async () => {
+        const eventId = await insertEvent(vehicleId, data);
+        for (const item of data.items) {
+          await insertLog(vehicleId, { ...item, date: data.date, mileage: data.mileage }, eventId);
+        }
+        return eventId;
+      });
+      return (await repo.getServiceEvent(id))!;
+    },
+
+    /** Updates the visit's header (a new date or mileage applies to its items) and, if given, its item list. */
+    async updateServiceEvent(id: Id, data: ServiceEventUpdate): Promise<ServiceEventRead> {
+      validateServiceEvent(data, true);
+      await tx(async () => {
+        const event = await first("SELECT * FROM service_events WHERE id = ? AND deleted_at IS NULL", [id]);
+        if (!event) throw new Error("This visit no longer exists.");
+        const sets: string[] = [];
+        const vals: SqlValue[] = [];
+        if (data.date !== undefined) { sets.push("date = ?"); vals.push(data.date); }
+        if (data.mileage !== undefined) { sets.push("mileage = ?"); vals.push(data.mileage); }
+        if (data.shop !== undefined) { sets.push("shop = ?"); vals.push(cleanText(data.shop)); }
+        if (data.notes !== undefined) { sets.push("notes = ?"); vals.push(cleanText(data.notes)); }
+        if (sets.length > 0) {
+          const [touch, touchVals] = touched();
+          await run(`UPDATE service_events SET ${sets.join(", ")}, ${touch} WHERE id = ?`, [...vals, ...touchVals, id]);
+        }
+        const date = data.date ?? event.date;
+        const mileage = data.mileage ?? event.mileage;
+        if (data.items !== undefined) {
+          await syncItems(event, date, mileage, data.items);
+        } else {
+          for (const log of await all("SELECT * FROM maintenance_logs WHERE event_id = ? AND deleted_at IS NULL", [id])) {
+            await updateItem(log, { date, mileage });
+          }
+        }
+      });
+      return (await repo.getServiceEvent(id))!;
+    },
+
+    /** Deletes a visit with its items and their values. */
+    deleteServiceEvent: (id: Id): Promise<void> =>
+      tx(async () => {
+        for (const { id: logId } of await all<{ id: Id }>(
+          "SELECT id FROM maintenance_logs WHERE event_id = ? AND deleted_at IS NULL",
+          [id],
+        )) {
+          await tombstoneLog(logId);
+        }
         const [del, delVals] = tombstoned();
-        await run(`UPDATE custom_field_values SET ${del} WHERE deleted_at IS NULL AND log_id = ?`, [...delVals, logId]);
-        await run(`UPDATE maintenance_logs SET ${del} WHERE deleted_at IS NULL AND id = ?`, [...delVals, logId]);
+        await run(`UPDATE service_events SET ${del} WHERE deleted_at IS NULL AND id = ?`, [...delVals, id]);
       }),
 
     // --- Interval overrides ---
@@ -724,7 +912,10 @@ export function createRepository(db: SqlDriver, w: WriteContext) {
         }));
       }
       if (config.include_maintenance_logs === false) vehicles = vehicles.map((v) => ({ ...v, maintenance_logs: [] }));
-      return encodeBackup({ serviceTypes: await listServiceTypes(true), vehicles, config, exportedAt });
+      const serviceEvents = await all<Pick<ServiceEventRead, "id" | "vehicle_id" | "date" | "mileage" | "shop" | "notes">>(
+        "SELECT id, vehicle_id, date, mileage, shop, notes FROM service_events WHERE deleted_at IS NULL ORDER BY id",
+      );
+      return encodeBackup({ serviceTypes: await listServiceTypes(true), vehicles, serviceEvents, config, exportedAt });
     },
 
     /** Compares a parsed backup with local data: new vehicles, VIN conflicts, VIN-less duplicates. */

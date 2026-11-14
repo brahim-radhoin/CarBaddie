@@ -87,6 +87,8 @@ its connection pool can't keep BEGIN/COMMIT on one connection).
       symbol / unit settings are adopted once). Verified on a copy of the real DB (costs exact).
    b. NEXT candidates: first-class `odometer_readings`; garage visits with multiple service items
       (`service_events` + items); local notifications from the engine.
+   c. DONE — garage visits: migration v7 `service_events` (date, mileage, shop, notes) + `maintenance_logs.event_id`;
+      each item is a log, so the engine is unchanged; logs without event_id are single-item visits.
 
 ## Known open issues
 

@@ -15,7 +15,7 @@ export type { ComputeUpcomingMaintenanceInput } from "./maintenance/upcoming";
 
 export { vehicleIdentityKey } from "./vehicles/identity";
 
-export { uuidv7, uuidv5, isUuid, intervalOverrideId, setRandomSource, ID_NAMESPACES } from "./ids/uuid";
+export { uuidv7, uuidv5, isUuid, intervalOverrideId, serviceEventId, setRandomSource, ID_NAMESPACES } from "./ids/uuid";
 export type { RandomBytes } from "./ids/uuid";
 
 export { HlcClock, formatHlc, parseHlc, tickHlc, receiveHlc } from "./sync/hlc";
@@ -61,6 +61,7 @@ export {
   validateServiceType,
   validateIntervalOverride,
   validateMaintenanceLog,
+  validateServiceEvent,
   validatePreference,
 } from "./validation";
 

@@ -7,6 +7,7 @@ import type {
   MaintenanceLogRead, MaintenanceLogCreate, MaintenanceLogUpdate,
   VehicleServiceIntervalOverrideCreate, VehicleServiceIntervalOverrideRead,
   ServiceTypeLogSummary, CustomFieldRead, Preferences,
+  ServiceEventRead, ServiceEventCreate, ServiceEventUpdate,
 } from "../types";
 
 // ====================================================================
@@ -29,6 +30,11 @@ export const queryKeys = {
     forVehicle: (vehicleId: string) => ["logs", "vehicle", String(vehicleId)] as const,
     forServiceType: (vehicleId: string, stId: string) =>
       ["logs", "vehicle", String(vehicleId), "serviceType", String(stId)] as const,
+  },
+  // Under "logs" so invalidating a vehicle's logs refreshes its visits too.
+  visits: {
+    one: (id: string) => ["logs", "visit", String(id)] as const,
+    forVehicle: (vehicleId: string) => ["logs", "vehicle", String(vehicleId), "visits"] as const,
   },
   summaries: {
     forVehicle: (vehicleId: string) => ["summaries", String(vehicleId)] as const,
@@ -236,6 +242,63 @@ export function useDeleteMaintenanceLog() {
       qc.invalidateQueries({ queryKey: queryKeys.summaries.forVehicle(vehicleId) });
       triggerBackgroundCloudPush();
     },
+  });
+}
+
+// ====================================================================
+// GARAGE VISIT HOOKS (service events; their items are maintenance logs)
+// ====================================================================
+
+/** Newest first; logs recorded on their own come back as single-item visits (`standalone: true`). */
+export function useVisitsForVehicle(vehicleId?: string) {
+  const id = vehicleId || undefined;
+  return useQuery<ServiceEventRead[]>({
+    queryKey: queryKeys.visits.forVehicle(id!),
+    queryFn: () => repo.getVisitsForVehicle(id!),
+    enabled: !!id,
+  });
+}
+
+export function useServiceEvent(visitId?: string) {
+  const id = visitId || undefined;
+  return useQuery<ServiceEventRead | null>({
+    queryKey: queryKeys.visits.one(id!),
+    queryFn: () => repo.getServiceEvent(id!),
+    enabled: !!id,
+  });
+}
+
+function useInvalidateVisits() {
+  const qc = useQueryClient();
+  return (vehicleId: string) => {
+    qc.invalidateQueries({ queryKey: queryKeys.vehicles.one(vehicleId) });
+    qc.invalidateQueries({ queryKey: queryKeys.logs.all() }); // includes the visit keys
+    qc.invalidateQueries({ queryKey: queryKeys.summaries.forVehicle(vehicleId) });
+    triggerBackgroundCloudPush();
+  };
+}
+
+export function useAddServiceEvent() {
+  const invalidate = useInvalidateVisits();
+  return useMutation<ServiceEventRead, Error, { vehicleId: string; data: ServiceEventCreate }>({
+    mutationFn: ({ vehicleId, data }) => repo.createServiceEvent(vehicleId, data),
+    onSuccess: (visit) => invalidate(visit.vehicle_id),
+  });
+}
+
+export function useUpdateServiceEvent() {
+  const invalidate = useInvalidateVisits();
+  return useMutation<ServiceEventRead, Error, { visitId: string; data: ServiceEventUpdate }>({
+    mutationFn: ({ visitId, data }) => repo.updateServiceEvent(visitId, data),
+    onSuccess: (visit) => invalidate(visit.vehicle_id),
+  });
+}
+
+export function useDeleteServiceEvent() {
+  const invalidate = useInvalidateVisits();
+  return useMutation<void, Error, { visitId: string; vehicleId: string }>({
+    mutationFn: ({ visitId }) => repo.deleteServiceEvent(visitId),
+    onSuccess: (_, { vehicleId }) => invalidate(vehicleId),
   });
 }
 

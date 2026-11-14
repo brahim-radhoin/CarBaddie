@@ -1,10 +1,11 @@
 import { StyleSheet, ScrollView, TouchableOpacity, View, Alert } from "react-native";
 import { useLocalSearchParams, useRouter, useTheme } from "expo-router";
-import { useVehicle, useServiceTypeSummaries, useServiceTypes, useDeleteVehicle } from "@/src/hooks/useDatabase";
+import { useVehicle, useServiceTypeSummaries, useServiceTypes, useDeleteVehicle, useVisitsForVehicle } from "@/src/hooks/useDatabase";
 import { useUpcomingMaintenance } from "@/src/hooks/useUpcomingMaintenance";
 import { Text } from "@/components/Themed";
 import { useState } from "react";
 import { useUnits } from "@/src/hooks/useUnits";
+import type { ServiceEventRead } from "@/src/types";
 
 export default function VehicleDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -13,6 +14,7 @@ export default function VehicleDetailScreen() {
   const { data: vehicle } = useVehicle(id);
   const { data: summaries = [] } = useServiceTypeSummaries(id);
   const { data: allServiceTypes = [] } = useServiceTypes();
+  const { data: visits = [] } = useVisitsForVehicle(id);
   const deleteMutation = useDeleteVehicle();
   const units = useUnits();
 
@@ -40,6 +42,58 @@ export default function VehicleDetailScreen() {
   const overdueItems = upcomingItems.filter((i) => i.status === "Overdue");
   const dueSoonItems = upcomingItems.filter((i) => i.status === "Upcoming");
   const okItems = upcomingItems.filter((i) => i.status === "OK");
+
+  /** A garage visit; a log recorded on its own is a single-item visit. `full` lists each service. */
+  const renderVisit = (visit: ServiceEventRead, full: boolean) => {
+    const notes = visit.notes ?? (visit.standalone ? visit.items[0]?.notes : null);
+    const showItems = full && visit.items.length > 1;
+    return (
+      <TouchableOpacity
+        key={visit.id}
+        style={[styles.logCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+        onPress={() => router.push(visit.standalone ? `/vehicle/${id}/edit-log/${visit.id}` : `/vehicle/${id}/edit-visit/${visit.id}`)}
+        activeOpacity={0.7}
+      >
+        <View style={styles.logHeader}>
+          <Text style={[styles.logService, { color: colors.text, flex: 1 }]} numberOfLines={full ? undefined : 1}>
+            {visit.items.map((item) => item.service_type?.name ?? "Service").join(" + ") || "Service"}
+          </Text>
+          <Text style={[styles.logCost, { color: colors.primary }]}>{units.money(visit.total_cost_cents)}</Text>
+        </View>
+        <View style={styles.logMeta}>
+          <Text style={[styles.logDetail, { color: (colors.text as string) + "88" }]}>{visit.date}</Text>
+          <Text style={[styles.logDetail, { color: (colors.text as string) + "88" }]}>{units.distance(visit.mileage)}</Text>
+          {visit.shop && <Text style={[styles.logDetail, { color: (colors.text as string) + "88" }]}>{visit.shop}</Text>}
+        </View>
+        {notes && (
+          <Text style={[styles.logNotes, { color: (colors.text as string) + "77" }]} numberOfLines={full ? undefined : 1}>
+            {notes}
+          </Text>
+        )}
+        {showItems &&
+          visit.items.map((item) => (
+            <View key={item.id} style={[styles.itemRow, { borderTopColor: colors.border }]}>
+              <View style={styles.logHeader}>
+                <Text style={[styles.logDetail, { color: colors.text }]}>{item.service_type?.name ?? "Service"}</Text>
+                <Text style={[styles.logDetail, { color: (colors.text as string) + "88" }]}>{units.money(item.cost_cents)}</Text>
+              </View>
+              {item.notes && <Text style={[styles.logNotes, { color: (colors.text as string) + "77" }]}>{item.notes}</Text>}
+            </View>
+          ))}
+        {full && visit.items.some((item) => item.custom_field_values.length > 0) && (
+          <View style={[styles.cfvRow, { borderTopColor: colors.border }]}>
+            {visit.items.flatMap((item) =>
+              item.custom_field_values.map((cfv) => (
+                <Text key={cfv.id} style={[styles.cfvBadge, { color: (colors.text as string) + "88" }]}>
+                  {cfv.custom_field.name}: {cfv.value} {cfv.custom_field.unit ?? ""}
+                </Text>
+              ))
+            )}
+          </View>
+        )}
+      </TouchableOpacity>
+    );
+  };
 
   const handleDelete = () => {
     Alert.alert("Delete Vehicle", `Delete "${vehicle.make} ${vehicle.model}"? This cannot be undone.`, [
@@ -131,7 +185,7 @@ export default function VehicleDetailScreen() {
           onPress={() => router.push(`/vehicle/${id}/add-log`)}
           activeOpacity={0.8}
         >
-          <Text style={styles.actionBtnText}>+ Log Service</Text>
+          <Text style={styles.actionBtnText}>+ Add Visit</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.actionBtn, styles.actionBtnOutline, { borderColor: colors.border }]}
@@ -168,7 +222,7 @@ export default function VehicleDetailScreen() {
           activeOpacity={0.7}
         >
           <Text style={[styles.tabText, { color: activeTab === "history" ? "#fff" : colors.text }]}>
-            History ({logCount})
+            History ({visits.length})
           </Text>
         </TouchableOpacity>
       </View>
@@ -231,41 +285,20 @@ export default function VehicleDetailScreen() {
           {/* Recent Activity */}
           <View style={styles.sectionBlock}>
             <View style={styles.sectionHeaderRow}>
-              <Text style={[styles.sectionTitle, { color: colors.text, marginBottom: 0 }]}>Recent Logs</Text>
-              {vehicle.maintenance_logs.length > 5 && (
+              <Text style={[styles.sectionTitle, { color: colors.text, marginBottom: 0 }]}>Recent Visits</Text>
+              {visits.length > 5 && (
                 <TouchableOpacity onPress={() => setActiveTab("history")}>
-                  <Text style={[styles.seeAllText, { color: colors.primary }]}>View all ({logCount})</Text>
+                  <Text style={[styles.seeAllText, { color: colors.primary }]}>View all ({visits.length})</Text>
                 </TouchableOpacity>
               )}
             </View>
 
-            {vehicle.maintenance_logs.length === 0 ? (
+            {visits.length === 0 ? (
               <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
                 <Text style={[styles.emptyText, { color: (colors.text as string) + "88" }]}>No maintenance logged yet.</Text>
               </View>
             ) : (
-              vehicle.maintenance_logs.slice(0, 5).map((log) => (
-                <TouchableOpacity
-                  key={log.id}
-                  style={[styles.logCard, { backgroundColor: colors.card, borderColor: colors.border }]}
-                  onPress={() => router.push(`/vehicle/${id}/edit-log/${log.id}`)}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.logHeader}>
-                    <Text style={[styles.logService, { color: colors.text }]}>{log.service_type?.name ?? "Service"}</Text>
-                    <Text style={[styles.logCost, { color: colors.primary }]}>{units.money(log.cost_cents)}</Text>
-                  </View>
-                  <View style={styles.logMeta}>
-                    <Text style={[styles.logDetail, { color: (colors.text as string) + "88" }]}>{log.date}</Text>
-                    <Text style={[styles.logDetail, { color: (colors.text as string) + "88" }]}>{units.distance(log.mileage)}</Text>
-                  </View>
-                  {log.notes && (
-                    <Text style={[styles.logNotes, { color: (colors.text as string) + "77" }]} numberOfLines={1}>
-                      {log.notes}
-                    </Text>
-                  )}
-                </TouchableOpacity>
-              ))
+              visits.slice(0, 5).map((visit) => renderVisit(visit, false))
             )}
           </View>
         </View>
@@ -311,42 +344,12 @@ export default function VehicleDetailScreen() {
       {/* TAB 3: FULL HISTORY */}
       {activeTab === "history" && (
         <View style={styles.tabContent}>
-          {vehicle.maintenance_logs.length === 0 ? (
+          {visits.length === 0 ? (
             <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <Text style={[styles.emptyText, { color: (colors.text as string) + "88" }]}>No logs on record.</Text>
             </View>
           ) : (
-            vehicle.maintenance_logs.map((log) => (
-              <TouchableOpacity
-                key={log.id}
-                style={[styles.logCard, { backgroundColor: colors.card, borderColor: colors.border }]}
-                onPress={() => router.push(`/vehicle/${id}/edit-log/${log.id}`)}
-                activeOpacity={0.7}
-              >
-                <View style={styles.logHeader}>
-                  <Text style={[styles.logService, { color: colors.text }]}>{log.service_type?.name ?? "Service"}</Text>
-                  <Text style={[styles.logCost, { color: colors.primary }]}>{units.money(log.cost_cents)}</Text>
-                </View>
-                <View style={styles.logMeta}>
-                  <Text style={[styles.logDetail, { color: (colors.text as string) + "88" }]}>{log.date}</Text>
-                  <Text style={[styles.logDetail, { color: (colors.text as string) + "88" }]}>{units.distance(log.mileage)}</Text>
-                </View>
-                {log.notes && (
-                  <Text style={[styles.logNotes, { color: (colors.text as string) + "77" }]}>
-                    {log.notes}
-                  </Text>
-                )}
-                {log.custom_field_values.length > 0 && (
-                  <View style={[styles.cfvRow, { borderTopColor: colors.border }]}>
-                    {log.custom_field_values.map((cfv) => (
-                      <Text key={cfv.id} style={[styles.cfvBadge, { color: (colors.text as string) + "88" }]}>
-                        {cfv.custom_field.name}: {cfv.value} {cfv.custom_field.unit ?? ""}
-                      </Text>
-                    ))}
-                  </View>
-                )}
-              </TouchableOpacity>
-            ))
+            visits.map((visit) => renderVisit(visit, true))
           )}
         </View>
       )}
@@ -415,6 +418,7 @@ const styles = StyleSheet.create({
   logMeta: { flexDirection: "row", gap: 12, marginTop: 4 },
   logDetail: { fontSize: 12 },
   logNotes: { fontSize: 12, marginTop: 4, fontStyle: "italic" },
+  itemRow: { borderTopWidth: 1, marginTop: 8, paddingTop: 6 },
   cfvRow: { borderTopWidth: 1, marginTop: 8, paddingTop: 6, flexDirection: "row", flexWrap: "wrap", gap: 8 },
   cfvBadge: { fontSize: 11, fontFamily: "SpaceMono" },
   deleteBtn: { marginTop: 10, borderRadius: 12, paddingVertical: 14, alignItems: "center", backgroundColor: "#ef444415", borderWidth: 1, borderColor: "#ef444430" },

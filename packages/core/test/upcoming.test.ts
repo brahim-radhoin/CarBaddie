@@ -35,6 +35,7 @@ function log(id: number, date: string, mileage: number, serviceTypeId: number): 
   return {
     id: String(id),
     vehicle_id: "1",
+    event_id: null,
     date,
     mileage,
     cost_cents: 0,

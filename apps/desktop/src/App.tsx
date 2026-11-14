@@ -41,6 +41,7 @@ export default function App() {
             <Route path="settings" element={<VehicleSettingsPage />} />
             <Route path="add-log" element={<AddMaintenanceLogPage />} />
             <Route path="logs/:logId/edit" element={<AddMaintenanceLogPage />} />
+            <Route path="visits/:visitId/edit" element={<AddMaintenanceLogPage />} />
             <Route path="history/:serviceTypeId" element={<ServiceTypeLogHistoryPage />} />
           </Route>
 

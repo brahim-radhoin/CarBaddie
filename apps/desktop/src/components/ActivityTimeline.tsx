@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { MaintenanceLogRead } from "../types";
+import { ServiceEventRead } from "../types";
 import { format, parseISO } from "date-fns";
 import { Gauge, Search, ArrowUpDown } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -7,24 +7,31 @@ import { Button } from "@/components/ui/button";
 import { useUnits } from "../hooks/useUnits";
 
 interface ActivityTimelineProps {
-  logs: MaintenanceLogRead[];
+  /** Garage visits; standalone logs are single-item visits. */
+  visits: ServiceEventRead[];
   onSelectDate?: (date: string) => void;
 }
 
-export function ActivityTimeline({ logs, onSelectDate }: ActivityTimelineProps) {
+const visitTitle = (visit: ServiceEventRead) =>
+  visit.items.map((item) => item.service_type?.name ?? "Maintenance").join(" + ") || "Maintenance";
+/** A visit's notes; a standalone log's own notes. */
+const visitNotes = (visit: ServiceEventRead) => visit.notes ?? (visit.standalone ? visit.items[0]?.notes : null);
+
+export function ActivityTimeline({ visits, onSelectDate }: ActivityTimelineProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc");
   const units = useUnits();
 
   const filteredLogs = useMemo(() => {
-    let result = [...logs];
+    let result = [...visits];
 
     if (searchTerm) {
       const lower = searchTerm.toLowerCase();
       result = result.filter(
-        (log) =>
-          log.notes?.toLowerCase().includes(lower) ||
-          log.service_type?.name.toLowerCase().includes(lower)
+        (visit) =>
+          visit.shop?.toLowerCase().includes(lower) ||
+          visit.notes?.toLowerCase().includes(lower) ||
+          visit.items.some((log) => log.notes?.toLowerCase().includes(lower) || log.service_type?.name.toLowerCase().includes(lower))
       );
     }
 
@@ -35,7 +42,7 @@ export function ActivityTimeline({ logs, onSelectDate }: ActivityTimelineProps) 
     });
 
     return result;
-  }, [logs, searchTerm, sortOrder]);
+  }, [visits, searchTerm, sortOrder]);
 
   const groupedLogs = useMemo(() => {
     return filteredLogs.reduce((groups, log) => {
@@ -45,7 +52,7 @@ export function ActivityTimeline({ logs, onSelectDate }: ActivityTimelineProps) 
       }
       groups[monthYear].push(log);
       return groups;
-    }, {} as Record<string, MaintenanceLogRead[]>);
+    }, {} as Record<string, ServiceEventRead[]>);
   }, [filteredLogs]);
 
   return (
@@ -96,11 +103,9 @@ export function ActivityTimeline({ logs, onSelectDate }: ActivityTimelineProps) 
                     className="p-3 rounded border border-border bg-card/60 hover:bg-accent/20 transition-colors text-xs"
                   >
                     <div className="flex items-baseline justify-between gap-2">
-                      <span className="font-medium text-foreground">
-                        {log.service_type?.name ?? "Maintenance"}
-                      </span>
+                      <span className="font-medium text-foreground">{visitTitle(log)}</span>
                       <span className="font-mono text-[11px] font-medium text-foreground">
-                        {units.money(log.cost_cents)}
+                        {units.money(log.total_cost_cents)}
                       </span>
                     </div>
 
@@ -111,11 +116,17 @@ export function ActivityTimeline({ logs, onSelectDate }: ActivityTimelineProps) 
                         <Gauge className="h-3 w-3 opacity-60" />
                         {units.distance(log.mileage)}
                       </span>
+                      {log.shop && (
+                        <>
+                          <span className="opacity-30">/</span>
+                          <span className="font-sans">{log.shop}</span>
+                        </>
+                      )}
                     </div>
 
-                    {log.notes && (
+                    {visitNotes(log) && (
                       <p className="mt-2 text-[11px] text-muted-foreground/90 leading-relaxed pt-1.5 border-t border-border/40">
-                        {log.notes}
+                        {visitNotes(log)}
                       </p>
                     )}
                   </div>
