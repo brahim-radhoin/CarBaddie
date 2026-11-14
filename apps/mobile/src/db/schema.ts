@@ -1,6 +1,6 @@
 import * as SQLite from "expo-sqlite";
 import { getRandomBytes } from "expo-crypto";
-import { openRepository, setRandomSource, type Repository, type SqlDriver } from "@carbaddie/core";
+import { openRepository, setRandomSource, type OpenedDatabase, type Repository, type SqlDriver } from "@carbaddie/core";
 
 const DB_NAME = "car_baddie.db";
 
@@ -17,20 +17,23 @@ function asSqlDriver(db: SQLite.SQLiteDatabase): SqlDriver {
   };
 }
 
-let _repo: Promise<Repository> | null = null;
+let _db: Promise<OpenedDatabase> | null = null;
 
-/** The shared repository (@carbaddie/core) over the app's SQLite database, opened once. */
-export function getRepository(): Promise<Repository> {
-  if (!_repo) {
-    _repo = (async () => {
+/** The app's SQLite database with the shared repository (@carbaddie/core) and sync, opened once. */
+export function getDatabase(): Promise<OpenedDatabase> {
+  if (!_db) {
+    _db = (async () => {
       const db = await SQLite.openDatabaseAsync(DB_NAME);
       await db.execAsync("PRAGMA journal_mode = WAL;");
-      const { repo } = await openRepository(asSqlDriver(db));
-      return repo;
+      return openRepository(asSqlDriver(db));
     })().catch((error) => {
-      _repo = null; // let the next call retry instead of caching the failure
+      _db = null; // let the next call retry instead of caching the failure
       throw error;
     });
   }
-  return _repo;
+  return _db;
+}
+
+export async function getRepository(): Promise<Repository> {
+  return (await getDatabase()).repo;
 }

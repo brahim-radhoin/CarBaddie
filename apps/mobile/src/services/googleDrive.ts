@@ -1,66 +1,73 @@
-import * as WebBrowser from "expo-web-browser";
-import * as Linking from "expo-linking";
+// Google account connection and device-to-device sync through the user's Google Drive
+// (engine: @carbaddie/core sync/engine.ts, files in Drive's hidden appDataFolder).
+//
+// Sign-in is Android's native Google account picker (@react-native-google-signin). Google Play
+// services keeps the access token fresh, so no token is stored by the app. The Android OAuth
+// client (package + signing SHA-1) must live in the same Google Cloud project as the desktop
+// client, because appDataFolder is per project.
+import {
+  GoogleSignin,
+  isErrorWithCode,
+  isSuccessResponse,
+  statusCodes,
+} from "@react-native-google-signin/google-signin";
+import { createDriveTransport, DRIVE_APPDATA_SCOPE, SYNC_SETTING_KEYS, type SyncResult } from "@carbaddie/core";
+import { getDatabase } from "../db/schema";
 import * as repo from "../db/repository";
-import { parseBackup } from "@carbaddie/core";
-import { exportBackupData, analyzeBackup, executeImport } from "../db/backup";
-import type { FullBackupData } from "../types";
-
-WebBrowser.maybeCompleteAuthSession();
 
 export interface GoogleDriveStatus {
   isConnected: boolean;
   email?: string;
-  lastBackupTime?: string;
-  fileId?: string;
+  lastSyncTime?: string;
   autoSyncEnabled: boolean;
 }
 
-const SETTING_TOKEN = "gdrive_access_token";
 const SETTING_EMAIL = "gdrive_user_email";
-const SETTING_LAST_BACKUP = "gdrive_last_backup_time";
-const SETTING_FILE_ID = "gdrive_file_id";
-const SETTING_CLIENT_ID = "gdrive_client_id";
 const SETTING_AUTO_SYNC = "gdrive_auto_sync";
-const BACKUP_FILENAME = "carbaddie_backup.json";
+/** Settings older versions used for the implicit-flow token and the backup-file sync. */
+const LEGACY_SETTINGS = ["gdrive_access_token", "gdrive_last_backup_time", "gdrive_file_id", "gdrive_client_id"];
 
-// Default demo Google Client ID for development / testing
-const DEFAULT_GOOGLE_CLIENT_ID = "58648902421-3ksgpe4l3jetkbvi5rusivmp02glltuq.apps.googleusercontent.com";
+GoogleSignin.configure({ scopes: [DRIVE_APPDATA_SCOPE] });
 
-export async function getGoogleDriveStatus(): Promise<GoogleDriveStatus> {
-  const token = await repo.getSetting(SETTING_TOKEN);
-  const email = await repo.getSetting(SETTING_EMAIL);
-  const lastBackupTime = await repo.getSetting(SETTING_LAST_BACKUP);
-  const fileId = await repo.getSetting(SETTING_FILE_ID);
-  const autoSync = await repo.getSetting(SETTING_AUTO_SYNC);
-
-  return {
-    isConnected: !!token,
-    email: email ?? undefined,
-    lastBackupTime: lastBackupTime ?? undefined,
-    fileId: fileId ?? undefined,
-    autoSyncEnabled: autoSync !== "false",
-  };
+/** Thrown when there is no usable Google sign-in. */
+export class NotConnectedError extends Error {
+  constructor(message = "Google Drive is not connected. Sign in with Google first.") {
+    super(message);
+    this.name = "NotConnectedError";
+  }
 }
 
-export async function setGoogleDriveToken(token: string, email?: string): Promise<void> {
-  await repo.setSetting(SETTING_TOKEN, token.trim());
-  if (email) {
-    await repo.setSetting(SETTING_EMAIL, email.trim());
-  } else {
+let legacyCleanup: Promise<void> | null = null;
+const removeLegacySettings = () =>
+  (legacyCleanup ??= Promise.all(LEGACY_SETTINGS.map((key) => repo.removeSetting(key))).then(() => undefined));
+
+let lastToken: string | null = null;
+
+/** A valid access token; with `forceRefresh`, a new one (the Drive transport asks after a 401). */
+export async function getAccessToken(forceRefresh = false): Promise<string> {
+  if (!GoogleSignin.getCurrentUser()) {
     try {
-      const res = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
-        headers: { Authorization: `Bearer ${token.trim()}` },
-      });
-      if (res.ok) {
-        const info = await res.json();
-        if (info.email) {
-          await repo.setSetting(SETTING_EMAIL, info.email);
-        }
-      }
-    } catch {
-      // Ignore if userinfo fails
+      const silent = await GoogleSignin.signInSilently();
+      if (silent.type !== "success") throw new NotConnectedError();
+    } catch (e) {
+      if (e instanceof NotConnectedError) throw e;
+      throw new NotConnectedError(`Google sign-in needs to be renewed. Sign in with Google again. (${(e as Error).message})`);
     }
   }
+  if (forceRefresh && lastToken) await GoogleSignin.clearCachedAccessToken(lastToken);
+  lastToken = (await GoogleSignin.getTokens()).accessToken;
+  return lastToken;
+}
+
+export async function getGoogleDriveStatus(): Promise<GoogleDriveStatus> {
+  await removeLegacySettings();
+  const db = await getDatabase();
+  return {
+    isConnected: GoogleSignin.hasPreviousSignIn(),
+    email: GoogleSignin.getCurrentUser()?.user.email ?? (await db.repo.getSetting(SETTING_EMAIL)) ?? undefined,
+    lastSyncTime: (await db.repo.getSetting(SYNC_SETTING_KEYS.lastSuccess)) ?? undefined,
+    autoSyncEnabled: (await db.repo.getSetting(SETTING_AUTO_SYNC)) !== "false",
+  };
 }
 
 export async function setAutoSyncEnabled(enabled: boolean): Promise<void> {
@@ -68,289 +75,84 @@ export async function setAutoSyncEnabled(enabled: boolean): Promise<void> {
 }
 
 export async function disconnectGoogleDrive(): Promise<void> {
-  await repo.removeSetting(SETTING_TOKEN);
+  lastToken = null;
+  await GoogleSignin.signOut();
   await repo.removeSetting(SETTING_EMAIL);
-  await repo.removeSetting(SETTING_FILE_ID);
 }
 
-/**
- * 1-Tap OAuth Sign-in with Google.
- * Opens the native Google sign-in consent modal.
- */
-export async function signInWithGoogle(customClientId?: string): Promise<{
-  success: boolean;
-  email?: string;
-  error?: string;
-}> {
+/** Opens the Google account picker and asks for access to the app's private Drive folder. */
+export async function signInWithGoogle(): Promise<{ success: boolean; email?: string; error?: string }> {
   try {
-    const savedClientId = await repo.getSetting(SETTING_CLIENT_ID);
-    const clientId = customClientId || savedClientId || DEFAULT_GOOGLE_CLIENT_ID;
+    await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+    const res = await GoogleSignin.signIn();
+    if (!isSuccessResponse(res)) return { success: false }; // cancelled
 
-    if (customClientId) {
-      await repo.setSetting(SETTING_CLIENT_ID, customClientId.trim());
-    }
-
-    const redirectUri = Linking.createURL("oauthredirect");
-    const scopes = [
-      "https://www.googleapis.com/auth/drive.file",
-      "https://www.googleapis.com/auth/userinfo.email",
-    ].join(" ");
-
-    const authUrl =
-      `https://accounts.google.com/o/oauth2/v2/auth?` +
-      `client_id=${encodeURIComponent(clientId)}&` +
-      `redirect_uri=${encodeURIComponent(redirectUri)}&` +
-      `response_type=token&` +
-      `scope=${encodeURIComponent(scopes)}&` +
-      `prompt=select_account`;
-
-    const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectUri);
-
-    if (result.type === "success" && result.url) {
-      // Parse token from hash redirect
-      const urlToParse = result.url.replace("#", "?");
-      const parsedUrl = new URL(urlToParse);
-      const accessToken = parsedUrl.searchParams.get("access_token");
-
-      if (accessToken) {
-        await setGoogleDriveToken(accessToken);
-        const status = await getGoogleDriveStatus();
-        return { success: true, email: status.email };
+    if (!res.data.scopes.includes(DRIVE_APPDATA_SCOPE)) {
+      const added = await GoogleSignin.addScopes({ scopes: [DRIVE_APPDATA_SCOPE] });
+      if (!added || !isSuccessResponse(added) || !added.data.scopes.includes(DRIVE_APPDATA_SCOPE)) {
+        await GoogleSignin.signOut();
+        return { success: false, error: "Sync needs permission to store CarBaddie's data in your Google Drive. Please allow it." };
       }
     }
 
-    return { success: false, error: "Sign-in was canceled or no token was returned." };
-  } catch (e: any) {
-    return { success: false, error: e.message || "Failed to launch Google Sign-In." };
-  }
-}
-
-/**
- * Uploads a FullBackupData JSON payload to Google Drive.
- * Updates the existing carbaddie_backup.json if found, or creates a new one.
- */
-export async function uploadBackupToGoogleDrive(
-  backupData: FullBackupData
-): Promise<{ fileId: string; modifiedTime: string }> {
-  const token = await repo.getSetting(SETTING_TOKEN);
-  if (!token) {
-    throw new Error("Google Drive is not connected. Please sign in with Google first.");
-  }
-
-  const jsonString = JSON.stringify(backupData, null, 2);
-  const existingFileId = await findBackupFileId(token);
-
-  const boundary = "-------CarBaddieBoundary" + Date.now();
-  const delimiter = "\r\n--" + boundary + "\r\n";
-  const closeDelimiter = "\r\n--" + boundary + "--";
-
-  let url: string;
-  let method: string;
-  let metadata: any;
-
-  if (existingFileId) {
-    url = `https://www.googleapis.com/upload/drive/v3/files/${existingFileId}?uploadType=multipart`;
-    method = "PATCH";
-    metadata = {
-      description: "CarBaddie Full Vehicle Telemetry & Maintenance Backup",
-      modifiedTime: new Date().toISOString(),
-    };
-  } else {
-    url = "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart";
-    method = "POST";
-    metadata = {
-      name: BACKUP_FILENAME,
-      mimeType: "application/json",
-      description: "CarBaddie Full Vehicle Telemetry & Maintenance Backup",
-    };
-  }
-
-  const multipartRequestBody =
-    delimiter +
-    "Content-Type: application/json; charset=UTF-8\r\n\r\n" +
-    JSON.stringify(metadata) +
-    delimiter +
-    "Content-Type: application/json\r\n\r\n" +
-    jsonString +
-    closeDelimiter;
-
-  const res = await fetch(url, {
-    method,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": `multipart/related; boundary=${boundary}`,
-    },
-    body: multipartRequestBody,
-  });
-
-  if (!res.ok) {
-    if (res.status === 401) {
-      await disconnectGoogleDrive();
-      throw new Error("Google Drive access token expired. Please reconnect your account.");
+    const email = res.data.user.email;
+    await repo.setSetting(SETTING_EMAIL, email);
+    // Possibly another account than before: send everything there on the next sync.
+    await (await getDatabase()).resetSync();
+    return { success: true, email };
+  } catch (e) {
+    if (isErrorWithCode(e)) {
+      if (e.code === statusCodes.SIGN_IN_CANCELLED) return { success: false };
+      if (e.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
+        return { success: false, error: "Google Play services is missing or out of date on this phone." };
+      }
+      if (String(e.code) === "10" || /DEVELOPER_ERROR/.test(e.message)) {
+        return {
+          success: false,
+          error:
+            "Google rejected this app build (DEVELOPER_ERROR). The Android OAuth client must match package " +
+            "com.carbaddie.mobile and this build's signing SHA-1.",
+        };
+      }
     }
-    const errorText = await res.text();
-    throw new Error(`Google Drive upload failed (${res.status}): ${errorText}`);
+    return { success: false, error: (e as Error).message || "Google sign-in failed." };
   }
-
-  const result = await res.json();
-  const fileId = result.id || existingFileId;
-  const nowIso = new Date().toISOString();
-
-  await repo.setSetting(SETTING_FILE_ID, fileId);
-  await repo.setSetting(SETTING_LAST_BACKUP, nowIso);
-
-  return { fileId, modifiedTime: nowIso };
 }
 
-/**
- * Downloads the latest backup JSON from Google Drive.
- */
-export async function downloadBackupFromGoogleDrive(): Promise<{
-  backupData: FullBackupData;
-  modifiedTime: string;
-  fileId: string;
-}> {
-  const token = await repo.getSetting(SETTING_TOKEN);
-  if (!token) {
-    throw new Error("Google Drive is not connected. Please sign in with Google first.");
-  }
+// ------------------------------------------------------------------
+// Sync
+// ------------------------------------------------------------------
 
-  const query = encodeURIComponent(`name = '${BACKUP_FILENAME}' and trashed = false`);
-  const listUrl = `https://www.googleapis.com/drive/v3/files?q=${query}&fields=files(id,name,modifiedTime,size)&orderBy=modifiedTime desc`;
+const transport = createDriveTransport({ getAccessToken });
+let onRemoteChanges: (() => void) | null = null;
 
-  const listRes = await fetch(listUrl, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-
-  if (!listRes.ok) {
-    if (listRes.status === 401) {
-      await disconnectGoogleDrive();
-      throw new Error("Google Drive access token expired. Please reconnect your account.");
-    }
-    throw new Error("Failed to query Google Drive for backup file.");
-  }
-
-  const listData = await listRes.json();
-  const file = listData.files?.[0];
-
-  if (!file) {
-    throw new Error("No 'carbaddie_backup.json' found in your Google Drive.");
-  }
-
-  const downloadUrl = `https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`;
-  const dlRes = await fetch(downloadUrl, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-
-  if (!dlRes.ok) {
-    throw new Error(`Failed to download backup from Google Drive (${dlRes.status})`);
-  }
-
-  const content = await dlRes.text();
-  let backupData: FullBackupData;
-  try {
-    backupData = parseBackup(JSON.parse(content));
-  } catch (e: any) {
-    throw new Error(`The backup file retrieved from Google Drive is invalid or corrupted. ${e?.message ?? ""}`.trim());
-  }
-
-  return {
-    backupData,
-    modifiedTime: file.modifiedTime,
-    fileId: file.id,
-  };
+/** Called after a sync that changed local data (the app refreshes its queries). */
+export function setRemoteChangesListener(listener: (() => void) | null): void {
+  onRemoteChanges = listener;
 }
 
-/**
- * Background auto-sync:
- * Pulls newer cloud updates on startup or pushes local modifications silently.
- */
-export async function performAutoSync(onDataUpdated?: () => void): Promise<{ synced: boolean; action?: "pulled" | "pushed" | "idle" }> {
+export async function syncNow(): Promise<SyncResult> {
+  const result = await (await getDatabase()).sync(transport);
+  if (result.applied > 0) onRemoteChanges?.();
+  return result;
+}
+
+/** Background sync if connected and automatic sync is on. Never throws. */
+export async function performAutoSync(): Promise<SyncResult | null> {
   try {
     const status = await getGoogleDriveStatus();
-    if (!status.isConnected || !status.autoSyncEnabled) {
-      return { synced: false, action: "idle" };
-    }
-
-    const token = await repo.getSetting(SETTING_TOKEN);
-    if (!token) return { synced: false, action: "idle" };
-
-    // 1. Check if cloud file exists and its timestamp
-    const query = encodeURIComponent(`name = '${BACKUP_FILENAME}' and trashed = false`);
-    const listUrl = `https://www.googleapis.com/drive/v3/files?q=${query}&fields=files(id,name,modifiedTime)&orderBy=modifiedTime desc`;
-    const listRes = await fetch(listUrl, { headers: { Authorization: `Bearer ${token}` } });
-    if (!listRes.ok) return { synced: false, action: "idle" };
-
-    const listData = await listRes.json();
-    const cloudFile = listData.files?.[0];
-
-    const localLastBackup = status.lastBackupTime;
-
-    if (cloudFile && cloudFile.modifiedTime) {
-      const cloudDate = new Date(cloudFile.modifiedTime).getTime();
-      const localDate = localLastBackup ? new Date(localLastBackup).getTime() : 0;
-
-      // Cloud has newer data -> silently pull and restore
-      if (cloudDate > localDate + 1000) {
-        const { backupData } = await downloadBackupFromGoogleDrive();
-        const analysis = await analyzeBackup(backupData);
-
-        await executeImport(backupData, {
-          vehicles_to_add: analysis.new_vehicles.map((v) => v.id_in_backup),
-          conflict_resolutions: analysis.conflicting_vehicles.map((c) => ({
-            vin: c.vin,
-            action: "replace",
-          })),
-        });
-
-        await repo.setSetting(SETTING_LAST_BACKUP, cloudFile.modifiedTime);
-        if (onDataUpdated) onDataUpdated();
-        return { synced: true, action: "pulled" };
-      }
-    }
-
-    // Local is newer or cloud file doesn't exist -> silently push
-    const localBackup = await exportBackupData({ include_maintenance_logs: true });
-    if (localBackup.vehicles.length > 0 || localBackup.service_types.length > 0) {
-      await uploadBackupToGoogleDrive(localBackup);
-      return { synced: true, action: "pushed" };
-    }
-
-    return { synced: true, action: "idle" };
-  } catch {
-    // Fail silently in background
-    return { synced: false, action: "idle" };
-  }
-}
-
-let _pushTimeout: any = null;
-
-/**
- * Triggers a debounced background sync upload whenever local data changes.
- */
-export function triggerBackgroundCloudPush(): void {
-  if (_pushTimeout) clearTimeout(_pushTimeout);
-  _pushTimeout = setTimeout(async () => {
-    try {
-      const status = await getGoogleDriveStatus();
-      if (!status.isConnected || !status.autoSyncEnabled) return;
-      const backup = await exportBackupData({ include_maintenance_logs: true });
-      await uploadBackupToGoogleDrive(backup);
-    } catch {
-      // Fail silently in background
-    }
-  }, 2500);
-}
-
-async function findBackupFileId(token: string): Promise<string | null> {
-  try {
-    const query = encodeURIComponent(`name = '${BACKUP_FILENAME}' and trashed = false`);
-    const url = `https://www.googleapis.com/drive/v3/files?q=${query}&fields=files(id)&pageSize=1`;
-    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-    if (!res.ok) return null;
-    const data = await res.json();
-    return data.files?.[0]?.id ?? null;
-  } catch {
+    if (!status.isConnected || !status.autoSyncEnabled) return null;
+    return await syncNow();
+  } catch (e) {
+    if (!(e instanceof NotConnectedError)) console.warn("Background sync failed:", e);
     return null;
   }
+}
+
+let pushTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** Debounced background sync after a local edit. */
+export function triggerBackgroundCloudPush(): void {
+  if (pushTimer) clearTimeout(pushTimer);
+  pushTimer = setTimeout(() => void performAutoSync(), 2500);
 }

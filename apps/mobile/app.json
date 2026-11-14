@@ -1,4 +1,4 @@
-﻿{
+{
   "expo": {
     "name": "CarBaddie",
     "slug": "carbaddie-mobile",
@@ -12,7 +12,9 @@
       "resizeMode": "contain",
       "backgroundColor": "#0a0a0f"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.carbaddie.mobile"
@@ -24,9 +26,22 @@
       },
       "package": "com.carbaddie.mobile"
     },
-    "plugins": ["expo-router", "expo-sqlite"],
+    "plugins": [
+      "expo-router",
+      "expo-sqlite"
+    ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {
+        "asyncRoutes": {
+          "web": true
+        }
+      },
+      "eas": {
+        "projectId": "f3186422-f93b-4e02-9256-9836ea0c7103"
+      }
     }
   }
 }

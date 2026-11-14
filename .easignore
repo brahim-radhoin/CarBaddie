@@ -1,0 +1,46 @@
+# What EAS Build leaves out when it uploads the repo for the mobile build.
+# EAS reads this file *instead of* every .gitignore, so it repeats their rules
+# (root, apps/desktop, apps/desktop/src-tauri, apps/mobile) and adds desktop-only output.
+
+# --- root .gitignore
+node_modules/
+.pnpm-store/
+.old-repos/
+/carbaddie_*export*.json
+*.log
+.DS_Store
+Thumbs.db
+car_baddie.db
+apps/desktop/src-tauri/carbaddie-backend-*
+apps/backend/
+
+# --- apps/desktop (sources stay: they are a pnpm workspace member the lockfile expects)
+apps/desktop/dist/
+apps/desktop/dist-ssr/
+apps/desktop/.env
+apps/desktop/.env.local
+apps/desktop/.env.*.local
+apps/desktop/.vite/
+apps/desktop/src-tauri/target/
+apps/desktop/src-tauri/gen/
+.idea/
+.vscode/
+
+# --- apps/mobile/.gitignore
+apps/mobile/.expo/
+apps/mobile/dist/
+apps/mobile/web-build/
+apps/mobile/expo-env.d.ts
+apps/mobile/.kotlin/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+.metro-health-check*
+*.pem
+.env*.local
+*.tsbuildinfo
+apps/mobile/ios/
+apps/mobile/android/

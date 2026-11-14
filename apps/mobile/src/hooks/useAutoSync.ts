@@ -1,28 +1,23 @@
 import { useEffect } from "react";
 import { AppState, AppStateStatus } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
-import { performAutoSync } from "../services/googleDrive";
+import { performAutoSync, setRemoteChangesListener } from "../services/googleDrive";
 
+/** Syncs at start and whenever the app returns to the foreground; refreshes queries when data changed. */
 export function useAutoSync() {
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    // 1. Initial check on mount
-    performAutoSync(() => {
-      queryClient.invalidateQueries();
-    });
+    setRemoteChangesListener(() => void queryClient.invalidateQueries());
+    void performAutoSync();
 
-    // 2. Check whenever user returns to the app from background
     const handleAppStateChange = (nextAppState: AppStateStatus) => {
-      if (nextAppState === "active") {
-        performAutoSync(() => {
-          queryClient.invalidateQueries();
-        });
-      }
+      if (nextAppState === "active") void performAutoSync();
     };
-
     const sub = AppState.addEventListener("change", handleAppStateChange);
-    return () => sub.remove();
+    return () => {
+      sub.remove();
+      setRemoteChangesListener(null);
+    };
   }, [queryClient]);
 }
-

@@ -7,7 +7,6 @@ import {
   Alert,
   Platform,
   ActivityIndicator,
-  TextInput,
   Switch,
   Image,
 } from "react-native";
@@ -27,11 +26,10 @@ import {
 } from "@/src/hooks/useDatabase";
 import {
   getGoogleDriveStatus,
-  setGoogleDriveToken,
   disconnectGoogleDrive,
   signInWithGoogle,
   setAutoSyncEnabled,
-  performAutoSync,
+  syncNow,
   type GoogleDriveStatus,
 } from "@/src/services/googleDrive";
 import * as repo from "@/src/db/repository";
@@ -56,9 +54,6 @@ export default function SettingsScreen() {
   const [driveStatus, setDriveStatus] = useState<GoogleDriveStatus>({ isConnected: false, autoSyncEnabled: true });
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [showAdvanced, setShowAdvanced] = useState(false);
-  const [customClientIdInput, setCustomClientIdInput] = useState("");
-  const [manualTokenInput, setManualTokenInput] = useState("");
 
   // App preferences
   const [odometerUnit, setOdometerUnit] = useState<"km" | "mi">("km");
@@ -102,17 +97,17 @@ export default function SettingsScreen() {
   const handleGoogleSignIn = async () => {
     try {
       setIsSigningIn(true);
-      const res = await signInWithGoogle(customClientIdInput.trim() || undefined);
+      const res = await signInWithGoogle();
       if (res.success) {
         await refreshDriveStatus();
-        await performAutoSync(() => queryClient.invalidateQueries());
+        await syncNow();
         await refreshDriveStatus();
-        Alert.alert("Connected", `Signed in as ${res.email || "Google Account"}. Automatic cloud sync is now active!`);
+        Alert.alert("Connected", `Signed in as ${res.email || "Google Account"}. Your devices now sync through Google Drive.`);
       } else if (res.error) {
         Alert.alert("Sign In", res.error);
       }
     } catch (e: any) {
-      Alert.alert("Sign In Error", e.message || "Failed to sign in with Google.");
+      Alert.alert("Sync Error", e.message || "Signed in, but the first sync failed.");
     } finally {
       setIsSigningIn(false);
     }
@@ -121,15 +116,14 @@ export default function SettingsScreen() {
   const handleSyncNow = async () => {
     try {
       setIsSyncing(true);
-      const res = await performAutoSync(() => queryClient.invalidateQueries());
+      const res = await syncNow();
       await refreshDriveStatus();
-      if (res.action === "pulled") {
-        Alert.alert("Synced", "Latest records downloaded from Google Drive!");
-      } else if (res.action === "pushed") {
-        Alert.alert("Synced", "Local records saved to Google Drive!");
-      } else {
-        Alert.alert("In Sync", "Your garage database is already up to date with Google Drive.");
-      }
+      Alert.alert(
+        "Synced",
+        res.applied > 0
+          ? `${res.applied} change${res.applied === 1 ? "" : "s"} from your other devices applied.`
+          : "Everything is in sync.",
+      );
     } catch (e: any) {
       Alert.alert("Sync Error", e.message || "Failed to sync with Google Drive.");
     } finally {
@@ -154,18 +148,6 @@ export default function SettingsScreen() {
         },
       },
     ]);
-  };
-
-  const handleManualTokenSave = async () => {
-    if (!manualTokenInput.trim()) return;
-    try {
-      await setGoogleDriveToken(manualTokenInput.trim());
-      await refreshDriveStatus();
-      setManualTokenInput("");
-      Alert.alert("Connected", "Access token saved successfully.");
-    } catch (e: any) {
-      Alert.alert("Error", e.message || "Failed to save token.");
-    }
   };
 
   const handleExport = async () => {
@@ -386,8 +368,8 @@ export default function SettingsScreen() {
                     {driveStatus.email || "Google Account"}
                   </Text>
                   <Text style={[styles.accountMeta, { color: (colors.text as string) + "77" }]}>
-                    {driveStatus.lastBackupTime
-                      ? `Last synced: ${new Date(driveStatus.lastBackupTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+                    {driveStatus.lastSyncTime
+                      ? `Last synced: ${new Date(driveStatus.lastSyncTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
                       : "Automatic background sync active"}
                   </Text>
                 </View>
@@ -446,47 +428,9 @@ export default function SettingsScreen() {
                 )}
               </TouchableOpacity>
               <Text style={[styles.googleSignInHint, { color: (colors.text as string) + "66" }]}>
-                Sign in once to enable zero-click cloud backup to your personal Google Drive.
+                Sign in to sync your garage between devices through your personal Google Drive.
               </Text>
 
-              {/* Collapsible Advanced Config */}
-              <TouchableOpacity onPress={() => setShowAdvanced(!showAdvanced)} style={styles.advancedToggleBtn}>
-                <Text style={{ color: (colors.text as string) + "66", fontSize: 11 }}>
-                  {showAdvanced ? "▲ Hide Advanced Options" : "▼ Advanced Developer Options"}
-                </Text>
-              </TouchableOpacity>
-
-              {showAdvanced && (
-                <View style={[styles.advancedContainer, { borderColor: colors.border }]}>
-                  <Text style={[styles.advancedLabel, { color: colors.text }]}>Custom Client ID (Optional)</Text>
-                  <TextInput
-                    style={[styles.input, { backgroundColor: colors.background, color: colors.text, borderColor: colors.border }]}
-                    value={customClientIdInput}
-                    onChangeText={setCustomClientIdInput}
-                    placeholder="Enter custom OAuth Client ID"
-                    placeholderTextColor={(colors.text as string) + "44"}
-                    autoCapitalize="none"
-                  />
-
-                  <Text style={[styles.advancedLabel, { color: colors.text, marginTop: 10 }]}>Direct Access Token Fallback</Text>
-                  <View style={{ flexDirection: "row", gap: 8 }}>
-                    <TextInput
-                      style={[styles.input, { flex: 1, backgroundColor: colors.background, color: colors.text, borderColor: colors.border }]}
-                      value={manualTokenInput}
-                      onChangeText={setManualTokenInput}
-                      placeholder="ya29..."
-                      placeholderTextColor={(colors.text as string) + "44"}
-                      autoCapitalize="none"
-                    />
-                    <TouchableOpacity
-                      style={[styles.saveTokenBtn, { backgroundColor: colors.primary }]}
-                      onPress={handleManualTokenSave}
-                    >
-                      <Text style={{ color: "#fff", fontWeight: "700", fontSize: 12 }}>Save</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              )}
             </View>
           )}
         </View>
@@ -828,34 +772,6 @@ const styles = StyleSheet.create({
     marginTop: 8,
     textAlign: "center",
     lineHeight: 15,
-  },
-  advancedToggleBtn: {
-    alignSelf: "center",
-    marginTop: 12,
-    paddingVertical: 4,
-  },
-  advancedContainer: {
-    marginTop: 10,
-    padding: 12,
-    borderWidth: 1,
-    borderRadius: 10,
-  },
-  advancedLabel: {
-    fontSize: 11,
-    fontWeight: "600",
-    marginBottom: 6,
-  },
-  input: {
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    fontSize: 12,
-  },
-  saveTokenBtn: {
-    borderRadius: 8,
-    paddingHorizontal: 14,
-    justifyContent: "center",
   },
   kpiContainer: {
     flexDirection: "row",
