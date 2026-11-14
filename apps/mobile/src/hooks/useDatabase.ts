@@ -7,6 +7,7 @@ import type {
   MaintenanceLogRead, MaintenanceLogCreate, MaintenanceLogUpdate,
   VehicleServiceIntervalOverrideCreate, VehicleServiceIntervalOverrideRead,
   ServiceTypeLogSummary, CustomFieldRead, Preferences,
+  OdometerReadingCreate, OdometerReadingRead,
 } from "../types";
 
 // ====================================================================
@@ -234,6 +235,32 @@ export function useDeleteMaintenanceLog() {
       qc.invalidateQueries({ queryKey: queryKeys.vehicles.one(vehicleId) });
       qc.invalidateQueries({ queryKey: queryKeys.logs.forVehicle(vehicleId) });
       qc.invalidateQueries({ queryKey: queryKeys.summaries.forVehicle(vehicleId) });
+      triggerBackgroundCloudPush();
+    },
+  });
+}
+
+// ====================================================================
+// ODOMETER READING HOOKS (readings are part of VehicleRead)
+// ====================================================================
+
+export function useAddOdometerReading() {
+  const qc = useQueryClient();
+  return useMutation<OdometerReadingRead, Error, { vehicleId: string; data: OdometerReadingCreate }>({
+    mutationFn: ({ vehicleId, data }) => repo.addOdometerReading(vehicleId, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.vehicles.all() });
+      triggerBackgroundCloudPush();
+    },
+  });
+}
+
+export function useDeleteOdometerReading() {
+  const qc = useQueryClient();
+  return useMutation<void, Error, { readingId: string; vehicleId: string }>({
+    mutationFn: ({ readingId }) => repo.deleteOdometerReading(readingId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.vehicles.all() });
       triggerBackgroundCloudPush();
     },
   });

@@ -85,6 +85,15 @@ const backupOverrideSchema = z.object({
   override_interval_days: optionalInt,
 });
 
+/** Added with schema v6; files from older versions have none. */
+const backupOdometerReadingSchema = z.object({
+  id: fileId.optional(),
+  vehicle_id: fileId.optional(),
+  date: z.string(),
+  mileage: lenientNumber.transform(Math.trunc),
+  note: optionalString,
+});
+
 const backupVehicleSchema = z.object({
   id: fileId,
   make: z.string(),
@@ -98,6 +107,7 @@ const backupVehicleSchema = z.object({
   acquisition_date: optionalString,
   maintenance_logs: z.array(backupLogSchema).default([]),
   interval_overrides: z.array(backupOverrideSchema).default([]),
+  odometer_readings: z.array(backupOdometerReadingSchema).default([]),
 });
 
 const backupConfigSchema = z.object({
@@ -209,6 +219,13 @@ export function encodeBackup({ serviceTypes, vehicles, config, exportedAt }: Enc
           override_interval_km: ov.override_interval_km ?? null,
           override_interval_days: ov.override_interval_days ?? null,
         })),
+      odometer_readings: v.odometer_readings.map((r) => ({
+        id: fileIdFor("reading", r.id),
+        vehicle_id: vehicleFileId,
+        date: r.date,
+        mileage: r.mileage,
+        note: r.note ?? null,
+      })),
     };
   });
 

@@ -5,6 +5,7 @@ import { useAllLogsForVehicle, useServiceTypeSummaries, useServiceTypes, useDele
 import { ActivityTimeline } from "../components/ActivityTimeline";
 import { LogHistoryList } from "../components/LogHistoryList";
 import { VehicleStatistics, VehicleStatsData } from "../components/VehicleStatistics";
+import { UpdateOdometerPopover } from "../components/UpdateOdometerPopover";
 import { useUnits } from "../hooks/useUnits";
 
 // UI Components
@@ -40,7 +41,7 @@ export function VehicleMaintenancePage() {
     if (!vehicle || !allLogs) return null;
     const latestLog = allLogs.length > 0 ? allLogs[0] : null;
     return {
-      currentMileage: latestLog?.mileage ?? vehicle.initial_mileage ?? 0,
+      currentMileage: vehicle.current_mileage ?? 0,
       lastServiceDate: latestLog?.date ?? null,
       daysSinceLastSvc: latestLog
         ? Math.floor((new Date().getTime() - new Date(latestLog.date).getTime()) / 86400000)
@@ -116,9 +117,12 @@ export function VehicleMaintenancePage() {
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             {/* Odometer */}
             <div className="kpi-card">
-              <span className="text-[11px] font-medium text-muted-foreground">
-                Odometer
-              </span>
+              <div className="flex items-center justify-between -my-1">
+                <span className="text-[11px] font-medium text-muted-foreground">
+                  Odometer
+                </span>
+                <UpdateOdometerPopover vehicleId={vehicle.id} currentMileage={vehicle.current_mileage} />
+              </div>
               <div className="mt-2">
                 <div className="font-mono text-xl font-medium text-foreground tracking-tight">
                   {units.toDisplay(vehicleStats?.currentMileage ?? 0).toLocaleString()}

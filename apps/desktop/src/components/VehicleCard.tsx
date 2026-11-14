@@ -16,7 +16,7 @@ export function VehicleCard({ vehicle }: VehicleCardProps) {
       ? vehicle.maintenance_logs[0]
       : null;
 
-  const currentMileage = latestLog ? latestLog.mileage : vehicle.initial_mileage;
+  const currentMileage = vehicle.current_mileage;
 
   return (
     <div

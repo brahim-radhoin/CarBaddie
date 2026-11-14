@@ -140,6 +140,27 @@ export interface VehicleServiceIntervalOverrideRead extends VehicleServiceInterv
 }
 
 // ----------------------------------------
+// Odometer Readings
+// ----------------------------------------
+
+/** A mileage noted between services, so the current mileage is known without a log. */
+export interface OdometerReadingCreate {
+  date: string; // ISO format: "YYYY-MM-DD"
+  mileage: number; // km
+  note?: string | null;
+}
+
+export interface OdometerReadingRead {
+  id: Id;
+  vehicle_id: Id;
+  date: string;
+  mileage: number;
+  note: string | null;
+}
+
+export interface OdometerReadingUpdate extends Partial<OdometerReadingCreate> {}
+
+// ----------------------------------------
 // Vehicles
 // ----------------------------------------
 
@@ -160,6 +181,13 @@ export interface VehicleRead extends VehicleBase {
   id: Id;
   maintenance_logs: MaintenanceLogRead[];
   interval_overrides: VehicleServiceIntervalOverrideRead[];
+  /** Newest first (by date, then mileage). */
+  odometer_readings: OdometerReadingRead[];
+  /**
+   * The highest known mileage in km: initial mileage, logs and odometer readings.
+   * Null when none is known.
+   */
+  current_mileage: number | null;
 }
 
 // ====================================================================

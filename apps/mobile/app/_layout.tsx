@@ -103,6 +103,10 @@ function RootLayoutNav() {
             options={{ title: "Vehicle Settings" }}
           />
           <Stack.Screen
+            name="vehicle/[id]/odometer"
+            options={{ title: "Odometer" }}
+          />
+          <Stack.Screen
             name="vehicle/new"
             options={{ title: "Add Vehicle", presentation: "modal" }}
           />

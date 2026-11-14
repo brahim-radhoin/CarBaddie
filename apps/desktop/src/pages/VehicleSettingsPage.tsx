@@ -10,6 +10,7 @@ import { VehicleForm } from "@/components/VehicleForm";
 import { VehicleServiceIntervalsManager } from "@/components/VehicleServiceIntervalsManager";
 import { DeleteVehicleSection } from "@/components/DeleteVehicleSection";
 import { DataManagementSection } from "@/components/DataManagementSection";
+import { OdometerReadingsSection } from "@/components/OdometerReadingsSection";
 
 // UI Components & Icons
 import { Tabs } from "@/components/interior/tabs";
@@ -78,6 +79,7 @@ export function VehicleSettingsPage() {
         items={[
           { value: "details", label: "Specifications" },
           { value: "intervals", label: "Service Overrides" },
+          { value: "odometer", label: "Odometer" },
           { value: "backup", label: "Data Management" },
           { value: "danger", label: "Danger Zone" },
         ]}
@@ -104,6 +106,12 @@ export function VehicleSettingsPage() {
                     currentOverrides={vehicle.interval_overrides}
                     isLoading={isLoadingServiceTypes}
                   />
+                </div>
+              );
+            case "odometer":
+              return (
+                <div className="pt-4">
+                  <OdometerReadingsSection vehicle={vehicle} />
                 </div>
               );
             case "backup":

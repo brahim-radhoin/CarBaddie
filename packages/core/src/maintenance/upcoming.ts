@@ -31,8 +31,9 @@ function formatDate(date: Date): string {
 interface EngineVehicle<TId> {
   initial_mileage?: number | null;
   acquisition_date?: string | null;
-  /** Newest first. */
   maintenance_logs?: { mileage: number }[];
+  /** Mileages noted between services. */
+  odometer_readings?: { mileage: number }[];
   interval_overrides?: {
     service_type_id: TId;
     override_interval_km?: number | null;
@@ -71,8 +72,8 @@ export interface ComputeUpcomingMaintenanceInput<TId extends string | number = I
  * - The interval is the vehicle's override if set, otherwise the service type's recommendation.
  * - A service counts as performed when it was logged itself or when a service type that
  *   `resets` it was logged; the most recent date and highest mileage win.
- * - Current mileage is the mileage of the newest log (logs arrive newest first),
- *   falling back to the vehicle's initial mileage.
+ * - Current mileage is the highest known: any log, any odometer reading or the vehicle's
+ *   initial mileage (0 if none is known).
  * - Never-performed services are measured from the acquisition date / initial mileage.
  */
 export function computeUpcomingMaintenance<TId extends string | number = Id>({
@@ -87,8 +88,11 @@ export function computeUpcomingMaintenance<TId extends string | number = Id>({
     return [];
   }
 
-  const latestLog = vehicle.maintenance_logs?.[0];
-  const currentMileage = latestLog?.mileage ?? vehicle.initial_mileage ?? 0;
+  const currentMileage = Math.max(
+    vehicle.initial_mileage ?? 0,
+    ...(vehicle.maintenance_logs ?? []).map((l) => l.mileage),
+    ...(vehicle.odometer_readings ?? []).map((r) => r.mileage),
+  );
   const vehicleIntervalOverrides = vehicle.interval_overrides ?? [];
 
   const today = new Date(todayInput ?? new Date());

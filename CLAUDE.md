@@ -85,8 +85,10 @@ its connection pool can't keep BEGIN/COMMIT on one connection).
    a. DONE — money as integer cents with one synced currency, km canonical with km/mi display
       (migration v5: `maintenance_logs.cost_cents`, `preferences` table; old per-device currency
       symbol / unit settings are adopted once). Verified on a copy of the real DB (costs exact).
-   b. NEXT candidates: first-class `odometer_readings`; garage visits with multiple service items
-      (`service_events` + items); local notifications from the engine.
+   b. DONE — odometer readings (migration v6 `odometer_readings`: synced, moved on VIN merge, in backups);
+      `VehicleRead.current_mileage` = max(initial, logs, readings) feeds the engine and every odometer display.
+   c. NEXT candidates: garage visits with multiple service items (`service_events` + items); local
+      notifications from the engine.
 
 ## Known open issues
 

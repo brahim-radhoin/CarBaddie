@@ -29,6 +29,11 @@ export const createMaintenanceLog = call("createMaintenanceLog");
 export const updateMaintenanceLog = call("updateMaintenanceLog");
 export const deleteMaintenanceLog = call("deleteMaintenanceLog");
 
+export const getOdometerReadings = call("getOdometerReadings");
+export const addOdometerReading = call("addOdometerReading");
+export const updateOdometerReading = call("updateOdometerReading");
+export const deleteOdometerReading = call("deleteOdometerReading");
+
 export const getOverridesForVehicle = call("getOverridesForVehicle");
 export const upsertIntervalOverride = call("upsertIntervalOverride");
 export const deleteIntervalOverride = call("deleteIntervalOverride");

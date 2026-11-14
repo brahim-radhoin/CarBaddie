@@ -25,10 +25,9 @@ export default function VehicleListScreen() {
   }, [vehicles, search]);
 
   const renderVehicle = ({ item }: { item: VehicleRead }) => {
-    const lastLog = item.maintenance_logs?.[0];
     const totalCost = item.maintenance_logs?.reduce((sum, l) => sum + l.cost_cents, 0) ?? 0;
     const logCount = item.maintenance_logs?.length ?? 0;
-    const currentMileage = lastLog ? lastLog.mileage : item.initial_mileage;
+    const currentMileage = item.current_mileage;
 
     return (
       <TouchableOpacity

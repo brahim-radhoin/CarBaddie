@@ -34,8 +34,7 @@ export default function VehicleDetailScreen() {
 
   const totalCost = vehicle.maintenance_logs.reduce((sum, l) => sum + l.cost_cents, 0);
   const logCount = vehicle.maintenance_logs.length;
-  const lastLog = vehicle.maintenance_logs[0];
-  const lastMileage = lastLog?.mileage ?? vehicle.initial_mileage ?? 0;
+  const currentMileage = vehicle.current_mileage ?? 0;
 
   const overdueItems = upcomingItems.filter((i) => i.status === "Overdue");
   const dueSoonItems = upcomingItems.filter((i) => i.status === "Upcoming");
@@ -89,7 +88,7 @@ export default function VehicleDetailScreen() {
         {/* Telemetry KPIs */}
         <View style={[styles.kpiRow, { borderTopColor: colors.border }]}>
           <View style={styles.kpi}>
-            <Text style={[styles.kpiValue, { color: colors.text }]}>{units.toDisplay(lastMileage).toLocaleString()}</Text>
+            <Text style={[styles.kpiValue, { color: colors.text }]}>{units.toDisplay(currentMileage).toLocaleString()}</Text>
             <Text style={[styles.kpiLabel, { color: (colors.text as string) + "77" }]}>Odometer ({units.unit})</Text>
           </View>
           <View style={styles.kpi}>
@@ -141,6 +140,13 @@ export default function VehicleDetailScreen() {
           <Text style={[styles.actionBtnOutlineText, { color: colors.text }]}>Interval Overrides</Text>
         </TouchableOpacity>
       </View>
+      <TouchableOpacity
+        style={[styles.actionBtn, styles.actionBtnOutline, styles.odometerBtn, { borderColor: colors.border }]}
+        onPress={() => router.push(`/vehicle/${id}/odometer`)}
+        activeOpacity={0.8}
+      >
+        <Text style={[styles.actionBtnOutlineText, { color: colors.text }]}>Update Odometer</Text>
+      </TouchableOpacity>
 
       {/* Tab Switcher */}
       <View style={[styles.tabBar, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -383,6 +389,7 @@ const styles = StyleSheet.create({
   actionBtnText: { color: "#fff", fontSize: 14, fontWeight: "700" },
   actionBtnOutline: { backgroundColor: "transparent", borderWidth: 1 },
   actionBtnOutlineText: { fontSize: 14, fontWeight: "700" },
+  odometerBtn: { flex: 0, marginTop: -4, marginBottom: 14 },
   tabBar: { flexDirection: "row", borderRadius: 10, borderWidth: 1, padding: 3, marginBottom: 16 },
   tabItem: { flex: 1, paddingVertical: 8, alignItems: "center", borderRadius: 8 },
   tabText: { fontSize: 12, fontWeight: "600" },

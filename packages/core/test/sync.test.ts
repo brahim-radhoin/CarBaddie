@@ -209,3 +209,80 @@ test("resetting sync state makes the next sync re-send everything", async () => 
   const again = await a.sync(fresh.transport);
   assert.equal(again.uploaded, first.uploaded);
 });
+
+test("odometer readings sync, and deleting the vehicle removes them on both devices", async () => {
+  const drive = memoryDrive();
+  const a = await device();
+  const b = await device();
+  const v = await a.repo.createVehicle({ make: "Renault", model: "Clio" });
+  const reading = await a.repo.addOdometerReading(v.id, { date: "2025-06-01", mileage: 64000, note: "full tank" });
+  await a.sync(drive.transport);
+  await b.sync(drive.transport);
+
+  const onB = await b.repo.getVehicleById(v.id);
+  assert.deepEqual(onB?.odometer_readings, [reading]);
+  assert.equal(onB?.current_mileage, 64000);
+
+  // An edit on b reaches a; then a deletes the vehicle and its readings go with it everywhere.
+  await b.repo.updateOdometerReading(reading.id, { mileage: 64100 });
+  await b.sync(drive.transport);
+  await a.sync(drive.transport);
+  assert.equal((await a.repo.getOdometerReadings(v.id))[0]?.mileage, 64100);
+  await a.repo.deleteVehicle(v.id);
+  await a.sync(drive.transport);
+  await b.sync(drive.transport);
+
+  for (const d of [a, b]) {
+    assert.equal(await d.repo.getVehicleById(v.id), null);
+    const [row] = await d.db.all<{ deleted_at: string | null }>("SELECT deleted_at FROM odometer_readings WHERE id = ?", [reading.id]);
+    assert.notEqual(row.deleted_at, null);
+  }
+  assert.deepEqual(await liveState(a.db), await liveState(b.db));
+});
+
+test("a reading added while its vehicle is deleted on another device ends up deleted", async () => {
+  const drive = memoryDrive();
+  const a = await device();
+  const b = await device();
+  const v = await a.repo.createVehicle({ make: "Dacia", model: "Duster" });
+  await a.sync(drive.transport);
+  await b.sync(drive.transport);
+
+  await a.repo.deleteVehicle(v.id);
+  const late = await b.repo.addOdometerReading(v.id, { date: "2025-07-01", mileage: 5000 });
+  await a.sync(drive.transport);
+  await b.sync(drive.transport);
+  await a.sync(drive.transport);
+
+  for (const d of [a, b]) {
+    const [row] = await d.db.all<{ deleted_at: string | null }>("SELECT deleted_at FROM odometer_readings WHERE id = ?", [late.id]);
+    assert.notEqual(row.deleted_at, null);
+  }
+  assert.deepEqual(await liveState(a.db), await liveState(b.db));
+});
+
+test("a VIN merge moves odometer readings to the surviving vehicle", async () => {
+  const drive = memoryDrive();
+  const a = await device();
+  const b = await device();
+  const vin = "WVWZZZ1JZXW000001";
+  const va = await a.repo.createVehicle({ make: "VW", model: "Golf", vin });
+  const vb = await b.repo.createVehicle({ make: "VW", model: "Golf", vin });
+  const ra = await a.repo.addOdometerReading(va.id, { date: "2025-01-01", mileage: 90000 });
+  const rb = await b.repo.addOdometerReading(vb.id, { date: "2025-02-01", mileage: 91500 });
+
+  await a.sync(drive.transport);
+  await b.sync(drive.transport);
+  await a.sync(drive.transport);
+  await b.sync(drive.transport);
+
+  const keep = va.id < vb.id ? va.id : vb.id;
+  for (const d of [a, b]) {
+    const vehicles = await d.repo.getAllVehicles();
+    assert.equal(vehicles.length, 1);
+    assert.equal(vehicles[0].id, keep);
+    assert.deepEqual(vehicles[0].odometer_readings.map((r) => r.id), [rb.id, ra.id]);
+    assert.equal(vehicles[0].current_mileage, 91500);
+  }
+  assert.deepEqual(await liveState(a.db), await liveState(b.db));
+});

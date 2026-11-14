@@ -20,6 +20,8 @@ import type {
   MaintenanceLogCreate,
   MaintenanceLogUpdate,
   CustomFieldRead,
+  OdometerReadingCreate,
+  OdometerReadingRead,
   Preferences,
 } from "./types";
 import { getRepository } from "./db";
@@ -103,6 +105,37 @@ export function useDeleteVehicle() {
       queryClient.invalidateQueries({ queryKey: queryKeys.vehicles.all() });
     },
     onError: (error) => toast.error(message(error, "Failed to delete vehicle.")),
+  });
+}
+
+// --- ODOMETER READINGS (part of VehicleRead: odometer_readings, current_mileage) ---
+
+interface AddOdometerReadingVariables {
+  vehicleId: Id;
+  reading: OdometerReadingCreate;
+}
+
+export function useAddOdometerReading() {
+  const queryClient = useQueryClient();
+  return useMutation<OdometerReadingRead, Error, AddOdometerReadingVariables>({
+    mutationFn: async ({ vehicleId, reading }) => (await getRepository()).addOdometerReading(vehicleId, reading),
+    onSuccess: () => {
+      toast.success("Odometer updated.");
+      queryClient.invalidateQueries({ queryKey: queryKeys.vehicles.all() });
+    },
+    onError: (error) => toast.error(message(error, "Failed to save the odometer reading.")),
+  });
+}
+
+export function useDeleteOdometerReading() {
+  const queryClient = useQueryClient();
+  return useMutation<void, Error, { readingId: Id; vehicleId: Id }>({
+    mutationFn: async ({ readingId }) => (await getRepository()).deleteOdometerReading(readingId),
+    onSuccess: () => {
+      toast.success("Odometer reading deleted.");
+      queryClient.invalidateQueries({ queryKey: queryKeys.vehicles.all() });
+    },
+    onError: (error) => toast.error(message(error, "Failed to delete the odometer reading.")),
   });
 }
 

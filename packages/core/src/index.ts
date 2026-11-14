@@ -61,6 +61,7 @@ export {
   validateServiceType,
   validateIntervalOverride,
   validateMaintenanceLog,
+  validateOdometerReading,
   validatePreference,
 } from "./validation";
 

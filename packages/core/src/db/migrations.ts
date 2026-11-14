@@ -383,6 +383,26 @@ export const MIGRATIONS: readonly Migration[] = [
         );
       `),
   },
+  {
+    // Odometer readings recorded between services (mileage in km), so the current mileage
+    // is known without a log. The vehicle's current mileage is the highest of these, its logs
+    // and its initial mileage.
+    version: 6,
+    description: "odometer_readings",
+    checkForeignKeys: false,
+    up: (db) =>
+      db.exec(`
+        CREATE TABLE odometer_readings (
+          id TEXT PRIMARY KEY NOT NULL,
+          vehicle_id TEXT NOT NULL REFERENCES vehicles(id) ON DELETE CASCADE,
+          date TEXT NOT NULL,
+          mileage INTEGER NOT NULL,
+          note TEXT,
+          ${SYNC_COLUMNS}
+        );
+        CREATE INDEX idx_odometer_readings_vehicle_id ON odometer_readings(vehicle_id);
+      `),
+  },
 ];
 
 export const LATEST_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

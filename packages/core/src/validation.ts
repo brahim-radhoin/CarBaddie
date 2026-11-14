@@ -89,6 +89,14 @@ export function validateMaintenanceLog(
   c.done();
 }
 
+export function validateOdometerReading(data: { date?: string; mileage?: number | null }, partial = false): void {
+  const c = new Checker();
+  if (!partial || data.date !== undefined) c.required("date", data.date);
+  if (data.mileage === null || (!partial && data.mileage === undefined)) c.add("mileage", "This field is required.");
+  c.nonNegativeInt("mileage", data.mileage);
+  c.done();
+}
+
 export function validatePreference(key: string, value: string): void {
   const c = new Checker();
   if (key === "currency" && !/^[A-Z]{3}$/.test(value)) c.add(key, "Use a three-letter currency code, e.g. EUR.");

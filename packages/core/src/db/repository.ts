@@ -14,6 +14,7 @@ import {
   normaliseVin,
   validateIntervalOverride,
   validateMaintenanceLog,
+  validateOdometerReading,
   validatePreference,
   validateServiceType,
   validateVehicle,
@@ -35,6 +36,9 @@ import type {
   MaintenanceLogRead,
   MaintenanceLogUpdate,
   MaintenanceSummary,
+  OdometerReadingCreate,
+  OdometerReadingRead,
+  OdometerReadingUpdate,
   Preferences,
   RestorePlan,
   ServiceTypeCreate,
@@ -173,7 +177,30 @@ export function createRepository(db: SqlDriver, w: WriteContext) {
     );
   }
 
+  /** Newest first: by date, then the higher mileage. */
+  async function listReadings(vehicleId: Id): Promise<OdometerReadingRead[]> {
+    return all<OdometerReadingRead>(
+      `SELECT id, vehicle_id, date, mileage, note FROM odometer_readings
+       WHERE vehicle_id = ? AND deleted_at IS NULL ORDER BY date DESC, mileage DESC, id DESC`,
+      [vehicleId],
+    );
+  }
+
+  async function getReading(id: Id): Promise<OdometerReadingRead | null> {
+    return first<OdometerReadingRead>(
+      "SELECT id, vehicle_id, date, mileage, note FROM odometer_readings WHERE id = ? AND deleted_at IS NULL",
+      [id],
+    );
+  }
+
   async function buildVehicle(row: Row): Promise<VehicleRead> {
+    const maintenance_logs = await listLogs(row.id);
+    const odometer_readings = await listReadings(row.id);
+    const known = [
+      ...(row.initial_mileage != null ? [row.initial_mileage as number] : []),
+      ...maintenance_logs.map((l) => l.mileage),
+      ...odometer_readings.map((r) => r.mileage),
+    ];
     return {
       id: row.id,
       make: row.make,
@@ -182,8 +209,10 @@ export function createRepository(db: SqlDriver, w: WriteContext) {
       vin: row.vin,
       initial_mileage: row.initial_mileage,
       acquisition_date: row.acquisition_date,
-      maintenance_logs: await listLogs(row.id),
+      maintenance_logs,
       interval_overrides: await listOverrides(row.id),
+      odometer_readings,
+      current_mileage: known.length ? Math.max(...known) : null,
     };
   }
 
@@ -219,6 +248,7 @@ export function createRepository(db: SqlDriver, w: WriteContext) {
     );
     await run(`UPDATE maintenance_logs SET ${del} WHERE deleted_at IS NULL AND vehicle_id = ?`, [...delVals, id]);
     await run(`UPDATE vehicle_service_interval_overrides SET ${del} WHERE deleted_at IS NULL AND vehicle_id = ?`, [...delVals, id]);
+    await run(`UPDATE odometer_readings SET ${del} WHERE deleted_at IS NULL AND vehicle_id = ?`, [...delVals, id]);
     await run(`UPDATE vehicles SET ${del} WHERE deleted_at IS NULL AND id = ?`, [...delVals, id]);
   }
 
@@ -367,6 +397,18 @@ export function createRepository(db: SqlDriver, w: WriteContext) {
     }
   }
 
+  const cleanNote = (note: string | null | undefined) => (note && note.trim() ? note.trim() : null);
+
+  async function insertReading(vehicleId: Id, data: OdometerReadingCreate): Promise<Id> {
+    const id = w.newId();
+    await run(
+      `INSERT INTO odometer_readings (id, vehicle_id, date, mileage, note, updated_at, deleted_at, device_id)
+       VALUES (?, ?, ?, ?, ?, ?, NULL, ?)`,
+      [id, vehicleId, data.date, data.mileage, cleanNote(data.note), w.stamp(), w.deviceId],
+    );
+    return id;
+  }
+
   /** One override row per vehicle and service type, with the same id on every device. */
   async function writeOverride(vehicleId: Id, serviceTypeId: Id, data: VehicleServiceIntervalOverrideCreate): Promise<void> {
     await run(
@@ -481,6 +523,9 @@ export function createRepository(db: SqlDriver, w: WriteContext) {
         const serviceTypeId = serviceTypeIds.get(ov.service_type_id);
         if (serviceTypeId) await writeOverride(vehicleId, serviceTypeId, ov);
       }
+      for (const reading of v.odometer_readings) {
+        await insertReading(vehicleId, reading);
+      }
     }
   }
 
@@ -527,7 +572,7 @@ export function createRepository(db: SqlDriver, w: WriteContext) {
       return (await repo.getVehicleById(id))!;
     },
 
-    /** Deletes a vehicle with its logs and interval overrides. */
+    /** Deletes a vehicle with its logs, odometer readings and interval overrides. */
     deleteVehicle: (id: Id): Promise<void> => tx(() => tombstoneVehicle(id)),
 
     /** Deletes every vehicle with its logs and overrides. Service types are kept. */
@@ -650,6 +695,39 @@ export function createRepository(db: SqlDriver, w: WriteContext) {
         await run(`UPDATE maintenance_logs SET ${del} WHERE deleted_at IS NULL AND id = ?`, [...delVals, logId]);
       }),
 
+    // --- Odometer readings ---
+    getOdometerReadings: (vehicleId: Id): Promise<OdometerReadingRead[]> => listReadings(vehicleId),
+
+    async addOdometerReading(vehicleId: Id, data: OdometerReadingCreate): Promise<OdometerReadingRead> {
+      validateOdometerReading(data);
+      const id = await tx(() => insertReading(vehicleId, data));
+      return (await getReading(id))!;
+    },
+
+    async updateOdometerReading(id: Id, data: OdometerReadingUpdate): Promise<OdometerReadingRead> {
+      validateOdometerReading(data, true);
+      await tx(async () => {
+        const sets: string[] = [];
+        const vals: SqlValue[] = [];
+        if (data.date !== undefined) { sets.push("date = ?"); vals.push(data.date); }
+        if (data.mileage !== undefined) { sets.push("mileage = ?"); vals.push(data.mileage); }
+        if (data.note !== undefined) { sets.push("note = ?"); vals.push(cleanNote(data.note)); }
+        if (sets.length > 0) {
+          const [touch, touchVals] = touched();
+          await run(`UPDATE odometer_readings SET ${sets.join(", ")}, ${touch} WHERE id = ? AND deleted_at IS NULL`, [
+            ...vals, ...touchVals, id,
+          ]);
+        }
+      });
+      return (await getReading(id))!;
+    },
+
+    deleteOdometerReading: (id: Id): Promise<void> =>
+      tx(async () => {
+        const [del, delVals] = tombstoned();
+        await run(`UPDATE odometer_readings SET ${del} WHERE deleted_at IS NULL AND id = ?`, [...delVals, id]);
+      }),
+
     // --- Interval overrides ---
     getOverridesForVehicle: (vehicleId: Id): Promise<VehicleServiceIntervalOverrideRead[]> => listOverrides(vehicleId),
 
@@ -715,15 +793,19 @@ export function createRepository(db: SqlDriver, w: WriteContext) {
     async exportBackup(config: BackupConfiguration, exportedAt: Date = new Date()): Promise<FullBackupData> {
       let vehicles = await repo.getAllVehicles();
       if (config.vehicle_ids?.length) vehicles = vehicles.filter((v) => config.vehicle_ids!.includes(v.id));
+      // Odometer readings are history too: they follow the date range and the logs switch.
       if (config.start_date || config.end_date) {
+        const inRange = (date: string) =>
+          !(config.start_date && date < config.start_date) && !(config.end_date && date > config.end_date);
         vehicles = vehicles.map((v) => ({
           ...v,
-          maintenance_logs: v.maintenance_logs.filter(
-            (log) => !(config.start_date && log.date < config.start_date) && !(config.end_date && log.date > config.end_date),
-          ),
+          maintenance_logs: v.maintenance_logs.filter((log) => inRange(log.date)),
+          odometer_readings: v.odometer_readings.filter((r) => inRange(r.date)),
         }));
       }
-      if (config.include_maintenance_logs === false) vehicles = vehicles.map((v) => ({ ...v, maintenance_logs: [] }));
+      if (config.include_maintenance_logs === false) {
+        vehicles = vehicles.map((v) => ({ ...v, maintenance_logs: [], odometer_readings: [] }));
+      }
       return encodeBackup({ serviceTypes: await listServiceTypes(true), vehicles, config, exportedAt });
     },
 

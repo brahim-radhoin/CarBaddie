@@ -52,6 +52,8 @@ const vehicles: VehicleRead[] = [
       },
     ],
     interval_overrides: [{ id: "ov-1", vehicle_id: V1, service_type_id: ST_OIL, override_interval_km: 10000 }],
+    odometer_readings: [{ id: "odo-1", vehicle_id: V1, date: "2025-09-01", mileage: 97000, note: " tyres " }],
+    current_mileage: 97000,
   },
 ];
 
@@ -70,6 +72,7 @@ test("encoded backups use file-local integer ids and survive a JSON round trip",
   assert.deepEqual(v.interval_overrides[0], {
     id: 1, vehicle_id: 1, service_type_id: 1, override_interval_km: 10000, override_interval_days: null,
   });
+  assert.deepEqual(v.odometer_readings, [{ id: 1, vehicle_id: 1, date: "2025-09-01", mileage: 97000, note: " tyres " }]);
   assert.deepEqual(file.metadata.config_used.vehicle_ids, [1], "no local UUIDs leak into the file");
   assert.ok(!JSON.stringify(file).includes(V1));
 });
@@ -107,6 +110,7 @@ test("files from older desktop and mobile versions are normalised", () => {
   const v = parsed.vehicles[0];
   assert.equal(v.vin, null);
   assert.deepEqual(v.interval_overrides, []);
+  assert.deepEqual(v.odometer_readings, [], "files from before odometer readings have none");
   const log = v.maintenance_logs[0];
   assert.equal(log.mileage, 12000);
   assert.equal(log.cost, 45.1);

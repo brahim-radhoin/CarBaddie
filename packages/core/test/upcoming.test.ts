@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { computeUpcomingMaintenance } from "../src/maintenance/upcoming.ts";
 import type {
   MaintenanceLogRead,
+  OdometerReadingRead,
   ServiceTypeLogSummary,
   ServiceTypeRead,
   UpcomingMaintenanceItemData,
@@ -49,6 +50,7 @@ function vehicle(
   opts: {
     logs?: MaintenanceLogRead[];
     overrides?: VehicleServiceIntervalOverrideRead[];
+    readings?: OdometerReadingRead[];
     initialMileage?: number;
     acquisitionDate?: string;
   } = {},
@@ -63,7 +65,13 @@ function vehicle(
     acquisition_date: opts.acquisitionDate ?? null,
     maintenance_logs: opts.logs ?? [],
     interval_overrides: opts.overrides ?? [],
+    odometer_readings: opts.readings ?? [],
+    current_mileage: null, // the engine works it out itself
   };
+}
+
+function reading(id: number, date: string, mileage: number): OdometerReadingRead {
+  return { id: String(id), vehicle_id: "1", date, mileage, note: null };
 }
 
 function summary(serviceTypeId: number, date: string | null, mileage: number | null): ServiceTypeLogSummary {
@@ -107,7 +115,7 @@ test("overdue by date", () => {
   assert.equal(item.message, "Overdue by 3 days");
 });
 
-test("overdue by mileage uses the newest log as current mileage", () => {
+test("overdue by mileage uses the highest log mileage as current mileage", () => {
   const v = vehicle({ logs: [log(2, "2026-01-20", 19000, 9), log(1, "2025-12-01", 10000, 1)] });
   const item = only(compute(v, [serviceType(1, "Oil change", { recommended_interval_km: 8000 })], [summary(1, "2025-12-01", 10000)]));
   assert.equal(item.status, "Overdue");
@@ -118,6 +126,24 @@ test("upcoming within the km threshold", () => {
   const v = vehicle({ logs: [log(2, "2026-01-20", 17500, 9)] });
   const item = only(compute(v, [serviceType(1, "Oil change", { recommended_interval_km: 8000 })], [summary(1, "2025-12-01", 10000)]));
   assert.equal(item.status, "Upcoming");
+  assert.equal(item.details?.byMileage?.remainingKm, 500);
+});
+
+test("an odometer reading newer than the last log moves the current mileage on", () => {
+  const types = [serviceType(1, "Oil change", { recommended_interval_km: 8000 })];
+  const summaries = [summary(1, "2025-12-01", 10000)];
+  const logs = [log(1, "2025-12-01", 10000, 1)];
+  assert.equal(only(compute(vehicle({ logs }), types, summaries)).status, "OK");
+
+  const v = vehicle({ logs, readings: [reading(1, "2026-01-25", 18500)] });
+  const item = only(compute(v, types, summaries));
+  assert.equal(item.status, "Overdue");
+  assert.deepEqual(item.details?.byMileage, { due: 18000, remainingKm: -500 });
+});
+
+test("a reading lower than the logs does not lower the current mileage", () => {
+  const v = vehicle({ logs: [log(1, "2026-01-20", 17500, 9)], readings: [reading(1, "2026-01-28", 12000)] });
+  const item = only(compute(v, [serviceType(1, "Oil change", { recommended_interval_km: 8000 })], [summary(1, "2025-12-01", 10000)]));
   assert.equal(item.details?.byMileage?.remainingKm, 500);
 });
 

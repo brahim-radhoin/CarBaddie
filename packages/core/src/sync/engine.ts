@@ -4,7 +4,8 @@
 // Rules that keep every device converging on the same data:
 // - a row is replaced only by a copy with a newer `updated_at`
 // - two live vehicles with the same VIN are merged: the one with the smaller id stays, the
-//   other is tombstoned with `merged_into`, and its logs and overrides move to the survivor
+//   other is tombstoned with `merged_into`, and its logs, odometer readings and overrides
+//   move to the survivor
 // - two live service types (or two active fields of one service type) with the same name:
 //   the one with the larger id is renamed "Name (2)"
 // - after merging, children of tombstoned parents are tombstoned too (a delete on one device
@@ -393,6 +394,15 @@ class MergeContext {
         ]);
         changed++;
       }
+      for (const reading of await db.all<{ id: string; vehicle_id: string }>(
+        `SELECT id, vehicle_id FROM odometer_readings WHERE deleted_at IS NULL AND ${inMerged}`,
+      )) {
+        const t = touch();
+        await db.run("UPDATE odometer_readings SET vehicle_id = ?, updated_at = ?, device_id = ? WHERE id = ?", [
+          survivor(reading.vehicle_id), t.stamp, t.device, reading.id,
+        ]);
+        changed++;
+      }
       for (const ov of await db.all<Record<string, SqlValue>>(
         `SELECT * FROM vehicle_service_interval_overrides WHERE deleted_at IS NULL AND ${inMerged}`,
       )) {
@@ -430,6 +440,7 @@ class MergeContext {
     const cascades: [string, string][] = [
       ["custom_fields", `service_type_id IN (${deadType})`],
       ["maintenance_logs", `vehicle_id IN (${deadVehicle})`],
+      ["odometer_readings", `vehicle_id IN (${deadVehicle})`],
       ["custom_field_values", `log_id IN (SELECT id FROM maintenance_logs WHERE deleted_at IS NOT NULL)
                                OR field_id IN (SELECT id FROM custom_fields WHERE deleted_at IS NOT NULL)`],
       ["vehicle_service_interval_overrides", `vehicle_id IN (${deadVehicle}) OR service_type_id IN (${deadType})`],
