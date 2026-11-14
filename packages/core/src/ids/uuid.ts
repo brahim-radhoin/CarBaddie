@@ -26,6 +26,7 @@ export function setRandomSource(source: RandomBytes): void {
 export const ID_NAMESPACES = {
   builtinServiceType: "19a1b14e-2ce9-44cd-9aa2-7883bba75f69",
   intervalOverride: "1d2a5110-fb3f-4064-a951-4802026e86b9",
+  builtinField: "468f311e-1f4d-4040-a391-9a05b40eefbb",
 } as const;
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;

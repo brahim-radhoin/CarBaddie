@@ -34,16 +34,19 @@ export {
   BUILTIN_RESETS,
   BUILTIN_SUGGESTIONS,
   builtinServiceTypeId,
+  builtinFieldId,
   findBuiltinServiceTypeByName,
+  LEGACY_SERVICE_TYPES,
 } from "./service-types/builtin";
-export type { BuiltinServiceType } from "./service-types/builtin";
+export type { BuiltinField, BuiltinServiceType } from "./service-types/builtin";
 
 export { backupFileSchema, parseBackup, encodeBackup } from "./backup/format";
 export type { BackupFile, EncodeBackupInput } from "./backup/format";
 
 export type { SqlDriver, SqlValue, WriteContext } from "./db/driver";
 export { migrate, getSchemaVersion, MIGRATIONS, LATEST_SCHEMA_VERSION } from "./db/migrations";
-export { seedBuiltinServiceTypes } from "./db/seed";
+export { seedBuiltinServiceTypes, SEED_STAMP } from "./db/seed";
+export { mergeLegacyServiceTypes } from "./db/legacy";
 export { createRepository } from "./db/repository";
 export type { Repository } from "./db/repository";
 export { openRepository, SYNCED_TABLES } from "./db/open";

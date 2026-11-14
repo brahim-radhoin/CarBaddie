@@ -26,6 +26,11 @@ CI (.github/workflows/ci.yml): frozen install, typecheck, core tests.
 - Schema changes go in `packages/core/src/db/migrations.ts` as a new version (`PRAGMA user_version`); never
   edit a shipped migration. Every synced row: UUID `id`, `updated_at` (HLC string), `deleted_at` tombstone,
   `device_id`. Reads filter `deleted_at IS NULL`; deletes tombstone and cascade by hand (core repository.ts).
+- Built-in service types (`packages/core/src/service-types/builtin.ts`) and their default fields have fixed
+  UUIDv5 ids (slug, slug/key); never change a shipped slug or field key. `db/seed.ts` runs on every open,
+  adds missing ones (deleted ones stay deleted) and stamps them `SEED_STAMP` (older than any real write,
+  so a fresh device's seed never overrides an edit or delete synced from elsewhere). `db/legacy.ts` merges
+  the old desktop's duplicate types into built-ins once per device (`service_types.legacy_merged`).
 - Backup/Drive JSON keeps file-local integer ids (`packages/core/src/backup/format.ts`, zod), compatible with
   files from older app versions; importers always create fresh local ids.
 - Core source files must not have runtime imports between each other unless they use a `.ts`
@@ -58,7 +63,7 @@ its connection pool can't keep BEGIN/COMMIT on one connection).
    desktop migrates its existing DB in place (copy saved first as `car_baddie.before-v<N>-<ts>.db`);
    migration v3 drops `vehicle_definitions`/`alembic_version`; catalog is `apps/desktop/src/data/
    vehicle-catalog.json`, loaded lazily; no DB is bundled. Verified on a copy of the real desktop DB.
-5. DONE (core + desktop) — sync engine (`packages/core/src/sync/engine.ts`, `files.ts`, `drive.ts`): each
+5. DONE — sync engine (`packages/core/src/sync/engine.ts`, `files.ts`, `drive.ts`): each
    device writes only its own files to Drive `appDataFolder` (`carbaddie-chg-<device>-<seq>.json`, compacted
    into `carbaddie-snap-<device>-<seq>.json` after 50), merges others' rows by last-writer-wins on the HLC.
    Same live VIN → merged into the smaller id (`vehicles.merged_into`, migration v4; children moved); same
@@ -67,21 +72,21 @@ its connection pool can't keep BEGIN/COMMIT on one connection).
    loopback sign-in, refresh token in the OS keychain (`src-tauri/src/secrets.rs`, keyring crate),
    `useAutoSync` (start, 5 min, focus, after edits); set `VITE_GOOGLE_CLIENT_SECRET` if the Desktop OAuth
    client demands its (non-confidential) secret. Verified on a copy of the real desktop DB vs a fresh device.
-   NEXT: mobile — native Google OAuth client + Expo dev build (Expo Go can't take the redirect),
-   expo-auth-session PKCE, expo-secure-store, then `openRepository(...).sync(createDriveTransport(...))`.
+   Mobile (Android only): native account picker via @react-native-google-signin (no Firebase, so no
+   config plugin; Play services refreshes tokens, nothing stored), `expo-dev-client`; needs an EAS
+   development build, not Expo Go. Its Android OAuth client must be in the same Cloud project as the
+   desktop client (appDataFolder is per project). Mobile code is typechecked and bundles; untested on a phone.
 6. Domain upgrades: garage visits with multiple service items (`service_events` + items),
    first-class `odometer_readings`, money as integer cents + currency, km canonical with display
    units, local notifications from the engine.
 
 ## Known open issues
 
-- Desktop's service types came from the old backend seed; on the user's real DB 6 of 17 matched a core
-  built-in name and got its slug/UUID. Mobile seeds 25. Nothing reconciles the two lists, so the first
-  sync gives desktop every built-in it lacked (real DB: 17 → 36 types); near-duplicates by meaning may show.
-- Mobile Drive sync is still snapshot-restore of `carbaddie_backup.json` (VIN matches replaced, whole DB
-  pushed on every foreground). Desktop only touches that file through its "Save/Import backup file" buttons.
+- Desktop's "Save/Import backup file" buttons still use `carbaddie_backup.json` (drive.file); mobile no
+  longer reads or writes it.
 - Desktop dashboard counts "overdue" as >365 days since last log instead of using
   `computeUpcomingMaintenance` (the shared hook exists in apps/desktop/src/hooks but is unused).
-- Mobile Google sign-in uses implicit flow, no refresh token, token stored in app_settings.
-- Desktop sign-in not yet tried against Google with the new scopes; the sync engine is only tested in-memory.
+- No iOS sign-in yet (needs an iOS OAuth client and the plugin's `iosUrlScheme`).
+- Sync stalls silently if a device's change file is missing from Drive with no snapshot covering it
+  (e.g. files deleted by hand): `engine.ts` stops at the gap and reports nothing.
 - Tauri capability allows writing text files anywhere (`"**"`).

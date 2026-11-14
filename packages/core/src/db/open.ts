@@ -6,6 +6,8 @@ import { HlcClock } from "../sync/hlc.ts";
 import { migrate } from "./migrations.ts";
 import { createRepository, type Repository } from "./repository.ts";
 import { seedBuiltinServiceTypes } from "./seed.ts";
+import { LEGACY_MERGE_SETTING, mergeLegacyServiceTypes } from "./legacy.ts";
+import { transaction } from "./transaction.ts";
 import { resetSyncState, runSync } from "../sync/engine.ts";
 import { SYNCED_TABLES } from "../sync/tables.ts";
 import type { SqlDriver, WriteContext } from "./driver";
@@ -53,7 +55,14 @@ export async function openRepository(db: SqlDriver, wallClock: () => number = Da
   );
   if (latest[0]?.latest) clock.observe(latest[0].latest);
 
-  await seedBuiltinServiceTypes(db, ctx);
+  await transaction(db, async () => {
+    await seedBuiltinServiceTypes(db, ctx);
+    const [merged] = await db.all("SELECT 1 FROM app_settings WHERE key = ?", [LEGACY_MERGE_SETTING]);
+    if (!merged) {
+      await mergeLegacyServiceTypes(db, ctx);
+      await db.run("INSERT INTO app_settings (key, value) VALUES (?, '1')", [LEGACY_MERGE_SETTING]);
+    }
+  });
   return {
     repo: createRepository(db, ctx),
     deviceId,
