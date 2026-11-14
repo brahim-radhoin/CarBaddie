@@ -12,6 +12,20 @@ export {
   UPCOMING_THRESHOLD_KM,
 } from "./maintenance/upcoming";
 export type { ComputeUpcomingMaintenanceInput } from "./maintenance/upcoming";
+export {
+  computeReminders,
+  pickNewReminders,
+  reminderNotifications,
+  reminderKey,
+  collectReminders,
+  checkReminders,
+  getRemindersEnabled,
+  setRemindersEnabled,
+  getNotifiedReminderKeys,
+  setNotifiedReminderKeys,
+  REMINDER_SETTING_KEYS,
+} from "./maintenance/reminders";
+export type { Reminder, ReminderStatus, ComputeRemindersInput, CheckRemindersOptions } from "./maintenance/reminders";
 
 export { vehicleIdentityKey } from "./vehicles/identity";
 

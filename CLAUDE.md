@@ -87,15 +87,16 @@ its connection pool can't keep BEGIN/COMMIT on one connection).
       symbol / unit settings are adopted once). Verified on a copy of the real DB (costs exact).
    b. DONE — odometer readings (migration v6 `odometer_readings`: synced, moved on VIN merge, in backups);
       `VehicleRead.current_mileage` = max(initial, logs, readings) feeds the engine and every odometer display.
-   c. NEXT candidates: garage visits with multiple service items (`service_events` + items); local
-      notifications from the engine.
+   c. NEXT — garage visits with multiple service items (`service_events` + items).
+   d. DONE — reminders (core `maintenance/reminders.ts`, one key per due occurrence, app_settings `reminders.*`):
+      desktop tauri-plugin-notification; mobile expo-notifications + 09:00 due-date ones (new EAS build needed).
 
 ## Known open issues
 
 - Desktop's "Save/Import backup file" buttons still use `carbaddie_backup.json` (drive.file); mobile no
   longer reads or writes it.
-- Desktop dashboard counts "overdue" as >365 days since last log instead of using
-  `computeUpcomingMaintenance` (the shared hook exists in apps/desktop/src/hooks but is unused).
+- The engine (`upcoming.ts`) rounds day gaps up, so across the autumn DST change `remainingDays` is one too
+  many (`Math.round` would fix it); reminders.ts compensates for its keys and due dates.
 - No iOS sign-in yet (needs an iOS OAuth client and the plugin's `iosUrlScheme`).
 - Sync stalls silently if a device's change file is missing from Drive with no snapshot covering it
   (e.g. files deleted by hand): `engine.ts` stops at the gap and reports nothing.

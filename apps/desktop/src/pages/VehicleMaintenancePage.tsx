@@ -7,6 +7,7 @@ import { LogHistoryList } from "../components/LogHistoryList";
 import { VehicleStatistics, VehicleStatsData } from "../components/VehicleStatistics";
 import { UpdateOdometerPopover } from "../components/UpdateOdometerPopover";
 import { useUnits } from "../hooks/useUnits";
+import { useUpcomingMaintenance } from "../hooks/useUpcomingMaintenance";
 
 // UI Components
 import { Button } from "@/components/ui/button";
@@ -64,14 +65,14 @@ export function VehicleMaintenancePage() {
     [allLogs, thisYear]
   );
 
-  // Check overdue services
-  const overdueCount = serviceTypeSummaries.filter((s) => {
-    if (!s.last_log_date) return false;
-    const daysSince = Math.floor(
-      (Date.now() - new Date(s.last_log_date).getTime()) / 86400000
-    );
-    return daysSince > 365;
-  }).length;
+  // Overdue services, from the shared due-date engine
+  const upcomingItems = useUpcomingMaintenance({
+    vehicle,
+    serviceTypeSummaries,
+    allServiceTypes,
+    distanceUnit: units.unit,
+  });
+  const overdueCount = upcomingItems.filter((item) => item.status === "Overdue").length;
 
   const handleDeleteLog = async (logId: string) => {
     if (!vehicleId) return;

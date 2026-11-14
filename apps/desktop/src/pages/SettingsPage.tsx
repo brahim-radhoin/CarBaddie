@@ -1,7 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAppPreferences } from "../components/AppPreferencesProvider";
 import { useVehicles, useServiceTypes, useExportBackup, useWipeDatabase, useSetPreference } from "../api";
-import { COMMON_CURRENCIES } from "@carbaddie/core";
+import { COMMON_CURRENCIES, getRemindersEnabled, setRemindersEnabled } from "@carbaddie/core";
+import { getRepository } from "../db";
+import { checkRemindersNow } from "../hooks/useReminders";
+import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useUnits } from "../hooks/useUnits";
 import { GoogleDriveSyncSection } from "../components/GoogleDriveSyncSection";
@@ -60,6 +63,22 @@ export function SettingsPage() {
   const currencies = COMMON_CURRENCIES.includes(units.currency as (typeof COMMON_CURRENCIES)[number])
     ? [...COMMON_CURRENCIES]
     : [units.currency, ...COMMON_CURRENCIES];
+
+  // Reminders are a device-local setting (app_settings), not a synced preference.
+  const [remindersOn, setRemindersOn] = useState(true);
+  useEffect(() => {
+    getRepository().then(getRemindersEnabled).then(setRemindersOn).catch(() => undefined);
+  }, []);
+  const handleToggleReminders = async (enabled: boolean) => {
+    setRemindersOn(enabled);
+    try {
+      await setRemindersEnabled(await getRepository(), enabled);
+    } catch {
+      toast.error("Failed to save the reminder setting.");
+      return;
+    }
+    if (enabled) checkRemindersNow().catch((error) => console.warn("Reminder check failed:", error));
+  };
 
   const handleExport = async () => {
     try {
@@ -204,6 +223,23 @@ export function SettingsPage() {
               ))}
             </SelectContent>
           </Select>
+        </div>
+
+        {/* Maintenance reminders (this device only) */}
+        <div className="flex items-center justify-between pt-4 border-t border-border/60">
+          <div>
+            <p className="text-sm font-medium text-foreground">
+              Maintenance reminders
+            </p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              A notification on this computer when a service is due soon or overdue
+            </p>
+          </div>
+          <Switch
+            checked={remindersOn}
+            onCheckedChange={handleToggleReminders}
+            aria-label="Maintenance reminders"
+          />
         </div>
       </div>
 

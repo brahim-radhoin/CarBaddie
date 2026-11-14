@@ -149,7 +149,8 @@ export function computeUpcomingMaintenance<TId extends string | number = Id>({
       if (intervalDays && baseDate) {
         const dueDate = new Date(baseDate);
         dueDate.setDate(dueDate.getDate() + intervalDays);
-        const remainingDays = Math.ceil((dueDate.getTime() - today.getTime()) / MS_PER_DAY);
+        // Both are local midnights; rounding absorbs the hour a DST change adds or removes.
+        const remainingDays = Math.round((dueDate.getTime() - today.getTime()) / MS_PER_DAY);
         byDateInfo = { due: formatDate(dueDate), remainingDays };
         if (remainingDays <= 0) overdueByDate = true;
         else if (remainingDays <= UPCOMING_THRESHOLD_DAYS) upcomingByDate = true;
