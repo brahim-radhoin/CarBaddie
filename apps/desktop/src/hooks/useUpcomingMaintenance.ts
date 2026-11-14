@@ -7,9 +7,10 @@ export function useUpcomingMaintenance({
   vehicle,
   serviceTypeSummaries,
   allServiceTypes,
+  distanceUnit,
 }: Omit<ComputeUpcomingMaintenanceInput, "today">): UpcomingMaintenanceItemData[] {
   return useMemo(
-    () => computeUpcomingMaintenance({ vehicle, serviceTypeSummaries, allServiceTypes }),
-    [vehicle, serviceTypeSummaries, allServiceTypes],
+    () => computeUpcomingMaintenance({ vehicle, serviceTypeSummaries, allServiceTypes, distanceUnit }),
+    [vehicle, serviceTypeSummaries, allServiceTypes, distanceUnit],
   );
 }

@@ -6,6 +6,7 @@ import "react-native-reanimated";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useColorScheme } from "@/components/useColorScheme";
 import { useAutoSync } from "@/src/hooks/useAutoSync";
+import { useReminders } from "@/src/hooks/useReminders";
 
 export { ErrorBoundary } from "expo-router";
 
@@ -66,10 +67,11 @@ export default function RootLayout() {
   return <RootLayoutNav />;
 }
 
-// useAutoSync needs the QueryClient, so it must run in a component rendered
+// useAutoSync and useReminders need the QueryClient, so they must run in a component rendered
 // *inside* QueryClientProvider, not in the component that renders the provider.
 function AutoSync() {
   useAutoSync();
+  useReminders();
   return null;
 }
 

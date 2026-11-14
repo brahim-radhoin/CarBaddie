@@ -15,10 +15,12 @@ import { StartupScreen } from "./components/StartupScreen";
 import { ErrorScreen } from "./components/ErrorScreen";
 import { useDatabaseBootstrap } from "./hooks/useDatabaseBootstrap";
 import { useAutoSync } from "./hooks/useAutoSync";
+import { useReminders } from "./hooks/useReminders";
 
 export default function App() {
   const { status, errorMessage, logs, retry } = useDatabaseBootstrap();
   useAutoSync(status === "running");
+  useReminders(status === "running");
 
   if (status === "starting") {
     return <StartupScreen backendLogs={logs} progress={50} />;

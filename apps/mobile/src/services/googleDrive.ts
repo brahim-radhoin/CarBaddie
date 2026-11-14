@@ -131,9 +131,18 @@ export function setRemoteChangesListener(listener: (() => void) | null): void {
   onRemoteChanges = listener;
 }
 
+const syncListeners = new Set<(result: SyncResult) => void>();
+
+/** Called after every successful sync (reminders re-check when data changed). Returns an unsubscribe. */
+export function addSyncListener(listener: (result: SyncResult) => void): () => void {
+  syncListeners.add(listener);
+  return () => void syncListeners.delete(listener);
+}
+
 export async function syncNow(): Promise<SyncResult> {
   const result = await (await getDatabase()).sync(transport);
   if (result.applied > 0) onRemoteChanges?.();
+  syncListeners.forEach((listener) => listener(result));
   return result;
 }
 

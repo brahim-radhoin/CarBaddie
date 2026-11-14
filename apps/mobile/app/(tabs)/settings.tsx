@@ -36,6 +36,7 @@ import {
   type GoogleDriveStatus,
 } from "@/src/services/googleDrive";
 import * as repo from "@/src/db/repository";
+import { areRemindersEnabled, setRemindersOn } from "@/src/services/reminders";
 import { useQueryClient } from "@tanstack/react-query";
 
 export default function SettingsScreen() {
@@ -114,6 +115,23 @@ export default function SettingsScreen() {
       Alert.alert("Sync Error", e.message || "Failed to sync with Google Drive.");
     } finally {
       setIsSyncing(false);
+    }
+  };
+
+  // Maintenance reminders: a device-local setting.
+  const [remindersOn, setRemindersOnState] = useState(true);
+  useEffect(() => {
+    areRemindersEnabled().then(setRemindersOnState).catch(() => undefined);
+  }, []);
+  const handleToggleReminders = async (value: boolean) => {
+    setRemindersOnState(value);
+    try {
+      const granted = await setRemindersOn(value);
+      if (value && !granted) {
+        Alert.alert("Notifications Off", "Allow notifications for CarBaddie in Android settings to get maintenance reminders.");
+      }
+    } catch (e: any) {
+      Alert.alert("Reminders", e.message || "Failed to update maintenance reminders.");
     }
   };
 
@@ -493,6 +511,21 @@ export default function SettingsScreen() {
                 ))}
               </View>
             </ScrollView>
+          </View>
+
+          {/* Maintenance reminders (this phone only) */}
+          <View style={[styles.prefRow, { borderTopColor: colors.border }]}>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.prefLabel, { color: colors.text }]}>Maintenance Reminders</Text>
+              <Text style={[styles.prefDesc, { color: (colors.text as string) + "77" }]}>
+                A notification when a service is due soon or overdue
+              </Text>
+            </View>
+            <Switch
+              value={remindersOn}
+              onValueChange={handleToggleReminders}
+              trackColor={{ false: "#333", true: colors.primary }}
+            />
           </View>
         </View>
       </View>
