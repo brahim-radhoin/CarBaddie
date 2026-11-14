@@ -1,4 +1,5 @@
-import type { Id, UpcomingMaintenanceItemData } from "../types";
+import { formatDistance } from "../units.ts";
+import type { DistanceUnit, Id, UpcomingMaintenanceItemData } from "../types";
 
 /** A service becomes "Upcoming" this many days before its due date. */
 export const UPCOMING_THRESHOLD_DAYS = 30;
@@ -59,6 +60,8 @@ export interface ComputeUpcomingMaintenanceInput<TId extends string | number = I
   allServiceTypes: EngineServiceType<TId>[];
   /** The day to compute against. Defaults to now; tests pass a fixed date. */
   today?: Date;
+  /** Unit for distances in messages (computation is always in km). Default km. */
+  distanceUnit?: DistanceUnit;
 }
 
 /**
@@ -77,7 +80,9 @@ export function computeUpcomingMaintenance<TId extends string | number = Id>({
   serviceTypeSummaries,
   allServiceTypes,
   today: todayInput,
+  distanceUnit = "km",
 }: ComputeUpcomingMaintenanceInput<TId>): UpcomingMaintenanceItemData<TId>[] {
+  const dist = (km: number) => formatDistance(km, distanceUnit);
   if (!vehicle || !allServiceTypes.length) {
     return [];
   }
@@ -162,26 +167,26 @@ export function computeUpcomingMaintenance<TId extends string | number = Id>({
       } else if (overdueByDate || overdueByMileage) {
         status = "Overdue";
         if (overdueByDate && overdueByMileage) {
-          message = `Overdue by ${Math.abs(byDateInfo!.remainingDays)} days and ${Math.abs(byMileageInfo!.remainingKm).toLocaleString()} km`;
+          message = `Overdue by ${Math.abs(byDateInfo!.remainingDays)} days and ${dist(Math.abs(byMileageInfo!.remainingKm))}`;
         } else if (overdueByDate) {
           message = `Overdue by ${Math.abs(byDateInfo!.remainingDays)} days`;
         } else {
-          message = `Overdue by ${Math.abs(byMileageInfo!.remainingKm).toLocaleString()} km`;
+          message = `Overdue by ${dist(Math.abs(byMileageInfo!.remainingKm))}`;
         }
       } else if (upcomingByDate || upcomingByMileage) {
         status = "Upcoming";
         if (upcomingByDate && upcomingByMileage) {
-          message = `Due in ${byDateInfo!.remainingDays} days or ${byMileageInfo!.remainingKm.toLocaleString()} km`;
+          message = `Due in ${byDateInfo!.remainingDays} days or ${dist(byMileageInfo!.remainingKm)}`;
         } else if (upcomingByDate) {
           message = `Due in ${byDateInfo!.remainingDays} days`;
         } else {
-          message = `Due in ${byMileageInfo!.remainingKm.toLocaleString()} km`;
+          message = `Due in ${dist(byMileageInfo!.remainingKm)}`;
         }
       } else {
         status = "OK";
         const dueParts: string[] = [];
         if (byDateInfo) dueParts.push(`in ${byDateInfo.remainingDays} days`);
-        if (byMileageInfo) dueParts.push(`in ${byMileageInfo.remainingKm.toLocaleString()} km`);
+        if (byMileageInfo) dueParts.push(`in ${dist(byMileageInfo.remainingKm)}`);
         message = dueParts.length ? `Next due ${dueParts.join(" or ")}` : "Up to date";
       }
 

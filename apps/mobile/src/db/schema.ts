@@ -1,6 +1,13 @@
 import * as SQLite from "expo-sqlite";
 import { getRandomBytes } from "expo-crypto";
-import { openRepository, setRandomSource, type OpenedDatabase, type Repository, type SqlDriver } from "@carbaddie/core";
+import {
+  CURRENCY_BY_SYMBOL,
+  openRepository,
+  setRandomSource,
+  type OpenedDatabase,
+  type Repository,
+  type SqlDriver,
+} from "@carbaddie/core";
 
 const DB_NAME = "car_baddie.db";
 
@@ -25,13 +32,29 @@ export function getDatabase(): Promise<OpenedDatabase> {
     _db = (async () => {
       const db = await SQLite.openDatabaseAsync(DB_NAME);
       await db.execAsync("PRAGMA journal_mode = WAL;");
-      return openRepository(asSqlDriver(db));
+      const opened = await openRepository(asSqlDriver(db));
+      await adoptLocalPreferences(opened.repo);
+      return opened;
     })().catch((error) => {
       _db = null; // let the next call retry instead of caching the failure
       throw error;
     });
   }
   return _db;
+}
+
+/**
+ * Currency and distance unit used to be per-device settings; they are synced preferences now.
+ * An old setting is taken over unless a value already came from sync.
+ */
+async function adoptLocalPreferences(repo: Repository): Promise<void> {
+  const symbol = await repo.getSetting("pref_currency_symbol");
+  const currency = symbol ? CURRENCY_BY_SYMBOL[symbol] : undefined;
+  if (currency) await repo.setPreference("currency", currency, { ifUnset: true });
+  const unit = await repo.getSetting("pref_odometer_unit");
+  if (unit === "km" || unit === "mi") await repo.setPreference("distance_unit", unit, { ifUnset: true });
+  await repo.removeSetting("pref_currency_symbol");
+  await repo.removeSetting("pref_odometer_unit");
 }
 
 export async function getRepository(): Promise<Repository> {

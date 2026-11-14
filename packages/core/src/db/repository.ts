@@ -10,7 +10,15 @@ import { encodeBackup } from "../backup/format.ts";
 import { intervalOverrideId } from "../ids/uuid.ts";
 import { builtinServiceTypeId, findBuiltinServiceTypeByName } from "../service-types/builtin.ts";
 import { vehicleIdentityKey } from "../vehicles/identity.ts";
-import { normaliseVin, validateIntervalOverride, validateServiceType, validateVehicle } from "../validation.ts";
+import {
+  normaliseVin,
+  validateIntervalOverride,
+  validateMaintenanceLog,
+  validatePreference,
+  validateServiceType,
+  validateVehicle,
+} from "../validation.ts";
+import { DEFAULT_PREFERENCES } from "../units.ts";
 import { seedBuiltinServiceTypes } from "./seed.ts";
 import { transaction } from "./transaction.ts";
 import type { SqlDriver, SqlValue, WriteContext } from "./driver";
@@ -27,6 +35,7 @@ import type {
   MaintenanceLogRead,
   MaintenanceLogUpdate,
   MaintenanceSummary,
+  Preferences,
   RestorePlan,
   ServiceTypeCreate,
   ServiceTypeLogSummary,
@@ -136,7 +145,7 @@ export function createRepository(db: SqlDriver, w: WriteContext) {
       service_type_id: row.service_type_id,
       date: row.date,
       mileage: row.mileage,
-      cost: row.cost,
+      cost_cents: row.cost_cents,
       notes: row.notes,
       service_type: stRow ? await buildServiceType(stRow, false) : null,
       custom_field_values: values,
@@ -317,9 +326,9 @@ export function createRepository(db: SqlDriver, w: WriteContext) {
   async function insertLog(vehicleId: Id, data: MaintenanceLogCreate): Promise<Id> {
     const id = w.newId();
     await run(
-      `INSERT INTO maintenance_logs (id, vehicle_id, service_type_id, date, mileage, cost, notes, updated_at, deleted_at, device_id)
+      `INSERT INTO maintenance_logs (id, vehicle_id, service_type_id, date, mileage, cost_cents, notes, updated_at, deleted_at, device_id)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)`,
-      [id, vehicleId, data.service_type_id ?? null, data.date, data.mileage, data.cost, data.notes ?? null, w.stamp(), w.deviceId],
+      [id, vehicleId, data.service_type_id ?? null, data.date, data.mileage, data.cost_cents, data.notes ?? null, w.stamp(), w.deviceId],
     );
     for (const cfv of data.custom_field_values ?? []) await insertFieldValue(id, cfv);
     return id;
@@ -459,7 +468,7 @@ export function createRepository(db: SqlDriver, w: WriteContext) {
         await insertLog(vehicleId, {
           date: log.date || new Date().toISOString().slice(0, 10),
           mileage: log.mileage,
-          cost: log.cost,
+          cost_cents: Math.round(log.cost * 100),
           notes: log.notes,
           service_type_id: log.service_type_id != null ? (serviceTypeIds.get(log.service_type_id) ?? null) : null,
           custom_field_values: log.custom_field_values.flatMap((cfv) => {
@@ -608,17 +617,19 @@ export function createRepository(db: SqlDriver, w: WriteContext) {
     },
 
     async createMaintenanceLog(vehicleId: Id, data: MaintenanceLogCreate): Promise<MaintenanceLogRead> {
+      validateMaintenanceLog(data);
       const id = await tx(() => insertLog(vehicleId, data));
       return (await repo.getLogById(id))!;
     },
 
     async updateMaintenanceLog(logId: Id, data: MaintenanceLogUpdate): Promise<MaintenanceLogRead> {
+      validateMaintenanceLog(data, true);
       await tx(async () => {
         const sets: string[] = [];
         const vals: SqlValue[] = [];
         if (data.date !== undefined) { sets.push("date = ?"); vals.push(data.date); }
         if (data.mileage !== undefined) { sets.push("mileage = ?"); vals.push(data.mileage); }
-        if (data.cost !== undefined) { sets.push("cost = ?"); vals.push(data.cost); }
+        if (data.cost_cents !== undefined) { sets.push("cost_cents = ?"); vals.push(data.cost_cents); }
         if (data.notes !== undefined) { sets.push("notes = ?"); vals.push(data.notes); }
         if (data.service_type_id !== undefined) { sets.push("service_type_id = ?"); vals.push(data.service_type_id); }
         if (sets.length > 0) {
@@ -668,7 +679,8 @@ export function createRepository(db: SqlDriver, w: WriteContext) {
     // --- Summaries ---
     async getMaintenanceSummary(vehicleId: Id, today: Date = new Date()): Promise<MaintenanceSummary> {
       const row = await first(
-        `SELECT COUNT(*) AS total_logs, COALESCE(SUM(cost), 0) AS total_cost, COALESCE(AVG(cost), 0) AS average_cost,
+        `SELECT COUNT(*) AS total_logs, COALESCE(SUM(cost_cents), 0) AS total_cost_cents,
+                CAST(ROUND(COALESCE(AVG(cost_cents), 0)) AS INTEGER) AS average_cost_cents,
                 MAX(date) AS last_service_date, MAX(mileage) AS last_mileage
          FROM maintenance_logs WHERE vehicle_id = ? AND deleted_at IS NULL`,
         [vehicleId],
@@ -679,8 +691,8 @@ export function createRepository(db: SqlDriver, w: WriteContext) {
       return {
         vehicle_id: vehicleId,
         total_logs: row?.total_logs ?? 0,
-        total_cost: row?.total_cost ?? 0,
-        average_cost: row?.average_cost ?? 0,
+        total_cost_cents: row?.total_cost_cents ?? 0,
+        average_cost_cents: row?.average_cost_cents ?? 0,
         last_service_date: row?.last_service_date ?? null,
         days_since_last_service: daysSince,
         last_mileage: row?.last_mileage ?? null,
@@ -690,7 +702,7 @@ export function createRepository(db: SqlDriver, w: WriteContext) {
     getServiceTypeSummaries: (vehicleId: Id): Promise<ServiceTypeLogSummary[]> =>
       all<ServiceTypeLogSummary>(
         `SELECT ml.service_type_id, st.name AS service_type_name, COUNT(*) AS log_count, MAX(ml.date) AS last_log_date,
-                MAX(ml.mileage) AS last_log_mileage, COALESCE(SUM(ml.cost), 0) AS total_cost_for_service_type
+                MAX(ml.mileage) AS last_log_mileage, COALESCE(SUM(ml.cost_cents), 0) AS total_cost_cents
          FROM maintenance_logs ml
          JOIN service_types st ON ml.service_type_id = st.id AND st.deleted_at IS NULL
          WHERE ml.vehicle_id = ? AND ml.service_type_id IS NOT NULL AND ml.deleted_at IS NULL
@@ -747,6 +759,26 @@ export function createRepository(db: SqlDriver, w: WriteContext) {
     /** Imports a parsed backup according to the plan, in one transaction. */
     importBackup: (backup: FullBackupData, plan: RestorePlan): Promise<void> =>
       tx(() => importBackupInTransaction(backup, plan)),
+
+    // --- Preferences (synced) ---
+    async getPreferences(): Promise<Preferences> {
+      const rows = await all<{ key: string; value: string }>("SELECT key, value FROM preferences WHERE deleted_at IS NULL");
+      const stored = Object.fromEntries(rows.map((r) => [r.key, r.value]));
+      return {
+        currency: stored.currency ?? DEFAULT_PREFERENCES.currency,
+        distance_unit: stored.distance_unit === "mi" ? "mi" : DEFAULT_PREFERENCES.distance_unit,
+      };
+    },
+
+    /** Only sets it if the device has no value yet (adopting an old per-device setting). */
+    async setPreference<K extends keyof Preferences>(key: K, value: Preferences[K], opts: { ifUnset?: boolean } = {}): Promise<void> {
+      validatePreference(key, value);
+      await run(
+        `INSERT INTO preferences (key, value, updated_at, deleted_at, device_id) VALUES (?, ?, ?, NULL, ?)
+         ON CONFLICT(key) DO ${opts.ifUnset ? "NOTHING" : "UPDATE SET value = excluded.value, deleted_at = NULL, updated_at = excluded.updated_at, device_id = excluded.device_id"}`,
+        [key, value, w.stamp(), w.deviceId],
+      );
+    },
 
     // --- Device-local settings (not synced) ---
     async getSetting(key: string): Promise<string | null> {

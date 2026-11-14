@@ -6,11 +6,13 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useState, useMemo } from "react";
 import { Text } from "@/components/Themed";
 import type { ServiceTypeRead } from "@/src/types";
+import { useUnits } from "@/src/hooks/useUnits";
 
 export default function ServiceTypesScreen() {
   const queryClient = useQueryClient();
   const [isSeeding, setIsSeeding] = useState(false);
   const [search, setSearch] = useState("");
+  const units = useUnits();
 
   const handleSeedDefaults = async () => {
     try {
@@ -59,7 +61,7 @@ export default function ServiceTypesScreen() {
         {item.recommended_interval_km && (
           <View style={[styles.badge, { backgroundColor: (colors.primary as string) + "20" }]}>
             <Text style={[styles.badgeText, { color: colors.primary }]}>
-              {item.recommended_interval_km.toLocaleString()} km
+              {units.distance(item.recommended_interval_km)}
             </Text>
           </View>
         )}

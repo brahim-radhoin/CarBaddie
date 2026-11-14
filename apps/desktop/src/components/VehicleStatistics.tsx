@@ -19,14 +19,15 @@ import {
 } from "recharts";
 
 import { Gauge, Calendar, DollarSign, Activity } from "lucide-react";
+import { useUnits } from "../hooks/useUnits";
 
 export interface VehicleStatsData {
   currentMileage: number;
   lastServiceDate: string | null;
   daysSinceLastSvc: number | null;
   totalLogs: number;
-  totalCost: number;
-  averageCostPerService: number;
+  totalCostCents: number;
+  averageCostCentsPerService: number;
   vehicleAge: number | null;
 }
 
@@ -54,12 +55,13 @@ export function VehicleStatistics({
   serviceTypeSummaries,
   allLogs,
 }: VehicleStatisticsProps) {
-  // 1. Cost per Km
-  const costPerKm = useMemo(() => {
+  const units = useUnits();
+  // 1. Cost per km / mile, in cents
+  const costPerDistance = useMemo(() => {
     if (allLogs.length === 0 || !vehicle.initial_mileage) return 0;
-    const distance = vehicleStats.currentMileage - vehicle.initial_mileage;
-    return distance > 0 ? vehicleStats.totalCost / distance : 0;
-  }, [allLogs, vehicle, vehicleStats]);
+    const distance = units.toDisplay(vehicleStats.currentMileage - vehicle.initial_mileage);
+    return distance > 0 ? Math.round(vehicleStats.totalCostCents / distance) : 0;
+  }, [allLogs, vehicle, vehicleStats, units]);
 
   // 2. Cumulative Spend Timeline
   const spendTimelineData = useMemo(() => {
@@ -67,10 +69,10 @@ export function VehicleStatistics({
     const sorted = [...allLogs].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     let cumulative = 0;
     return sorted.map((log) => {
-      cumulative += log.cost ?? 0;
+      cumulative += log.cost_cents;
       return {
         date: log.date,
-        cost: log.cost ?? 0,
+        cost: log.cost_cents,
         cumulative,
       };
     });
@@ -79,10 +81,10 @@ export function VehicleStatistics({
   // 3. Category Distribution Data
   const categoryChartData = useMemo(() => {
     return serviceTypeSummaries
-      .filter((s) => (s.total_cost_for_service_type ?? 0) > 0)
+      .filter((s) => s.total_cost_cents > 0)
       .map((s) => ({
         name: s.service_type_name,
-        value: s.total_cost_for_service_type ?? 0,
+        value: s.total_cost_cents,
         count: s.log_count,
       }))
       .sort((a, b) => b.value - a.value)
@@ -100,11 +102,11 @@ export function VehicleStatistics({
           </div>
           <div className="mt-2">
             <div className="font-mono text-xl font-medium text-foreground tracking-tight">
-              {vehicleStats.currentMileage.toLocaleString()}
-              <span className="text-xs font-normal text-muted-foreground ml-1">km</span>
+              {units.toDisplay(vehicleStats.currentMileage).toLocaleString()}
+              <span className="text-xs font-normal text-muted-foreground ml-1">{units.unit}</span>
             </div>
             <p className="text-[11px] text-muted-foreground mt-0.5">
-              +{Math.max(0, vehicleStats.currentMileage - (vehicle.initial_mileage ?? 0)).toLocaleString()} km logged
+              +{units.distance(Math.max(0, vehicleStats.currentMileage - (vehicle.initial_mileage ?? 0)))} logged
             </p>
           </div>
         </div>
@@ -116,10 +118,10 @@ export function VehicleStatistics({
           </div>
           <div className="mt-2">
             <div className="font-mono text-xl font-medium text-foreground tracking-tight">
-              ${vehicleStats.totalCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              {units.money(vehicleStats.totalCostCents)}
             </div>
             <p className="text-[11px] text-muted-foreground mt-0.5 font-mono">
-              ${costPerKm > 0 ? costPerKm.toFixed(2) : "0.00"}/km
+              {units.money(costPerDistance)}/{units.unit}
             </p>
           </div>
         </div>
@@ -135,7 +137,7 @@ export function VehicleStatistics({
               <span className="text-xs font-normal text-muted-foreground ml-1">records</span>
             </div>
             <p className="text-[11px] text-muted-foreground mt-0.5 font-mono">
-              avg ${vehicleStats.averageCostPerService.toFixed(2)}/svc
+              avg {units.money(vehicleStats.averageCostCentsPerService)}/svc
             </p>
           </div>
         </div>
@@ -181,7 +183,7 @@ export function VehicleStatistics({
                     tick={{ fontSize: 10 }}
                     tickLine={false}
                     axisLine={false}
-                    tickFormatter={(val) => `$${val}`}
+                    tickFormatter={(val) => units.money(Number(val))}
                   />
                   <RechartsTooltip
                     contentStyle={{
@@ -190,7 +192,7 @@ export function VehicleStatistics({
                       fontSize: "12px",
                       borderRadius: "6px",
                     }}
-                    formatter={(val) => [`$${Number(val ?? 0).toFixed(2)}`, "Cumulative"]}
+                    formatter={(val) => [units.money(Number(val ?? 0)), "Cumulative"]}
                   />
                   <Line
                     type="monotone"
@@ -235,7 +237,7 @@ export function VehicleStatistics({
                         fontSize: "12px",
                         borderRadius: "6px",
                       }}
-                      formatter={(val) => [`$${Number(val ?? 0).toFixed(2)}`, "Cost"]}
+                      formatter={(val) => [units.money(Number(val ?? 0)), "Cost"]}
                     />
                   </PieChart>
                 </ResponsiveContainer>
@@ -253,7 +255,7 @@ export function VehicleStatistics({
                       <span className="truncate text-muted-foreground text-[11px]">{entry.name}</span>
                     </div>
                     <span className="font-mono text-[11px] font-medium text-foreground ml-2">
-                      ${entry.value.toFixed(0)}
+                      {units.money(entry.value)}
                     </span>
                   </div>
                 ))}

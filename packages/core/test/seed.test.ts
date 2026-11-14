@@ -97,7 +97,7 @@ test("an existing field with a default field's name moves to the built-in id wit
   );
   const v = await repo.createVehicle({ make: "VW", model: "Golf" });
   const log = await repo.createMaintenanceLog(v.id, {
-    date: "2025-01-01", mileage: 1, cost: 0, service_type_id: cabin,
+    date: "2025-01-01", mileage: 1, cost_cents: 0, service_type_id: cabin,
     custom_field_values: [{ field_id: "old-field", value: "Mann" }],
   });
 
@@ -122,7 +122,7 @@ test("legacy desktop service types merge into their built-ins", async () => {
   const unusedPads = await repo.createServiceType({ name: "Brake Pad Replacement", fields: [{ name: "Position", field_type: "text" }] });
   const v = await repo.createVehicle({ make: "Opel", model: "Astra" });
   const log = await repo.createMaintenanceLog(v.id, {
-    date: "2025-02-01", mileage: 1000, cost: 40, service_type_id: legacy.id,
+    date: "2025-02-01", mileage: 1000, cost_cents: 4000, service_type_id: legacy.id,
     custom_field_values: legacy.fields.map((f) => ({ field_id: f.id, value: f.name === "Oil Brand" ? "Total" : "Bosch" })),
   });
   await repo.upsertIntervalOverride(v.id, legacy.id, { override_interval_km: 5000 });
@@ -153,7 +153,7 @@ test("a legacy type that is still used and has no built-in to go to is kept", as
   const { db, repo, deviceId } = await device();
   const pads = await repo.createServiceType({ name: "Brake Pad Replacement", fields: [] });
   const v = await repo.createVehicle({ make: "Fiat", model: "Punto" });
-  await repo.createMaintenanceLog(v.id, { date: "2025-03-01", mileage: 1, cost: 0, service_type_id: pads.id });
+  await repo.createMaintenanceLog(v.id, { date: "2025-03-01", mileage: 1, cost_cents: 0, service_type_id: pads.id });
   assert.equal(await mergeLegacyServiceTypes(db, testContext(deviceId, wall + 3_000_000)), 0);
   assert.equal((await repo.getServiceTypeById(pads.id))?.name, "Brake Pad Replacement");
 });

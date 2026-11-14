@@ -3,11 +3,13 @@ import { useRouter, useTheme } from "expo-router";
 import { useAddVehicle } from "@/src/hooks/useDatabase";
 import { Text } from "@/components/Themed";
 import { useState } from "react";
+import { useUnits } from "@/src/hooks/useUnits";
 
 export default function AddVehicleScreen() {
   const { colors } = useTheme();
   const router = useRouter();
   const addMutation = useAddVehicle();
+  const units = useUnits();
 
   const [make, setMake] = useState("");
   const [model, setModel] = useState("");
@@ -31,7 +33,7 @@ export default function AddVehicleScreen() {
         model: model.trim(),
         year: year ? Number(year) : undefined,
         vin: vin.trim() || null,
-        initial_mileage: mileage ? Number(mileage) : undefined,
+        initial_mileage: mileage ? units.fromDisplay(Number(mileage)) : undefined,
         acquisition_date: acquisitionDate.trim() || null,
       },
       { onSuccess: () => router.back() }
@@ -52,7 +54,7 @@ export default function AddVehicleScreen() {
       <Text style={[styles.label, { color: colors.text }]}>VIN</Text>
       <TextInput style={inputStyle} value={vin} onChangeText={setVin} placeholder="Optional VIN" placeholderTextColor={(colors.text as string) + "55"} autoCapitalize="characters" />
 
-      <Text style={[styles.label, { color: colors.text }]}>Initial Mileage (km)</Text>
+      <Text style={[styles.label, { color: colors.text }]}>Initial Mileage ({units.unit})</Text>
       <TextInput style={inputStyle} value={mileage} onChangeText={setMileage} placeholder="e.g. 50000" placeholderTextColor={(colors.text as string) + "55"} keyboardType="numeric" />
 
       <View style={styles.dateHeaderRow}>

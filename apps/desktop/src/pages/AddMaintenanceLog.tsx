@@ -9,6 +9,8 @@ import {
   useUpdateMaintenanceLog,
 } from "../api";
 import { MaintenanceLogCreate, CustomFieldValueCreate } from "../types";
+import { centsToInput, parseMoney } from "@carbaddie/core";
+import { useUnits } from "../hooks/useUnits";
 import { toast } from "sonner";
 import { Checkbox } from "@/components/ui/checkbox";
 
@@ -35,6 +37,7 @@ export function AddMaintenanceLogPage() {
   const { data: logToEdit } = useMaintenanceLog(logId);
   const addMutation = useAddMaintenanceLog();
   const updateMutation = useUpdateMaintenanceLog();
+  const units = useUnits();
 
   // --- Local UI State ---
   const [serviceTypeId, setServiceTypeId] = useState<string>(() => (isEditMode ? "" : searchParams.get("service_type_id") || ""));
@@ -59,15 +62,15 @@ export function AddMaintenanceLogPage() {
 
     setServiceTypeId(logToEdit.service_type?.id.toString() || "");
     setDate(logToEdit.date);
-    setMileage(logToEdit.mileage.toString());
-    setCost(logToEdit.cost.toString());
+    setMileage(units.toDisplay(logToEdit.mileage).toString());
+    setCost(centsToInput(logToEdit.cost_cents));
     setNotes(logToEdit.notes || "");
     const initialCustomValues: Record<string, string> = {};
     logToEdit.custom_field_values.forEach((cfv) => {
       initialCustomValues[String(cfv.field_id)] = cfv.value;
     });
     setCustomFieldValues(initialCustomValues);
-  }, [isEditMode, logToEdit, serviceTypes]);
+  }, [isEditMode, logToEdit, serviceTypes, units]);
 
   const handleServiceTypeChange = (newId: string) => {
     setServiceTypeId(newId);
@@ -89,11 +92,18 @@ export function AddMaintenanceLogPage() {
         value: String(value),
       }));
 
+    const costCents = parseMoney(cost);
+    if (costCents === null) {
+      toast.error("Enter the cost as an amount, e.g. 45.90");
+      return;
+    }
+    const mileageKm = units.fromDisplay(parseInt(mileage, 10));
+
     const payload: MaintenanceLogCreate = {
       service_type_id: serviceTypeId,
       date,
-      mileage: parseInt(mileage, 10),
-      cost: cost ? parseFloat(cost) : 0,
+      mileage: mileageKm,
+      cost_cents: costCents,
       notes: notes || undefined,
       custom_field_values: customFieldsPayload,
     };
@@ -120,8 +130,8 @@ export function AddMaintenanceLogPage() {
                     logData: {
                       service_type_id: sugId,
                       date,
-                      mileage: parseInt(mileage, 10),
-                      cost: 0,
+                      mileage: mileageKm,
+                      cost_cents: 0,
                       notes: `Co-performed with ${selectedServiceType?.name ?? "service"}`,
                       custom_field_values: [],
                     },
@@ -240,7 +250,7 @@ export function AddMaintenanceLogPage() {
                 Recommended Co-Service Items
               </div>
               <p className="text-[11px] text-muted-foreground">
-                Commonly inspected or replaced alongside {selectedServiceType.name}. Select to log at $0 cost:
+                Commonly inspected or replaced alongside {selectedServiceType.name}. Select to log them at no cost:
               </p>
               <div className="space-y-1.5 pt-1">
                 {selectedServiceType.suggestions.map((sugId) => {
@@ -267,7 +277,7 @@ export function AddMaintenanceLogPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label htmlFor="mileage" className="text-xs font-medium text-foreground">
-                Odometer Reading (km) <span className="text-destructive">*</span>
+                Odometer Reading ({units.unit}) <span className="text-destructive">*</span>
               </Label>
               <Input
                 id="mileage"
@@ -283,7 +293,7 @@ export function AddMaintenanceLogPage() {
 
             <div className="space-y-1.5">
               <Label htmlFor="cost" className="text-xs font-medium text-foreground">
-                Cost ($)
+                Cost ({units.currency})
               </Label>
               <Input
                 id="cost"

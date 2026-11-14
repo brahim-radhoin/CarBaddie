@@ -40,7 +40,7 @@ test("editing a service type archives removed fields and keeps their values", as
   const log = await repo.createMaintenanceLog(v.id, {
     date: "2025-06-01",
     mileage: 1000,
-    cost: 50,
+    cost_cents: 5000,
     service_type_id: st.id,
     custom_field_values: [
       { field_id: wax.id, value: "Carnauba" },
@@ -86,7 +86,7 @@ test("deletes are tombstones that cascade like the old foreign keys", async () =
   const { db, repo } = await freshRepo();
   const oil = builtinServiceTypeId("oil-change");
   const v = await repo.createVehicle({ make: "Honda", model: "Civic" });
-  const log = await repo.createMaintenanceLog(v.id, { date: "2025-01-01", mileage: 5, cost: 1, service_type_id: oil });
+  const log = await repo.createMaintenanceLog(v.id, { date: "2025-01-01", mileage: 5, cost_cents: 100, service_type_id: oil });
   await repo.upsertIntervalOverride(v.id, oil, { override_interval_km: 5000 });
 
   await repo.deleteServiceType(oil);
@@ -134,11 +134,11 @@ test("a backup exported by one device imports into another", async () => {
   const a = await freshRepo();
   const v = await a.repo.createVehicle({ make: "Toyota", model: "Corolla", vin: "JTDBR32E720012345", initial_mileage: 100 });
   const oil = builtinServiceTypeId("oil-change");
-  await a.repo.createMaintenanceLog(v.id, { date: "2025-06-01", mileage: 900, cost: 79.5, service_type_id: oil });
+  await a.repo.createMaintenanceLog(v.id, { date: "2025-06-01", mileage: 900, cost_cents: 7950, service_type_id: oil });
   await a.repo.upsertIntervalOverride(v.id, oil, { override_interval_km: 10000 });
   const custom = await a.repo.createServiceType({ name: "Detailing", fields: [{ name: "Wax", field_type: "text" }] });
   await a.repo.createMaintenanceLog(v.id, {
-    date: "2025-07-01", mileage: 950, cost: 40, service_type_id: custom.id,
+    date: "2025-07-01", mileage: 950, cost_cents: 4000, service_type_id: custom.id,
     custom_field_values: [{ field_id: custom.fields[0].id, value: "Carnauba" }],
   });
 

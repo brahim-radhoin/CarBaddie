@@ -37,7 +37,7 @@ function log(id: number, date: string, mileage: number, serviceTypeId: number): 
     vehicle_id: "1",
     date,
     mileage,
-    cost: 0,
+    cost_cents: 0,
     notes: null,
     service_type_id: String(serviceTypeId),
     service_type: null,
@@ -73,7 +73,7 @@ function summary(serviceTypeId: number, date: string | null, mileage: number | n
     log_count: 1,
     last_log_date: date,
     last_log_mileage: mileage,
-    total_cost_for_service_type: 0,
+    total_cost_cents: 0,
   };
 }
 

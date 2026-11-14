@@ -94,7 +94,7 @@ test(
     assert.equal(types.find((t) => t.slug === "oil-change").id, oil);
 
     const logs = await db.all<any>(
-      `SELECT l.notes, l.cost, l.mileage, v.make, st.name AS st FROM maintenance_logs l
+      `SELECT l.notes, l.cost_cents, l.mileage, v.make, st.name AS st FROM maintenance_logs l
        JOIN vehicles v ON v.id = l.vehicle_id LEFT JOIN service_types st ON st.id = l.service_type_id ORDER BY l.date`,
     );
     assert.deepEqual(
@@ -107,7 +107,7 @@ test(
       ],
       "the log of a missing vehicle is dropped; a missing service type becomes NULL",
     );
-    assert.equal(logs[0].cost, 79.5);
+    assert.equal(logs[0].cost_cents, 7950, "v5 turns 79.50 into 7950 cents");
 
     const values = await db.all<any>(
       `SELECT f.name, f.unit, f.required, f.default_value, f.archived_at, c.value FROM custom_field_values c

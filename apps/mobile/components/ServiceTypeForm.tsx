@@ -10,6 +10,7 @@ import {
 } from "@/src/hooks/useDatabase";
 import { Text } from "@/components/Themed";
 import type { CustomFieldCreate } from "@/src/types";
+import { useUnits } from "@/src/hooks/useUnits";
 
 interface FormField extends CustomFieldCreate {
   _key: string;
@@ -32,6 +33,7 @@ export default function ServiceTypeForm({ serviceTypeId }: { serviceTypeId?: str
   const addMutation = useAddServiceType();
   const updateMutation = useUpdateServiceType();
   const deleteMutation = useDeleteServiceType();
+  const units = useUnits();
 
   const [name, setName] = useState("");
   const [intervalKm, setIntervalKm] = useState("");
@@ -43,7 +45,7 @@ export default function ServiceTypeForm({ serviceTypeId }: { serviceTypeId?: str
   useEffect(() => {
     if (existing) {
       setName(existing.name || "");
-      setIntervalKm(existing.recommended_interval_km != null ? String(existing.recommended_interval_km) : "");
+      setIntervalKm(existing.recommended_interval_km != null ? String(units.toDisplay(existing.recommended_interval_km)) : "");
       setIntervalDays(existing.recommended_interval_days != null ? String(existing.recommended_interval_days) : "");
       setFields(
         (existing.fields || []).map((f) => ({
@@ -57,7 +59,7 @@ export default function ServiceTypeForm({ serviceTypeId }: { serviceTypeId?: str
       setResets(existing.resets || []);
       setSuggestions(existing.suggestions || []);
     }
-  }, [existing]);
+  }, [existing, units]);
 
   const inputStyle = [
     styles.input,
@@ -104,7 +106,7 @@ export default function ServiceTypeForm({ serviceTypeId }: { serviceTypeId?: str
 
     const payload = {
       name: name.trim(),
-      recommended_interval_km: intervalKm ? Number(intervalKm) : undefined,
+      recommended_interval_km: intervalKm ? units.fromDisplay(Number(intervalKm)) : undefined,
       recommended_interval_days: intervalDays ? Number(intervalDays) : undefined,
       fields: cleanedFields,
       resets,
@@ -181,7 +183,7 @@ export default function ServiceTypeForm({ serviceTypeId }: { serviceTypeId?: str
       {/* Interval Targets */}
       <View style={styles.row}>
         <View style={styles.halfCol}>
-          <Text style={[styles.label, { color: colors.text }]}>Interval (km)</Text>
+          <Text style={[styles.label, { color: colors.text }]}>Interval ({units.unit})</Text>
           <TextInput
             style={inputStyle}
             value={intervalKm}

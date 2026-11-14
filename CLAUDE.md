@@ -31,6 +31,11 @@ CI (.github/workflows/ci.yml): frozen install, typecheck, core tests.
   adds missing ones (deleted ones stay deleted) and stamps them `SEED_STAMP` (older than any real write,
   so a fresh device's seed never overrides an edit or delete synced from elsewhere). `db/legacy.ts` merges
   the old desktop's duplicate types into built-ins once per device (`service_types.legacy_merged`).
+- Money and distance (`packages/core/src/units.ts`): costs are integer hundredths (`cost_cents`, `*_cents`),
+  distances are km everywhere in storage and the engine. One synced `preferences` table holds `currency`
+  (ISO code) and `distance_unit` (km|mi); apps show/parse through `useUnits()` (each app's src/hooks) and
+  convert typed distances with `fromDisplay` before saving. Sync upgrades rows from older-schema files
+  (`sync/upgrade.ts`); a new column rename needs a case there.
 - Backup/Drive JSON keeps file-local integer ids (`packages/core/src/backup/format.ts`, zod), compatible with
   files from older app versions; importers always create fresh local ids.
 - Core source files must not have runtime imports between each other unless they use a `.ts`
@@ -76,9 +81,12 @@ its connection pool can't keep BEGIN/COMMIT on one connection).
    config plugin; Play services refreshes tokens, nothing stored), `expo-dev-client`; needs an EAS
    development build, not Expo Go. Its Android OAuth client must be in the same Cloud project as the
    desktop client (appDataFolder is per project). Mobile code is typechecked and bundles; untested on a phone.
-6. Domain upgrades: garage visits with multiple service items (`service_events` + items),
-   first-class `odometer_readings`, money as integer cents + currency, km canonical with display
-   units, local notifications from the engine.
+6. Domain upgrades, one at a time:
+   a. DONE — money as integer cents with one synced currency, km canonical with km/mi display
+      (migration v5: `maintenance_logs.cost_cents`, `preferences` table; old per-device currency
+      symbol / unit settings are adopted once). Verified on a copy of the real DB (costs exact).
+   b. NEXT candidates: first-class `odometer_readings`; garage visits with multiple service items
+      (`service_events` + items); local notifications from the engine.
 
 ## Known open issues
 

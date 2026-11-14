@@ -23,7 +23,10 @@ import type { FullBackupData } from "@/src/types";
 import {
   useVehicles,
   useServiceTypes,
+  useSetPreference,
 } from "@/src/hooks/useDatabase";
+import { useUnits } from "@/src/hooks/useUnits";
+import { COMMON_CURRENCIES } from "@carbaddie/core";
 import {
   getGoogleDriveStatus,
   disconnectGoogleDrive,
@@ -55,30 +58,14 @@ export default function SettingsScreen() {
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
 
-  // App preferences
-  const [odometerUnit, setOdometerUnit] = useState<"km" | "mi">("km");
-  const [currencySymbol, setCurrencySymbol] = useState<string>("$");
-
-  const loadPreferences = async () => {
-    try {
-      const unit = await repo.getSetting("pref_odometer_unit");
-      if (unit === "mi" || unit === "km") setOdometerUnit(unit);
-      const curr = await repo.getSetting("pref_currency_symbol");
-      if (curr) setCurrencySymbol(curr);
-    } catch {
-      // Ignore
-    }
-  };
-
-  const handleSetUnit = async (unit: "km" | "mi") => {
-    setOdometerUnit(unit);
-    await repo.setSetting("pref_odometer_unit", unit);
-  };
-
-  const handleSetCurrency = async (curr: string) => {
-    setCurrencySymbol(curr);
-    await repo.setSetting("pref_currency_symbol", curr);
-  };
+  // Currency and distance unit: synced to your other devices.
+  const units = useUnits();
+  const { mutate: setPreference } = useSetPreference();
+  const odometerUnit = units.unit;
+  const handleSetUnit = (unit: "km" | "mi") => setPreference({ key: "distance_unit", value: unit });
+  const currencies = (COMMON_CURRENCIES as readonly string[]).includes(units.currency)
+    ? [...COMMON_CURRENCIES]
+    : [units.currency, ...COMMON_CURRENCIES];
 
   const refreshDriveStatus = async () => {
     try {
@@ -91,7 +78,6 @@ export default function SettingsScreen() {
 
   useEffect(() => {
     refreshDriveStatus();
-    loadPreferences();
   }, []);
 
   const handleGoogleSignIn = async () => {
@@ -463,7 +449,7 @@ export default function SettingsScreen() {
             <View style={{ flex: 1 }}>
               <Text style={[styles.prefLabel, { color: colors.text }]}>Distance Units</Text>
               <Text style={[styles.prefDesc, { color: (colors.text as string) + "77" }]}>
-                Odometer and interval measurements
+                Stored in km; switching converts what you see
               </Text>
             </View>
             <View style={[styles.pillSelector, { borderColor: colors.border, backgroundColor: colors.background }]}>
@@ -486,27 +472,27 @@ export default function SettingsScreen() {
             </View>
           </View>
 
-          {/* Currency Switcher */}
-          <View style={[styles.prefRow, { borderTopColor: colors.border }]}>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.prefLabel, { color: colors.text }]}>Currency Symbol</Text>
-              <Text style={[styles.prefDesc, { color: (colors.text as string) + "77" }]}>
-                Used on service receipts and cost calculations
-              </Text>
-            </View>
-            <View style={[styles.pillSelector, { borderColor: colors.border, backgroundColor: colors.background }]}>
-              {["$", "€", "£"].map((sym) => (
-                <TouchableOpacity
-                  key={sym}
-                  style={[styles.pillOption, currencySymbol === sym && { backgroundColor: colors.primary }]}
-                  onPress={() => handleSetCurrency(sym)}
-                >
-                  <Text style={{ color: currencySymbol === sym ? "#fff" : colors.text, fontSize: 13, fontWeight: "700" }}>
-                    {sym}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+          {/* Currency */}
+          <View style={[styles.prefRow, { borderTopColor: colors.border, flexDirection: "column", alignItems: "stretch" }]}>
+            <Text style={[styles.prefLabel, { color: colors.text }]}>Currency</Text>
+            <Text style={[styles.prefDesc, { color: (colors.text as string) + "77" }]}>
+              All costs are shown in it; changing it doesn't convert amounts
+            </Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 10 }}>
+              <View style={[styles.pillSelector, { borderColor: colors.border, backgroundColor: colors.background }]}>
+                {currencies.map((code) => (
+                  <TouchableOpacity
+                    key={code}
+                    style={[styles.pillOption, units.currency === code && { backgroundColor: colors.primary }]}
+                    onPress={() => setPreference({ key: "currency", value: code })}
+                  >
+                    <Text style={{ color: units.currency === code ? "#fff" : colors.text, fontSize: 12, fontWeight: "700" }}>
+                      {code}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </ScrollView>
           </View>
         </View>
       </View>

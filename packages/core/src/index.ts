@@ -54,4 +54,26 @@ export type { OpenedDatabase } from "./db/open";
 export { transaction } from "./db/transaction";
 export type { SeedOptions } from "./db/seed";
 
-export { ValidationError, normaliseVin, validateVehicle, validateServiceType, validateIntervalOverride } from "./validation";
+export {
+  ValidationError,
+  normaliseVin,
+  validateVehicle,
+  validateServiceType,
+  validateIntervalOverride,
+  validateMaintenanceLog,
+  validatePreference,
+} from "./validation";
+
+export {
+  KM_PER_MILE,
+  DEFAULT_PREFERENCES,
+  COMMON_CURRENCIES,
+  CURRENCY_BY_SYMBOL,
+  toDisplayDistance,
+  fromDisplayDistance,
+  formatDistance,
+  formatMoney,
+  centsToInput,
+  parseMoney,
+  isCurrencyCode,
+} from "./units";

@@ -36,6 +36,9 @@ export const deleteIntervalOverride = call("deleteIntervalOverride");
 export const getMaintenanceSummary = call("getMaintenanceSummary");
 export const getServiceTypeSummaries = call("getServiceTypeSummaries");
 
+export const getPreferences = call("getPreferences");
+export const setPreference = call("setPreference");
+
 export const getSetting = call("getSetting");
 export const setSetting = call("setSetting");
 export const removeSetting = call("removeSetting");

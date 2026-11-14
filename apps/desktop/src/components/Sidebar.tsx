@@ -9,12 +9,14 @@ import {
 import { cn } from "@/lib/utils";
 import { ModeToggle } from "./ModeToggle";
 import { useVehicles } from "../api";
+import { useUnits } from "../hooks/useUnits";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 
 export function Sidebar() {
   const { data: vehicles = [] } = useVehicles();
   const navigate = useNavigate();
+  const units = useUnits();
   const [vehiclesOpen, setVehiclesOpen] = useState(true);
 
   return (
@@ -106,7 +108,7 @@ export function Sidebar() {
                     </span>
                     {v.initial_mileage && (
                       <span className="font-mono text-[10px] text-muted-foreground opacity-60 ml-1.5 flex-shrink-0">
-                        {v.initial_mileage.toLocaleString()}
+                        {units.distance(v.initial_mileage)}
                       </span>
                     )}
                   </NavLink>

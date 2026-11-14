@@ -6,6 +6,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Text } from "@/components/Themed";
 import { useState, useEffect } from "react";
 import type { CustomFieldValueCreate } from "@/src/types";
+import { parseMoney } from "@carbaddie/core";
+import { useUnits } from "@/src/hooks/useUnits";
 
 export default function AddLogScreen() {
   const params = useLocalSearchParams<{ id: string; serviceTypeId?: string }>();
@@ -16,6 +18,7 @@ export default function AddLogScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { data: vehicle } = useVehicle(vehicleId);
+  const units = useUnits();
   const { data: serviceTypes } = useServiceTypes();
   const [isSeeding, setIsSeeding] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -80,6 +83,12 @@ export default function AddLogScreen() {
       Alert.alert("Invalid Mileage", "Please enter a valid mileage.");
       return;
     }
+    const costCents = parseMoney(cost);
+    if (costCents === null) {
+      Alert.alert("Invalid Cost", "Enter the cost as an amount, e.g. 45.90");
+      return;
+    }
+    const mileageKm = units.fromDisplay(numMileage);
 
     try {
       setIsSaving(true);
@@ -92,8 +101,8 @@ export default function AddLogScreen() {
         vehicleId: vehicleId!,
         data: {
           date: date.trim(),
-          mileage: numMileage,
-          cost: cost ? parseFloat(cost) || 0 : 0,
+          mileage: mileageKm,
+          cost_cents: costCents,
           notes: notes.trim() || null,
           service_type_id: serviceTypeId,
           custom_field_values: cfv,
@@ -107,8 +116,8 @@ export default function AddLogScreen() {
             vehicleId: vehicleId!,
             data: {
               date: date.trim(),
-              mileage: numMileage,
-              cost: 0,
+              mileage: mileageKm,
+              cost_cents: 0,
               notes: `Co-performed with ${selectedSt?.name ?? "service"}`,
               service_type_id: sugId,
               custom_field_values: [],
@@ -239,18 +248,18 @@ export default function AddLogScreen() {
       />
 
       {/* Mileage Input */}
-      <Text style={[styles.label, { color: colors.text }]}>Odometer Mileage (km) *</Text>
+      <Text style={[styles.label, { color: colors.text }]}>Odometer Mileage ({units.unit}) *</Text>
       <TextInput
         style={inputStyle}
         value={mileage}
         onChangeText={setMileage}
         keyboardType="numeric"
-        placeholder={currentOdometer != null ? `e.g. ${currentOdometer} (current)` : "e.g. 55000"}
+        placeholder={currentOdometer != null ? `e.g. ${units.toDisplay(currentOdometer)} (current)` : "e.g. 55000"}
         placeholderTextColor={(colors.text as string) + "55"}
       />
 
       {/* Cost Input */}
-      <Text style={[styles.label, { color: colors.text }]}>Total Cost ($)</Text>
+      <Text style={[styles.label, { color: colors.text }]}>Total Cost ({units.currency})</Text>
       <TextInput
         style={inputStyle}
         value={cost}

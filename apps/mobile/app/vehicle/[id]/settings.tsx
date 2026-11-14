@@ -3,6 +3,7 @@ import { useLocalSearchParams, useRouter, useTheme } from "expo-router";
 import { useVehicle, useServiceTypes, useUpsertIntervalOverride, useDeleteIntervalOverride, useDeleteVehicle } from "@/src/hooks/useDatabase";
 import { Text } from "@/components/Themed";
 import { useState, useEffect, useMemo } from "react";
+import { useUnits } from "@/src/hooks/useUnits";
 
 export default function VehicleSettingsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -13,6 +14,7 @@ export default function VehicleSettingsScreen() {
   const upsertMutation = useUpsertIntervalOverride();
   const deleteMutation = useDeleteIntervalOverride();
   const deleteVehicleMutation = useDeleteVehicle();
+  const units = useUnits();
 
   const [overrides, setOverrides] = useState<Record<string, { km: string; days: string }>>({});
   const [savedRowId, setSavedRowId] = useState<string | null>(null);
@@ -23,13 +25,13 @@ export default function VehicleSettingsScreen() {
       const ov: Record<string, { km: string; days: string }> = {};
       (vehicle.interval_overrides || []).forEach((o) => {
         ov[o.service_type_id] = {
-          km: o.override_interval_km != null ? String(o.override_interval_km) : "",
+          km: o.override_interval_km != null ? String(units.toDisplay(o.override_interval_km)) : "",
           days: o.override_interval_days != null ? String(o.override_interval_days) : "",
         };
       });
       setOverrides(ov);
     }
-  }, [vehicle]);
+  }, [vehicle, units]);
 
   const filteredTypes = useMemo(() => {
     if (!search.trim()) return serviceTypes;
@@ -49,13 +51,14 @@ export default function VehicleSettingsScreen() {
       return;
     }
 
-    const km = ov.km.trim() ? Number(ov.km) : undefined;
+    const typedKm = ov.km.trim() ? Number(ov.km) : undefined;
     const days = ov.days.trim() ? Number(ov.days) : undefined;
 
-    if (km !== undefined && (isNaN(km) || km <= 0)) {
-      Alert.alert("Invalid Interval", "Interval km must be a positive number.");
+    if (typedKm !== undefined && (isNaN(typedKm) || typedKm <= 0)) {
+      Alert.alert("Invalid Interval", `Interval ${units.unit} must be a positive number.`);
       return;
     }
+    const km = typedKm !== undefined ? units.fromDisplay(typedKm) : undefined;
     if (days !== undefined && (isNaN(days) || days <= 0)) {
       Alert.alert("Invalid Interval", "Interval days must be a positive number.");
       return;
@@ -198,13 +201,13 @@ export default function VehicleSettingsScreen() {
             </View>
 
             <Text style={[styles.stDefault, { color: (colors.text as string) + "77" }]}>
-              Global: {st.recommended_interval_km ? `${st.recommended_interval_km.toLocaleString()} km` : "No km"} /{" "}
+              Global: {st.recommended_interval_km ? units.distance(st.recommended_interval_km) : `No ${units.unit}`} /{" "}
               {st.recommended_interval_days ? `${st.recommended_interval_days} days` : "No days"}
             </Text>
 
             <View style={styles.inputRow}>
               <View style={{ flex: 1 }}>
-                <Text style={[styles.inputLabel, { color: (colors.text as string) + "88" }]}>Target km</Text>
+                <Text style={[styles.inputLabel, { color: (colors.text as string) + "88" }]}>Target {units.unit}</Text>
                 <TextInput
                   style={inputStyle}
                   value={ov.km}

@@ -43,7 +43,7 @@ const vehicles: VehicleRead[] = [
         service_type: null,
         date: "2025-06-01",
         mileage: 95000,
-        cost: 79.5,
+        cost_cents: 7950,
         notes: null,
         custom_field_values: [
           { id: "cfv-1", field_id: F_GRADE, value: "0W-20", custom_field: serviceTypes[0].fields[0] },

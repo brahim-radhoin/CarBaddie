@@ -55,7 +55,7 @@ test("changes made on one device reach another, and edits come back", async () =
 
   const v = await a.repo.createVehicle({ make: "Toyota", model: "Corolla", year: 2015, vin: "JTDBR32E720012345" });
   const [oil] = (await a.repo.getAllServiceTypes()).filter((st) => st.slug === "oil-change");
-  const log = await a.repo.createMaintenanceLog(v.id, { date: "2025-01-10", mileage: 100000, cost: 60, service_type_id: oil.id });
+  const log = await a.repo.createMaintenanceLog(v.id, { date: "2025-01-10", mileage: 100000, cost_cents: 6000, service_type_id: oil.id });
 
   const pushed = await a.sync(drive.transport);
   assert.equal(pushed.downloaded, 0);
@@ -66,10 +66,10 @@ test("changes made on one device reach another, and edits come back", async () =
   const onB = await b.repo.getVehicleById(v.id);
   assert.equal(onB?.maintenance_logs[0]?.id, log.id);
 
-  await b.repo.updateMaintenanceLog(log.id, { cost: 75 });
+  await b.repo.updateMaintenanceLog(log.id, { cost_cents: 7500 });
   await b.sync(drive.transport);
   await a.sync(drive.transport);
-  assert.equal((await a.repo.getLogById(log.id))?.cost, 75);
+  assert.equal((await a.repo.getLogById(log.id))?.cost_cents, 7500);
   assert.deepEqual(await liveState(a.db), await liveState(b.db));
 
   // Nothing new: nothing moves.
@@ -103,8 +103,8 @@ test("the same VIN added on two devices becomes one vehicle with both histories"
   const va = await a.repo.createVehicle({ make: "Honda", model: "Accord", vin });
   const vb = await b.repo.createVehicle({ make: "Honda", model: "Accord", vin: vin.toLowerCase() });
   const [tires] = (await a.repo.getAllServiceTypes()).filter((st) => st.slug === "tire-rotation");
-  const la = await a.repo.createMaintenanceLog(va.id, { date: "2025-02-01", mileage: 50000, cost: 20 });
-  const lb = await b.repo.createMaintenanceLog(vb.id, { date: "2025-03-01", mileage: 52000, cost: 30 });
+  const la = await a.repo.createMaintenanceLog(va.id, { date: "2025-02-01", mileage: 50000, cost_cents: 2000 });
+  const lb = await b.repo.createMaintenanceLog(vb.id, { date: "2025-03-01", mileage: 52000, cost_cents: 3000 });
   await b.repo.upsertIntervalOverride(vb.id, tires.id, { override_interval_km: 8000 });
 
   await a.sync(drive.transport);
@@ -147,7 +147,7 @@ test("a log edited on one device while its vehicle is deleted on another ends up
   const a = await device();
   const b = await device();
   const v = await a.repo.createVehicle({ make: "Mazda", model: "3" });
-  const log = await a.repo.createMaintenanceLog(v.id, { date: "2025-04-01", mileage: 1000, cost: 10 });
+  const log = await a.repo.createMaintenanceLog(v.id, { date: "2025-04-01", mileage: 1000, cost_cents: 1000 });
   await a.sync(drive.transport);
   await b.sync(drive.transport);
 
@@ -171,7 +171,7 @@ test("compaction replaces change files with a snapshot a new device can start fr
   const b = await device();
   const v = await a.repo.createVehicle({ make: "Ford", model: "Focus" });
   for (let i = 1; i <= 4; i++) {
-    await a.repo.createMaintenanceLog(v.id, { date: `2025-05-0${i}`, mileage: 1000 * i, cost: i });
+    await a.repo.createMaintenanceLog(v.id, { date: `2025-05-0${i}`, mileage: 1000 * i, cost_cents: i * 100 });
     await a.sync(drive.transport, { compactAfter: 3 });
   }
   const own = drive.names().map(parseSyncFileName).filter((n) => n?.deviceId === a.deviceId);

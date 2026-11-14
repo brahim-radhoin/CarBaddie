@@ -77,6 +77,26 @@ export function validateServiceType(
   c.done();
 }
 
+export function validateMaintenanceLog(
+  data: { date?: string; mileage?: number; cost_cents?: number },
+  partial = false,
+): void {
+  const c = new Checker();
+  if (!partial || data.date !== undefined) c.required("date", data.date);
+  if (!partial && data.mileage === undefined) c.add("mileage", "This field is required.");
+  c.nonNegativeInt("mileage", data.mileage);
+  c.nonNegativeInt("cost_cents", data.cost_cents);
+  c.done();
+}
+
+export function validatePreference(key: string, value: string): void {
+  const c = new Checker();
+  if (key === "currency" && !/^[A-Z]{3}$/.test(value)) c.add(key, "Use a three-letter currency code, e.g. EUR.");
+  else if (key === "distance_unit" && value !== "km" && value !== "mi") c.add(key, "Use km or mi.");
+  else if (key !== "currency" && key !== "distance_unit") c.add(key, "Unknown preference.");
+  c.done();
+}
+
 export function validateIntervalOverride(data: { override_interval_km?: number | null; override_interval_days?: number | null }): void {
   const c = new Checker();
   c.nonNegativeInt("override_interval_km", data.override_interval_km);

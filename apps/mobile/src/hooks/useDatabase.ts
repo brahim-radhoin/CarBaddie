@@ -6,7 +6,7 @@ import type {
   ServiceTypeRead, ServiceTypeCreate, ServiceTypeUpdate,
   MaintenanceLogRead, MaintenanceLogCreate, MaintenanceLogUpdate,
   VehicleServiceIntervalOverrideCreate, VehicleServiceIntervalOverrideRead,
-  ServiceTypeLogSummary, CustomFieldRead,
+  ServiceTypeLogSummary, CustomFieldRead, Preferences,
 } from "../types";
 
 // ====================================================================
@@ -33,7 +33,30 @@ export const queryKeys = {
   summaries: {
     forVehicle: (vehicleId: string) => ["summaries", String(vehicleId)] as const,
   },
+  preferences: () => ["preferences"] as const,
 };
+
+// ====================================================================
+// PREFERENCES (synced: currency, distance unit)
+// ====================================================================
+
+export function usePreferences() {
+  return useQuery<Preferences>({
+    queryKey: queryKeys.preferences(),
+    queryFn: () => repo.getPreferences(),
+  });
+}
+
+export function useSetPreference() {
+  const qc = useQueryClient();
+  return useMutation<void, Error, { key: keyof Preferences; value: string }>({
+    mutationFn: ({ key, value }) => repo.setPreference(key, value as Preferences[typeof key]),
+    onSuccess: () => {
+      qc.invalidateQueries(); // every money and distance on screen depends on these
+      triggerBackgroundCloudPush();
+    },
+  });
+}
 
 // ====================================================================
 // VEHICLE HOOKS

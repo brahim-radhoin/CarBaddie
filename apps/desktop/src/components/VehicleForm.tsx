@@ -1,6 +1,7 @@
 import { useState, useEffect, FormEvent } from "react";
 import { VehicleCreate, VehicleRead } from "../types";
 import { useGetMakes, useGetModels, useGetYears } from "../hooks/useVehicleDefinitions";
+import { useUnits } from "../hooks/useUnits";
 import { cn } from "@/lib/utils";
 
 // UI Components & Icons
@@ -26,12 +27,14 @@ interface VehicleFormProps {
 
 export function VehicleForm({ initialData, isSubmitting, backendErrors, onSubmit, mode }: VehicleFormProps) {
   const navigate = useNavigate();
+  const units = useUnits();
+  const shownMileage = (km?: number | null) => (km != null ? units.toDisplay(km).toString() : "");
   const [formData, setFormData] = useState<VehicleFormData>({
     make: initialData?.make || "",
     model: initialData?.model || "",
     year: initialData?.year?.toString() || "",
     vin: initialData?.vin || "",
-    initial_mileage: initialData?.initial_mileage?.toString() || "",
+    initial_mileage: shownMileage(initialData?.initial_mileage),
     acquisition_date: initialData?.acquisition_date || "",
   });
 
@@ -47,11 +50,12 @@ export function VehicleForm({ initialData, isSubmitting, backendErrors, onSubmit
         model: initialData.model || "",
         year: initialData.year?.toString() || "",
         vin: initialData.vin || "",
-        initial_mileage: initialData.initial_mileage?.toString() || "",
+        initial_mileage: shownMileage(initialData.initial_mileage),
         acquisition_date: initialData.acquisition_date || "",
       });
     }
-  }, [initialData]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reload only when the data or unit changes
+  }, [initialData, units.unit]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -75,7 +79,7 @@ export function VehicleForm({ initialData, isSubmitting, backendErrors, onSubmit
       model: formData.model.trim(),
       year: formData.year ? parseInt(formData.year, 10) : undefined,
       vin: formData.vin ? formData.vin.trim() || undefined : undefined,
-      initial_mileage: formData.initial_mileage ? parseInt(formData.initial_mileage, 10) : undefined,
+      initial_mileage: formData.initial_mileage ? units.fromDisplay(parseInt(formData.initial_mileage, 10)) : undefined,
       acquisition_date: formData.acquisition_date || undefined,
     };
     onSubmit(payload);
@@ -190,7 +194,7 @@ export function VehicleForm({ initialData, isSubmitting, backendErrors, onSubmit
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label htmlFor="initial_mileage" className="text-xs font-medium text-muted-foreground">
-                Starting Odometer (km)
+                Starting Odometer ({units.unit})
               </Label>
               <Input
                 id="initial_mileage"

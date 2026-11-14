@@ -2,6 +2,7 @@ import { useState, useEffect, FormEvent } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import { useServiceType, useAddServiceType, useUpdateServiceType, useServiceTypes } from "../api";
 import { ServiceTypeCreate, ServiceTypeUpdate, CustomFieldCreate, ServiceTypeRead } from "../types";
+import { useUnits } from "../hooks/useUnits";
 
 // UI Components & Icons
 import { Button } from "@/components/ui/button";
@@ -65,6 +66,7 @@ export function AddEditServiceTypePage() {
   const { data: allServiceTypes = [] } = useServiceTypes();
   const addMutation = useAddServiceType();
   const updateMutation = useUpdateServiceType();
+  const units = useUnits();
 
   const [name, setName] = useState("");
   const [recommendedIntervalKm, setRecommendedIntervalKm] = useState("");
@@ -76,7 +78,9 @@ export function AddEditServiceTypePage() {
   useEffect(() => {
     if (isEditMode && serviceType) {
       setName(serviceType.name || "");
-      setRecommendedIntervalKm(serviceType.recommended_interval_km?.toString() || "");
+      setRecommendedIntervalKm(
+        serviceType.recommended_interval_km != null ? units.toDisplay(serviceType.recommended_interval_km).toString() : "",
+      );
       setRecommendedIntervalDays(serviceType.recommended_interval_days?.toString() || "");
       const loadedFields = (serviceType.fields || []).map((f) => ({
         _key: String(f.id),
@@ -96,7 +100,7 @@ export function AddEditServiceTypePage() {
       setResetIds([]);
       setSuggestionIds([]);
     }
-  }, [isEditMode, serviceType]);
+  }, [isEditMode, serviceType, units]);
 
   const handleAddField = () => {
     setCustomFields((prev) => [
@@ -130,7 +134,7 @@ export function AddEditServiceTypePage() {
         unit: fieldData.unit?.trim() || undefined,
       }));
 
-    const km = recommendedIntervalKm ? parseInt(recommendedIntervalKm, 10) : undefined;
+    const km = recommendedIntervalKm ? units.fromDisplay(parseInt(recommendedIntervalKm, 10)) : undefined;
     const days = recommendedIntervalDays ? parseInt(recommendedIntervalDays, 10) : undefined;
 
     if (isEditMode && serviceTypeId) {
@@ -233,7 +237,7 @@ export function AddEditServiceTypePage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label htmlFor="recommendedIntervalKm" className="text-xs font-medium text-foreground">
-                Default Interval (km)
+                Default Interval ({units.unit})
               </Label>
               <Input
                 id="recommendedIntervalKm"

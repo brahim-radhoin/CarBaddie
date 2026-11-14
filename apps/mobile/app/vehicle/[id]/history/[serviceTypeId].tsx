@@ -3,6 +3,7 @@ import { useLocalSearchParams, useRouter, useTheme } from "expo-router";
 import { useLogsForServiceType, useServiceType, useDeleteMaintenanceLog } from "@/src/hooks/useDatabase";
 import { Text } from "@/components/Themed";
 import type { MaintenanceLogRead } from "@/src/types";
+import { useUnits } from "@/src/hooks/useUnits";
 
 export default function ServiceHistoryScreen() {
   const { id: vehicleId, serviceTypeId } = useLocalSearchParams<{ id: string; serviceTypeId: string }>();
@@ -11,6 +12,7 @@ export default function ServiceHistoryScreen() {
   const { data: logs } = useLogsForServiceType(vehicleId, serviceTypeId);
   const { data: serviceType } = useServiceType(serviceTypeId);
   const deleteMutation = useDeleteMaintenanceLog();
+  const units = useUnits();
 
   const handleDelete = (logId: string) => {
     Alert.alert("Delete Log", "Are you sure?", [
@@ -23,9 +25,9 @@ export default function ServiceHistoryScreen() {
     <TouchableOpacity style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]} onPress={() => router.push(`/vehicle/${vehicleId}/edit-log/${item.id}`)} onLongPress={() => handleDelete(item.id)} activeOpacity={0.7}>
       <View style={styles.row}>
         <Text style={[styles.date, { color: colors.text }]}>{item.date}</Text>
-        <Text style={[styles.cost, { color: colors.primary }]}>${item.cost.toFixed(2)}</Text>
+        <Text style={[styles.cost, { color: colors.primary }]}>{units.money(item.cost_cents)}</Text>
       </View>
-      <Text style={[styles.mileage, { color: (colors.text as string) + "88" }]}>{item.mileage.toLocaleString()} km</Text>
+      <Text style={[styles.mileage, { color: (colors.text as string) + "88" }]}>{units.distance(item.mileage)}</Text>
       {item.notes && <Text style={[styles.notes, { color: (colors.text as string) + "66" }]} numberOfLines={2}>{item.notes}</Text>}
       {item.custom_field_values.length > 0 && (
         <View style={[styles.fieldsRow, { borderTopColor: colors.border }]}>

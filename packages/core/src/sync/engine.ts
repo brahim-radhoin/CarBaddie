@@ -19,6 +19,7 @@ import { transaction } from "../db/transaction.ts";
 import { intervalOverrideId } from "../ids/uuid.ts";
 import { parseSyncFile, parseSyncFileName, syncFileName, SYNC_FILE_FORMAT, SYNC_FILE_VERSION } from "./files.ts";
 import { SYNCED_TABLE_INFO } from "./tables.ts";
+import { upgradeRow } from "./upgrade.ts";
 import type { SqlDriver, SqlValue, WriteContext } from "../db/driver";
 import type { SyncFile, SyncRow } from "./files";
 import type { SyncedTable } from "./tables";
@@ -225,7 +226,8 @@ async function mergeFiles(db: SqlDriver, w: WriteContext, files: SyncFile[]): Pr
       if (!rows) continue;
       let byKey = incoming.get(table.name);
       if (!byKey) incoming.set(table.name, (byKey = new Map()));
-      for (const row of rows) {
+      for (const original of rows) {
+        const row = upgradeRow(table.name, original, file.schema_version);
         const key = table.primaryKey.map((c) => row[c]).join("|");
         const prev = byKey.get(key);
         if (!prev || (row.updated_at as string) > (prev.updated_at as string)) byKey.set(key, row);

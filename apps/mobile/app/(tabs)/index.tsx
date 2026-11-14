@@ -4,11 +4,13 @@ import { useVehicles } from "@/src/hooks/useDatabase";
 import { Text } from "@/components/Themed";
 import { useState, useMemo } from "react";
 import type { VehicleRead } from "@/src/types";
+import { useUnits } from "@/src/hooks/useUnits";
 
 export default function VehicleListScreen() {
   const { colors } = useTheme();
   const router = useRouter();
   const { data: vehicles = [], isLoading } = useVehicles();
+  const units = useUnits();
   const [search, setSearch] = useState("");
 
   const filteredVehicles = useMemo(() => {
@@ -24,7 +26,7 @@ export default function VehicleListScreen() {
 
   const renderVehicle = ({ item }: { item: VehicleRead }) => {
     const lastLog = item.maintenance_logs?.[0];
-    const totalCost = item.maintenance_logs?.reduce((sum, l) => sum + l.cost, 0) ?? 0;
+    const totalCost = item.maintenance_logs?.reduce((sum, l) => sum + l.cost_cents, 0) ?? 0;
     const logCount = item.maintenance_logs?.length ?? 0;
     const currentMileage = lastLog ? lastLog.mileage : item.initial_mileage;
 
@@ -51,13 +53,13 @@ export default function VehicleListScreen() {
         <View style={[styles.statsRow, { borderTopColor: colors.border }]}>
           <View style={styles.stat}>
             <Text style={[styles.statValue, { color: colors.text }]}>
-              {currentMileage != null ? `${currentMileage.toLocaleString()} km` : "—"}
+              {currentMileage != null ? units.distance(currentMileage) : "—"}
             </Text>
             <Text style={[styles.statLabel, { color: (colors.text as string) + "77" }]}>Odometer</Text>
           </View>
           <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
           <View style={styles.stat}>
-            <Text style={[styles.statValue, { color: colors.text }]}>${totalCost.toFixed(0)}</Text>
+            <Text style={[styles.statValue, { color: colors.text }]}>{units.money(totalCost)}</Text>
             <Text style={[styles.statLabel, { color: (colors.text as string) + "77" }]}>Total Spent</Text>
           </View>
           <View style={[styles.statDivider, { backgroundColor: colors.border }]} />

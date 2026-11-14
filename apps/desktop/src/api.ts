@@ -20,11 +20,32 @@ import type {
   MaintenanceLogCreate,
   MaintenanceLogUpdate,
   CustomFieldRead,
+  Preferences,
 } from "./types";
 import { getRepository } from "./db";
 import { queryKeys } from "./queryKeys";
 
 const message = (error: unknown, fallback: string) => (error instanceof Error && error.message ? error.message : fallback);
+
+// --- PREFERENCES (synced: currency, distance unit) ---
+
+export function usePreferences() {
+  return useQuery<Preferences>({
+    queryKey: queryKeys.preferences(),
+    queryFn: async () => (await getRepository()).getPreferences(),
+  });
+}
+
+export function useSetPreference() {
+  const queryClient = useQueryClient();
+  return useMutation<void, Error, { key: keyof Preferences; value: string }>({
+    mutationFn: async ({ key, value }) =>
+      (await getRepository()).setPreference(key, value as Preferences[typeof key]),
+    // Every money and distance on screen depends on these.
+    onSuccess: () => queryClient.invalidateQueries(),
+    onError: (error) => toast.error(message(error, "Failed to save the preference.")),
+  });
+}
 
 // --- VEHICLE HOOKS ---
 

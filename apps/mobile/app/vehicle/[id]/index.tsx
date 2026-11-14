@@ -4,6 +4,7 @@ import { useVehicle, useServiceTypeSummaries, useServiceTypes, useDeleteVehicle 
 import { useUpcomingMaintenance } from "@/src/hooks/useUpcomingMaintenance";
 import { Text } from "@/components/Themed";
 import { useState } from "react";
+import { useUnits } from "@/src/hooks/useUnits";
 
 export default function VehicleDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -13,6 +14,7 @@ export default function VehicleDetailScreen() {
   const { data: summaries = [] } = useServiceTypeSummaries(id);
   const { data: allServiceTypes = [] } = useServiceTypes();
   const deleteMutation = useDeleteVehicle();
+  const units = useUnits();
 
   const [activeTab, setActiveTab] = useState<"overview" | "categories" | "history">("overview");
 
@@ -30,7 +32,7 @@ export default function VehicleDetailScreen() {
     );
   }
 
-  const totalCost = vehicle.maintenance_logs.reduce((sum, l) => sum + l.cost, 0);
+  const totalCost = vehicle.maintenance_logs.reduce((sum, l) => sum + l.cost_cents, 0);
   const logCount = vehicle.maintenance_logs.length;
   const lastLog = vehicle.maintenance_logs[0];
   const lastMileage = lastLog?.mileage ?? vehicle.initial_mileage ?? 0;
@@ -87,11 +89,11 @@ export default function VehicleDetailScreen() {
         {/* Telemetry KPIs */}
         <View style={[styles.kpiRow, { borderTopColor: colors.border }]}>
           <View style={styles.kpi}>
-            <Text style={[styles.kpiValue, { color: colors.text }]}>{lastMileage.toLocaleString()}</Text>
-            <Text style={[styles.kpiLabel, { color: (colors.text as string) + "77" }]}>Odometer (km)</Text>
+            <Text style={[styles.kpiValue, { color: colors.text }]}>{units.toDisplay(lastMileage).toLocaleString()}</Text>
+            <Text style={[styles.kpiLabel, { color: (colors.text as string) + "77" }]}>Odometer ({units.unit})</Text>
           </View>
           <View style={styles.kpi}>
-            <Text style={[styles.kpiValue, { color: colors.text }]}>${totalCost.toFixed(0)}</Text>
+            <Text style={[styles.kpiValue, { color: colors.text }]}>{units.money(totalCost)}</Text>
             <Text style={[styles.kpiLabel, { color: (colors.text as string) + "77" }]}>Total Spent</Text>
           </View>
           <View style={styles.kpi}>
@@ -251,11 +253,11 @@ export default function VehicleDetailScreen() {
                 >
                   <View style={styles.logHeader}>
                     <Text style={[styles.logService, { color: colors.text }]}>{log.service_type?.name ?? "Service"}</Text>
-                    <Text style={[styles.logCost, { color: colors.primary }]}>${log.cost.toFixed(2)}</Text>
+                    <Text style={[styles.logCost, { color: colors.primary }]}>{units.money(log.cost_cents)}</Text>
                   </View>
                   <View style={styles.logMeta}>
                     <Text style={[styles.logDetail, { color: (colors.text as string) + "88" }]}>{log.date}</Text>
-                    <Text style={[styles.logDetail, { color: (colors.text as string) + "88" }]}>{log.mileage.toLocaleString()} km</Text>
+                    <Text style={[styles.logDetail, { color: (colors.text as string) + "88" }]}>{units.distance(log.mileage)}</Text>
                   </View>
                   {log.notes && (
                     <Text style={[styles.logNotes, { color: (colors.text as string) + "77" }]} numberOfLines={1}>
@@ -287,7 +289,7 @@ export default function VehicleDetailScreen() {
                 <View style={styles.summaryTop}>
                   <Text style={[styles.summaryName, { color: colors.text }]}>{s.service_type_name}</Text>
                   <Text style={[styles.summaryTotal, { color: colors.primary }]}>
-                    ${s.total_cost_for_service_type.toFixed(0)}
+                    {units.money(s.total_cost_cents)}
                   </Text>
                 </View>
                 <View style={styles.summaryMetaRow}>
@@ -296,7 +298,7 @@ export default function VehicleDetailScreen() {
                   </Text>
                   {s.last_log_date && (
                     <Text style={[styles.summaryDetail, { color: (colors.text as string) + "88" }]}>
-                      Last: {s.last_log_date} ({s.last_log_mileage?.toLocaleString()} km)
+                      Last: {s.last_log_date} ({s.last_log_mileage != null ? units.distance(s.last_log_mileage) : "—"})
                     </Text>
                   )}
                 </View>
@@ -323,11 +325,11 @@ export default function VehicleDetailScreen() {
               >
                 <View style={styles.logHeader}>
                   <Text style={[styles.logService, { color: colors.text }]}>{log.service_type?.name ?? "Service"}</Text>
-                  <Text style={[styles.logCost, { color: colors.primary }]}>${log.cost.toFixed(2)}</Text>
+                  <Text style={[styles.logCost, { color: colors.primary }]}>{units.money(log.cost_cents)}</Text>
                 </View>
                 <View style={styles.logMeta}>
                   <Text style={[styles.logDetail, { color: (colors.text as string) + "88" }]}>{log.date}</Text>
-                  <Text style={[styles.logDetail, { color: (colors.text as string) + "88" }]}>{log.mileage.toLocaleString()} km</Text>
+                  <Text style={[styles.logDetail, { color: (colors.text as string) + "88" }]}>{units.distance(log.mileage)}</Text>
                 </View>
                 {log.notes && (
                   <Text style={[styles.logNotes, { color: (colors.text as string) + "77" }]}>

@@ -1,6 +1,7 @@
 import { VehicleRead as Vehicle } from "../types";
 import { useNavigate } from "react-router-dom";
 import { Gauge, Calendar, ChevronRight } from "lucide-react";
+import { useUnits } from "../hooks/useUnits";
 
 interface VehicleCardProps {
   vehicle: Vehicle;
@@ -8,6 +9,7 @@ interface VehicleCardProps {
 
 export function VehicleCard({ vehicle }: VehicleCardProps) {
   const navigate = useNavigate();
+  const units = useUnits();
 
   const latestLog =
     vehicle.maintenance_logs && vehicle.maintenance_logs.length > 0
@@ -58,7 +60,7 @@ export function VehicleCard({ vehicle }: VehicleCardProps) {
             </span>
             <p className="font-mono text-sm font-medium text-foreground mt-0.5">
               {currentMileage !== null && currentMileage !== undefined
-                ? `${currentMileage.toLocaleString()} km`
+                ? units.distance(currentMileage)
                 : "—"}
             </p>
           </div>

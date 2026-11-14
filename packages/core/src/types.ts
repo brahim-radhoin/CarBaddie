@@ -91,8 +91,9 @@ export interface CustomFieldValueRead extends CustomFieldValueCreate {
 
 export interface MaintenanceLogBase {
   date: string; // ISO format: "YYYY-MM-DD"
-  mileage: number;
-  cost: number;
+  mileage: number; // km
+  /** Hundredths of the currency unit (see Preferences.currency). */
+  cost_cents: number;
   notes?: string | null;
   service_type_id?: Id | null; // Null if the service type was deleted
 }
@@ -111,7 +112,7 @@ export interface MaintenanceLogRead extends MaintenanceLogBase {
 export interface MaintenanceLogUpdate {
   date?: string;
   mileage?: number;
-  cost?: number;
+  cost_cents?: number;
   notes?: string | null;
   service_type_id?: Id | null;
   /**
@@ -168,8 +169,8 @@ export interface VehicleRead extends VehicleBase {
 export interface MaintenanceSummary {
   vehicle_id: Id;
   total_logs: number;
-  total_cost: number;
-  average_cost: number;
+  total_cost_cents: number;
+  average_cost_cents: number;
   last_service_date?: string | null;
   days_since_last_service?: number | null;
   last_mileage?: number | null;
@@ -181,7 +182,7 @@ export interface ServiceTypeLogSummary {
   log_count: number;
   last_log_date?: string | null;
   last_log_mileage?: number | null;
-  total_cost_for_service_type: number;
+  total_cost_cents: number;
 }
 
 /** The calculated status of a single upcoming maintenance item. */
@@ -253,4 +254,17 @@ export interface RestorePlan {
     vin: string;
     action: "skip" | "replace";
   }[];
+}
+
+// ----------------------------------------
+// Preferences (synced between devices)
+// ----------------------------------------
+
+export type DistanceUnit = "km" | "mi";
+
+export interface Preferences {
+  /** ISO 4217 code, e.g. "EUR". */
+  currency: string;
+  /** How distances are shown and typed; they are always stored in km. */
+  distance_unit: DistanceUnit;
 }

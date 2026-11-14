@@ -4,6 +4,7 @@ import { format, parseISO } from "date-fns";
 import { Gauge, Search, ArrowUpDown } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { useUnits } from "../hooks/useUnits";
 
 interface ActivityTimelineProps {
   logs: MaintenanceLogRead[];
@@ -13,6 +14,7 @@ interface ActivityTimelineProps {
 export function ActivityTimeline({ logs, onSelectDate }: ActivityTimelineProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc");
+  const units = useUnits();
 
   const filteredLogs = useMemo(() => {
     let result = [...logs];
@@ -98,7 +100,7 @@ export function ActivityTimeline({ logs, onSelectDate }: ActivityTimelineProps) 
                         {log.service_type?.name ?? "Maintenance"}
                       </span>
                       <span className="font-mono text-[11px] font-medium text-foreground">
-                        ${log.cost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        {units.money(log.cost_cents)}
                       </span>
                     </div>
 
@@ -107,7 +109,7 @@ export function ActivityTimeline({ logs, onSelectDate }: ActivityTimelineProps) 
                       <span className="opacity-30">/</span>
                       <span className="flex items-center gap-1">
                         <Gauge className="h-3 w-3 opacity-60" />
-                        {log.mileage.toLocaleString()} km
+                        {units.distance(log.mileage)}
                       </span>
                     </div>
 

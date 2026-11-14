@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { useServiceTypes, useDeleteServiceType } from "../api";
 import { ServiceTypeRead } from "../types";
+import { useUnits } from "../hooks/useUnits";
 
 // UI Components & Icons
 import { Button } from "@/components/ui/button";
@@ -27,6 +28,7 @@ import { Plus, Edit, Trash2, MoreHorizontal, ChevronLeft } from "lucide-react";
 export function ManageServiceTypesPage() {
   const { data: serviceTypes = [], isLoading, isError, error } = useServiceTypes();
   const { mutate: deleteServiceType, isPending: isDeleting } = useDeleteServiceType();
+  const units = useUnits();
 
   const sortedServiceTypes = [...serviceTypes].sort((a, b) => a.name.localeCompare(b.name));
 
@@ -85,7 +87,7 @@ export function ManageServiceTypesPage() {
             <thead className="bg-muted/40 border-b border-border text-muted-foreground font-medium">
               <tr>
                 <th className="py-2.5 px-3.5">Category Name</th>
-                <th className="py-2.5 px-3.5">Interval (km)</th>
+                <th className="py-2.5 px-3.5">Interval ({units.unit})</th>
                 <th className="py-2.5 px-3.5">Interval (days)</th>
                 <th className="py-2.5 px-3.5 text-right">Actions</th>
               </tr>
@@ -104,7 +106,7 @@ export function ManageServiceTypesPage() {
                       {type.name}
                     </td>
                     <td className="py-2.5 px-3.5 font-mono text-muted-foreground">
-                      {type.recommended_interval_km ? `${type.recommended_interval_km.toLocaleString()} km` : "—"}
+                      {type.recommended_interval_km ? units.distance(type.recommended_interval_km) : "—"}
                     </td>
                     <td className="py-2.5 px-3.5 font-mono text-muted-foreground">
                       {type.recommended_interval_days ? `${type.recommended_interval_days} days` : "—"}

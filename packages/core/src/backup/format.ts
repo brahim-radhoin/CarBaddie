@@ -187,7 +187,7 @@ export function encodeBackup({ serviceTypes, vehicles, config, exportedAt }: Enc
         vehicle_id: vehicleFileId,
         date: log.date,
         mileage: log.mileage,
-        cost: log.cost,
+        cost: log.cost_cents / 100,
         notes: log.notes ?? null,
         service_type_id:
           log.service_type_id && knownServiceTypes.has(log.service_type_id)

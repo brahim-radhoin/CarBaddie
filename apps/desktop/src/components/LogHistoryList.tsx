@@ -16,6 +16,7 @@ import { Search, ListChecks, ChevronLeft, ChevronRight, History, XCircle, PlusCi
 import { useNavigate } from "react-router-dom";
 import Papa from "papaparse";
 import { toast } from "sonner";
+import { useUnits } from "../hooks/useUnits";
 
 interface LogHistoryListProps {
   allLogs: MaintenanceLogRead[];
@@ -41,6 +42,7 @@ export function LogHistoryList({
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const navigate = useNavigate(); // If needed for "Add First Log"
+  const units = useUnits();
 
   // Reset current page to 1 if the external date filter changes OR if search term changes
   useEffect(() => {
@@ -113,8 +115,8 @@ export function LogHistoryList({
         const row: Record<string, string | number> = {
           Date: log.date,
           "Service Type": log.service_type?.name || "Uncategorized",
-          "Mileage (km)": log.mileage,
-          "Cost (TND)": log.cost, // Assuming this is now a number
+          [`Mileage (${units.unit})`]: units.toDisplay(log.mileage),
+          [`Cost (${units.currency})`]: (log.cost_cents / 100).toFixed(2),
           Notes: log.notes || "",
         };
 

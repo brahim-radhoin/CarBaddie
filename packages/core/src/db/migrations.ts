@@ -365,6 +365,24 @@ export const MIGRATIONS: readonly Migration[] = [
     checkForeignKeys: false,
     up: (db) => db.exec("ALTER TABLE vehicles ADD COLUMN merged_into TEXT"),
   },
+  {
+    // Money as exact integer hundredths, and settings both devices share (currency, units).
+    // Sync converts `cost` in rows from devices still on v4 (sync/upgrade.ts).
+    version: 5,
+    description: "maintenance_logs.cost_cents, synced preferences",
+    checkForeignKeys: false,
+    up: (db) =>
+      db.exec(`
+        ALTER TABLE maintenance_logs ADD COLUMN cost_cents INTEGER NOT NULL DEFAULT 0;
+        UPDATE maintenance_logs SET cost_cents = CAST(ROUND(COALESCE(cost, 0) * 100) AS INTEGER);
+        ALTER TABLE maintenance_logs DROP COLUMN cost;
+        CREATE TABLE preferences (
+          key TEXT PRIMARY KEY NOT NULL,
+          value TEXT NOT NULL,
+          ${SYNC_COLUMNS}
+        );
+      `),
+  },
 ];
 
 export const LATEST_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

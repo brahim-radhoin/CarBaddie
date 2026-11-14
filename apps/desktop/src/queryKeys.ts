@@ -17,5 +17,6 @@ export const queryKeys = {
   },
   summaries: {
     forVehicle: (vehicleId: string | number) => ["summaries", String(vehicleId)] as const,
-  }
+  },
+  preferences: () => ["preferences"] as const,
 };

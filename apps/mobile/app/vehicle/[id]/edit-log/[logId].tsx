@@ -10,6 +10,8 @@ import {
 import { Text } from "@/components/Themed";
 import { useState, useEffect } from "react";
 import type { CustomFieldValueCreate } from "@/src/types";
+import { centsToInput, parseMoney } from "@carbaddie/core";
+import { useUnits } from "@/src/hooks/useUnits";
 
 export default function EditLogScreen() {
   const { id: vehicleId, logId } = useLocalSearchParams<{ id: string; logId: string }>();
@@ -20,6 +22,7 @@ export default function EditLogScreen() {
   const { data: serviceTypes } = useServiceTypes();
   const updateMutation = useUpdateMaintenanceLog();
   const deleteMutation = useDeleteMaintenanceLog();
+  const units = useUnits();
 
   const [serviceTypeId, setServiceTypeId] = useState<string | null>(null);
   const [date, setDate] = useState("");
@@ -39,8 +42,8 @@ export default function EditLogScreen() {
     if (log) {
       setServiceTypeId(log.service_type_id ?? null);
       setDate(log.date);
-      setMileage(String(log.mileage));
-      setCost(log.cost != null ? String(log.cost) : "");
+      setMileage(String(units.toDisplay(log.mileage)));
+      setCost(centsToInput(log.cost_cents));
       setNotes(log.notes ?? "");
       const fv: Record<string, string> = {};
       (log.custom_field_values || []).forEach((cfv) => {
@@ -48,7 +51,7 @@ export default function EditLogScreen() {
       });
       setFieldValues(fv);
     }
-  }, [log]);
+  }, [log, units]);
 
   const inputStyle = [
     styles.input,
@@ -72,6 +75,11 @@ export default function EditLogScreen() {
       Alert.alert("Invalid Mileage", "Please enter a valid mileage.");
       return;
     }
+    const costCents = parseMoney(cost);
+    if (costCents === null) {
+      Alert.alert("Invalid Cost", "Enter the cost as an amount, e.g. 45.90");
+      return;
+    }
 
     const cfv: CustomFieldValueCreate[] = Object.entries(fieldValues)
       .filter(([_, v]) => v != null && v.trim().length > 0)
@@ -82,8 +90,8 @@ export default function EditLogScreen() {
         logId: logId!,
         data: {
           date: date.trim(),
-          mileage: numMileage,
-          cost: cost ? parseFloat(cost) || 0 : 0,
+          mileage: units.fromDisplay(numMileage),
+          cost_cents: costCents,
           notes: notes.trim() || null,
           service_type_id: serviceTypeId,
           custom_field_values: cfv,
@@ -193,7 +201,7 @@ export default function EditLogScreen() {
       />
 
       {/* Mileage Input */}
-      <Text style={[styles.label, { color: colors.text }]}>Odometer Mileage (km) *</Text>
+      <Text style={[styles.label, { color: colors.text }]}>Odometer Mileage ({units.unit}) *</Text>
       <TextInput
         style={inputStyle}
         value={mileage}
@@ -204,7 +212,7 @@ export default function EditLogScreen() {
       />
 
       {/* Cost Input */}
-      <Text style={[styles.label, { color: colors.text }]}>Total Cost ($)</Text>
+      <Text style={[styles.label, { color: colors.text }]}>Total Cost ({units.currency})</Text>
       <TextInput
         style={inputStyle}
         value={cost}

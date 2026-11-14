@@ -1,6 +1,9 @@
 import { useState } from "react";
 import { useAppPreferences } from "../components/AppPreferencesProvider";
-import { useVehicles, useServiceTypes, useExportBackup, useWipeDatabase } from "../api";
+import { useVehicles, useServiceTypes, useExportBackup, useWipeDatabase, useSetPreference } from "../api";
+import { COMMON_CURRENCIES } from "@carbaddie/core";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useUnits } from "../hooks/useUnits";
 import { GoogleDriveSyncSection } from "../components/GoogleDriveSyncSection";
 import { RestoreSection } from "../components/RestoreSection";
 import { Button } from "@/components/ui/button";
@@ -51,23 +54,12 @@ export function SettingsPage() {
   const { mutateAsync: wipeDatabase, isPending: isWiping } =
     useWipeDatabase();
 
-  // Preferences stored in localStorage (desktop has no SQLite settings table)
-  const [odometerUnit, setOdometerUnit] = useState<"km" | "mi">(() => {
-    return (localStorage.getItem("pref_odometer_unit") as "km" | "mi") || "km";
-  });
-  const [currencySymbol, setCurrencySymbol] = useState<string>(() => {
-    return localStorage.getItem("pref_currency_symbol") || "$";
-  });
-
-  const handleSetUnit = (unit: "km" | "mi") => {
-    setOdometerUnit(unit);
-    localStorage.setItem("pref_odometer_unit", unit);
-  };
-
-  const handleSetCurrency = (sym: string) => {
-    setCurrencySymbol(sym);
-    localStorage.setItem("pref_currency_symbol", sym);
-  };
+  // Currency and distance unit are synced to your other devices.
+  const units = useUnits();
+  const { mutate: setPreference } = useSetPreference();
+  const currencies = COMMON_CURRENCIES.includes(units.currency as (typeof COMMON_CURRENCIES)[number])
+    ? [...COMMON_CURRENCIES]
+    : [units.currency, ...COMMON_CURRENCIES];
 
   const handleExport = async () => {
     try {
@@ -177,7 +169,7 @@ export function SettingsPage() {
               Distance Units
             </p>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Odometer and interval measurements
+              Odometer and intervals; stored in km, so switching converts what you see
             </p>
           </div>
           <PillSelector
@@ -185,30 +177,33 @@ export function SettingsPage() {
               { value: "km", label: "km" },
               { value: "mi", label: "miles" },
             ]}
-            selected={odometerUnit}
-            onSelect={(v) => handleSetUnit(v as "km" | "mi")}
+            selected={units.unit}
+            onSelect={(v) => setPreference({ key: "distance_unit", value: v })}
           />
         </div>
 
-        {/* Currency Symbol */}
+        {/* Currency */}
         <div className="flex items-center justify-between pt-4 border-t border-border/60">
           <div>
             <p className="text-sm font-medium text-foreground">
-              Currency Symbol
+              Currency
             </p>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Used on service receipts and cost calculations
+              All costs are shown in it; changing it doesn't convert amounts
             </p>
           </div>
-          <PillSelector
-            options={[
-              { value: "$", label: "$" },
-              { value: "€", label: "€" },
-              { value: "£", label: "£" },
-            ]}
-            selected={currencySymbol}
-            onSelect={handleSetCurrency}
-          />
+          <Select value={units.currency} onValueChange={(v) => setPreference({ key: "currency", value: v })}>
+            <SelectTrigger className="h-8 w-28 text-xs font-mono">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {currencies.map((code) => (
+                <SelectItem key={code} value={code} className="text-xs font-mono">
+                  {code}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </div>
 

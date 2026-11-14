@@ -20,6 +20,7 @@ import { MaintenanceLogRead as MaintenanceLog } from "@/types";
 import { Calendar, Edit3, Gauge, MoreHorizontal, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useUnits } from "../hooks/useUnits";
 
 interface LogCardProps {
   log: MaintenanceLog;
@@ -28,6 +29,7 @@ interface LogCardProps {
 
 export function LogCard({ log, onDelete }: LogCardProps) {
   const navigate = useNavigate();
+  const units = useUnits();
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
@@ -70,11 +72,11 @@ export function LogCard({ log, onDelete }: LogCardProps) {
             <span className="opacity-30">/</span>
             <span className="flex items-center gap-1 font-mono">
               <Gauge className="h-3 w-3 opacity-60" />
-              {log.mileage.toLocaleString()} km
+              {units.distance(log.mileage)}
             </span>
             <span className="opacity-30">/</span>
             <span className="flex items-center gap-1 font-mono font-medium text-foreground">
-              ${log.cost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              {units.money(log.cost_cents)}
             </span>
           </div>
         </div>

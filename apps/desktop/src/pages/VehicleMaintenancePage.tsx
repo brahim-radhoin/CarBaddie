@@ -5,6 +5,7 @@ import { useAllLogsForVehicle, useServiceTypeSummaries, useServiceTypes, useDele
 import { ActivityTimeline } from "../components/ActivityTimeline";
 import { LogHistoryList } from "../components/LogHistoryList";
 import { VehicleStatistics, VehicleStatsData } from "../components/VehicleStatistics";
+import { useUnits } from "../hooks/useUnits";
 
 // UI Components
 import { Button } from "@/components/ui/button";
@@ -27,6 +28,7 @@ export function VehicleMaintenancePage() {
   const { data: serviceTypeSummaries = [], isLoading: isLoadingSummaries } = useServiceTypeSummaries(vehicleId);
   const { data: allServiceTypes = [] } = useServiceTypes();
   const deleteLogMutation = useDeleteMaintenanceLog();
+  const units = useUnits();
 
   const [activeTab, setActiveTab] = useState<"dashboard" | "statistics" | "calendar">("dashboard");
   const [dateFilter, setDateFilter] = useState<string | null>(null);
@@ -44,9 +46,9 @@ export function VehicleMaintenancePage() {
         ? Math.floor((new Date().getTime() - new Date(latestLog.date).getTime()) / 86400000)
         : null,
       totalLogs: allLogs.length,
-      totalCost: allLogs.reduce((sum, log) => sum + log.cost, 0),
-      averageCostPerService:
-        allLogs.length > 0 ? allLogs.reduce((sum, log) => sum + log.cost, 0) / allLogs.length : 0,
+      totalCostCents: allLogs.reduce((sum, log) => sum + log.cost_cents, 0),
+      averageCostCentsPerService:
+        allLogs.length > 0 ? Math.round(allLogs.reduce((sum, log) => sum + log.cost_cents, 0) / allLogs.length) : 0,
       vehicleAge: vehicle.year ? new Date().getFullYear() - vehicle.year : null,
     };
   }, [vehicle, allLogs]);
@@ -57,7 +59,7 @@ export function VehicleMaintenancePage() {
     () =>
       allLogs
         .filter((l) => new Date(l.date).getFullYear() === thisYear)
-        .reduce((sum, l) => sum + l.cost, 0),
+        .reduce((sum, l) => sum + l.cost_cents, 0),
     [allLogs, thisYear]
   );
 
@@ -119,11 +121,11 @@ export function VehicleMaintenancePage() {
               </span>
               <div className="mt-2">
                 <div className="font-mono text-xl font-medium text-foreground tracking-tight">
-                  {vehicleStats?.currentMileage.toLocaleString()}
-                  <span className="text-xs font-normal text-muted-foreground ml-1">km</span>
+                  {units.toDisplay(vehicleStats?.currentMileage ?? 0).toLocaleString()}
+                  <span className="text-xs font-normal text-muted-foreground ml-1">{units.unit}</span>
                 </div>
                 <p className="text-[11px] text-muted-foreground mt-0.5">
-                  Initial: {vehicle.initial_mileage?.toLocaleString() ?? 0} km
+                  Initial: {units.distance(vehicle.initial_mileage ?? 0)}
                 </p>
               </div>
             </div>
@@ -135,10 +137,10 @@ export function VehicleMaintenancePage() {
               </span>
               <div className="mt-2">
                 <div className="font-mono text-xl font-medium text-foreground tracking-tight">
-                  ${vehicleStats?.totalCost.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                  {units.money(vehicleStats?.totalCostCents ?? 0)}
                 </div>
                 <p className="text-[11px] text-muted-foreground mt-0.5 font-mono">
-                  ${costYTD.toLocaleString(undefined, { maximumFractionDigits: 0 })} this year
+                  {units.money(costYTD)} this year
                 </p>
               </div>
             </div>
@@ -225,7 +227,7 @@ export function VehicleMaintenancePage() {
                             </div>
                             <div className="flex items-center justify-between font-mono">
                               <span>Mileage:</span>
-                              <span className="text-foreground">{summary.last_log_mileage?.toLocaleString()} km</span>
+                              <span className="text-foreground">{summary.last_log_mileage != null ? units.distance(summary.last_log_mileage) : "—"}</span>
                             </div>
                           </>
                         ) : (

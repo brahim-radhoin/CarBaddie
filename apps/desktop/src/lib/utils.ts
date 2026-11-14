@@ -27,22 +27,6 @@ export interface VehicleStatsData {
 }
 
 /**
- * Formats a number into a currency string.
- * @param amount The number to format.
- * @returns A string representing the currency, e.g., "TND 90.000", or "N/A" if input is invalid.
- */
-export const formatCurrency = (amount?: number): string => {
-  if (typeof amount !== "number" || isNaN(amount)) {
-    return "N/A";
-  }
-  // You can customize the locale and currency as needed
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "TND", // Changed to Tunisian Dinar as per previous code
-  }).format(amount);
-};
-
-/**
  * Formats a date string or Date object into a readable format.
  * @param dateInput The date to format.
  * @returns A string like "May 21, 2025", or "N/A" if input is invalid.

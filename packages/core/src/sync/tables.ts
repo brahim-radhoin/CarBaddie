@@ -15,6 +15,7 @@ export const SYNCED_TABLE_INFO = [
   { name: "vehicle_service_interval_overrides", primaryKey: ["id"] },
   { name: "service_type_resets", primaryKey: ["parent_id", "reset_id"] },
   { name: "service_type_suggestions", primaryKey: ["parent_id", "suggestion_id"] },
+  { name: "preferences", primaryKey: ["key"] },
 ] as const satisfies readonly SyncedTable[];
 
 /** Tables that carry sync columns (updated_at, deleted_at, device_id). */

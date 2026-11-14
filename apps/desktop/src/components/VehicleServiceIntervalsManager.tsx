@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useUpsertIntervalOverride, useDeleteIntervalOverride } from "../api";
 import { ServiceTypeRead, VehicleServiceIntervalOverrideRead } from "../types";
 import { toast } from "sonner";
+import { useUnits } from "../hooks/useUnits";
 
 // UI Components & Icons
 import { Button } from "@/components/ui/button";
@@ -34,6 +35,7 @@ export function VehicleServiceIntervalsManager({
 }: VehicleServiceIntervalsManagerProps) {
   const upsertMutation = useUpsertIntervalOverride();
   const deleteMutation = useDeleteIntervalOverride();
+  const units = useUnits();
 
   const [formData, setFormData] = useState<IntervalFormData>({});
   const [manuallyAddedIds, setManuallyAddedIds] = useState<Set<string>>(new Set());
@@ -58,13 +60,13 @@ export function VehicleServiceIntervalsManager({
       const existingEntry = formData[st.id.toString()];
 
       newFormData[st.id.toString()] = {
-        km: override?.override_interval_km?.toString() || "",
+        km: override?.override_interval_km != null ? units.toDisplay(override.override_interval_km).toString() : "",
         days: override?.override_interval_days?.toString() || "",
         isDirty: existingEntry?.isDirty || false,
       };
     });
     setFormData(newFormData);
-  }, [currentOverrides, serviceTypesToDisplay]);
+  }, [currentOverrides, serviceTypesToDisplay, units]);
 
   const availableServiceTypesForOverride = useMemo(() => {
     const displayedIds = new Set(serviceTypesToDisplay.map((st) => st.id));
@@ -86,7 +88,7 @@ export function VehicleServiceIntervalsManager({
     const data = formData[serviceTypeId.toString()];
     if (!data) return;
 
-    const km = data.km ? parseInt(data.km, 10) : undefined;
+    const km = data.km ? units.fromDisplay(parseInt(data.km, 10)) : undefined;
     const days = data.days ? parseInt(data.days, 10) : undefined;
 
     if (km === undefined && days === undefined) {
@@ -200,7 +202,7 @@ export function VehicleServiceIntervalsManager({
             <tr>
               <th className="py-2.5 px-3">Service Category</th>
               <th className="py-2.5 px-3">Default Schedule</th>
-              <th className="py-2.5 px-3">Vehicle Override (km)</th>
+              <th className="py-2.5 px-3">Vehicle Override ({units.unit})</th>
               <th className="py-2.5 px-3">Vehicle Override (days)</th>
               <th className="py-2.5 px-3 text-right">Actions</th>
             </tr>
@@ -216,13 +218,13 @@ export function VehicleServiceIntervalsManager({
                     {st.name}
                   </td>
                   <td className="py-2.5 px-3 font-mono text-[11px] text-muted-foreground">
-                    {st.recommended_interval_km ? `${st.recommended_interval_km.toLocaleString()} km` : "—"} /{" "}
+                    {st.recommended_interval_km ? units.distance(st.recommended_interval_km) : "—"} /{" "}
                     {st.recommended_interval_days ? `${st.recommended_interval_days} d` : "—"}
                   </td>
                   <td className="py-2.5 px-3">
                     <Input
                       type="number"
-                      placeholder={st.recommended_interval_km?.toString() || "km"}
+                      placeholder={st.recommended_interval_km ? units.toDisplay(st.recommended_interval_km).toString() : units.unit}
                       value={entry.km}
                       onChange={(e) => handleInputChange(st.id, "km", e.target.value)}
                       className="h-7 text-xs font-mono w-28 bg-background"

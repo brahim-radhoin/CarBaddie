@@ -3,6 +3,7 @@ import { useLocalSearchParams, useRouter, useTheme } from "expo-router";
 import { useVehicle, useUpdateVehicle, useDeleteVehicle } from "@/src/hooks/useDatabase";
 import { Text } from "@/components/Themed";
 import { useState, useEffect } from "react";
+import { useUnits } from "@/src/hooks/useUnits";
 
 export default function EditVehicleScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -11,6 +12,7 @@ export default function EditVehicleScreen() {
   const { data: vehicle, isLoading: isLoadingVehicle } = useVehicle(id);
   const updateMutation = useUpdateVehicle();
   const deleteMutation = useDeleteVehicle();
+  const units = useUnits();
 
   const [make, setMake] = useState("");
   const [model, setModel] = useState("");
@@ -25,10 +27,10 @@ export default function EditVehicleScreen() {
       setModel(vehicle.model);
       setYear(vehicle.year ? String(vehicle.year) : "");
       setVin(vehicle.vin ?? "");
-      setMileage(vehicle.initial_mileage ? String(vehicle.initial_mileage) : "");
+      setMileage(vehicle.initial_mileage != null ? String(units.toDisplay(vehicle.initial_mileage)) : "");
       setAcquisitionDate(vehicle.acquisition_date ?? "");
     }
-  }, [vehicle]);
+  }, [vehicle, units]);
 
   const inputStyle = [styles.input, { backgroundColor: colors.card, color: colors.text, borderColor: colors.border }];
 
@@ -47,7 +49,7 @@ export default function EditVehicleScreen() {
           model: model.trim(),
           year: year ? Number(year) : undefined,
           vin: vin.trim() || null,
-          initial_mileage: mileage ? Number(mileage) : undefined,
+          initial_mileage: mileage ? units.fromDisplay(Number(mileage)) : undefined,
           acquisition_date: acquisitionDate.trim() || null,
         },
       },
@@ -103,7 +105,7 @@ export default function EditVehicleScreen() {
       <Text style={[styles.label, { color: colors.text }]}>VIN</Text>
       <TextInput style={inputStyle} value={vin} onChangeText={setVin} autoCapitalize="characters" />
 
-      <Text style={[styles.label, { color: colors.text }]}>Initial Mileage (km)</Text>
+      <Text style={[styles.label, { color: colors.text }]}>Initial Mileage ({units.unit})</Text>
       <TextInput style={inputStyle} value={mileage} onChangeText={setMileage} keyboardType="numeric" />
 
       <View style={styles.dateHeaderRow}>
