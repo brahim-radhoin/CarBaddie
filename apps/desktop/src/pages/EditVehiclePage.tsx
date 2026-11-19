@@ -81,7 +81,7 @@ export function EditVehiclePage() {
           Edit vehicle
         </h1>
         <p className="text-xs text-muted-foreground mt-0.5">
-          Update identification, year, or initial odometer telemetry.
+          Make, model, year, type and starting odometer
         </p>
       </div>
 

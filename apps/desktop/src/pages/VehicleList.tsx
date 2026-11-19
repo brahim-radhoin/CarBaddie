@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
+import { splitGarage } from "@carbaddie/core";
 import { useVehicles } from "../api";
 import { VehicleCard } from "../components/VehicleCard";
+import { EmptyGarage, GarageCard, PartsSheet, type PartsTarget } from "../components/Garage";
 import { useNavigate } from "react-router-dom";
 
 // shadcn/ui components
@@ -10,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 // lucide-react icons
-import { Plus, Search, Car } from "lucide-react";
+import { Plus, Search } from "lucide-react";
 
 type SortOption = "make_asc" | "make_desc" | "model_asc" | "model_desc" | "newest" | "oldest";
 const sortOptions: { value: SortOption; label: string }[] = [
@@ -28,9 +30,14 @@ export function VehicleList() {
 
   const [searchTerm, setSearchTerm] = useState("");
   const [sortBy, setSortBy] = useState<SortOption>("newest");
+  const [partsTarget, setPartsTarget] = useState<PartsTarget | null>(null);
+
+  // The deck is the phone's garage deck exactly (favourites, then unset vehicles by age): search
+  // and sort only apply to the vehicles below it.
+  const { deck, others } = useMemo(() => splitGarage(allVehicles), [allVehicles]);
 
   const filteredAndSortedVehicles = useMemo(() => {
-    let result = [...allVehicles];
+    let result = [...others];
     if (searchTerm) {
       const lower = searchTerm.toLowerCase();
       result = result.filter(
@@ -49,7 +56,7 @@ export function VehicleList() {
       case "oldest": result.sort((a, b) => a.id.localeCompare(b.id)); break;
     }
     return result;
-  }, [allVehicles, searchTerm, sortBy]);
+  }, [others, searchTerm, sortBy]);
 
   return (
     <div className="space-y-6 max-w-6xl">
@@ -72,75 +79,74 @@ export function VehicleList() {
         </Button>
       </div>
 
-      {/* Filter / Search Controls */}
-      <div className="flex flex-col sm:flex-row gap-2.5">
-        <div className="relative flex-1">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground opacity-60" />
-          <Input
-            placeholder="Search make, model or VIN"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-8 h-8 text-xs bg-card"
-          />
-        </div>
-        <div className="w-full sm:w-56">
-          <Select value={sortBy} onValueChange={(val) => setSortBy(val as SortOption)}>
-            <SelectTrigger className="h-8 text-xs bg-card">
-              <SelectValue placeholder="Sort by" />
-            </SelectTrigger>
-            <SelectContent>
-              {sortOptions.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value} className="text-xs">
-                  {opt.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-
-      {/* Main Grid View */}
       {isLoading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {[...Array(3)].map((_, i) => (
-            <Skeleton key={i} className="h-40 rounded-lg" />
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 2xl:grid-cols-3">
+          {[...Array(2)].map((_, i) => (
+            <Skeleton key={i} className="h-96 rounded-xl" />
           ))}
         </div>
       ) : error ? (
         <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-4 text-xs text-destructive">
-          Unable to load vehicles. Verify backend connection.
+          Unable to load vehicles
         </div>
-      ) : filteredAndSortedVehicles.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-border p-12 text-center">
-          <div className="w-8 h-8 mx-auto rounded border border-border bg-muted/40 flex items-center justify-center text-muted-foreground mb-3">
-            <Car className="h-4 w-4" />
-          </div>
-          <h3 className="text-sm font-medium text-foreground">
-            {searchTerm ? "No vehicles match your search" : "No vehicles yet"}
-          </h3>
-          <p className="text-xs text-muted-foreground mt-1 max-w-sm mx-auto">
-            {searchTerm
-              ? "Try adjusting your search criteria or clear the query to see all vehicles."
-              : "Register your first vehicle to start tracking odometer readings, service intervals, and logs."}
-          </p>
-          {!searchTerm && (
-            <Button
-              onClick={() => navigate("/vehicles/new")}
-              variant="outline"
-              className="mt-4 h-8 text-xs gap-1.5"
-            >
-              <Plus className="h-3.5 w-3.5" />
-              Add first vehicle
-            </Button>
-          )}
-        </div>
+      ) : allVehicles.length === 0 ? (
+        <EmptyGarage onAdd={() => navigate("/vehicles/new")} />
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
-          {filteredAndSortedVehicles.map((vehicle) => (
-            <VehicleCard key={vehicle.id} vehicle={vehicle} />
-          ))}
-        </div>
+        <>
+          {/* The garage deck: favourites as big cards with their outline, as on the phone */}
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 2xl:grid-cols-3">
+            {deck.map((vehicle) => (
+              <GarageCard key={vehicle.id} vehicle={vehicle} onParts={setPartsTarget} />
+            ))}
+          </div>
+
+          {others.length > 0 && (
+            <section className="space-y-3">
+              <div className="flex flex-col gap-2.5 border-b border-border pb-3 sm:flex-row sm:items-center">
+                <h2 className="text-sm font-medium text-foreground sm:flex-1">Other vehicles</h2>
+                <div className="relative sm:w-64">
+                  <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground opacity-60" />
+                  <Input
+                    placeholder="Search make, model or VIN"
+                    aria-label="Search other vehicles"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="h-8 bg-card pl-8 text-xs"
+                  />
+                </div>
+                <div className="sm:w-48">
+                  <Select value={sortBy} onValueChange={(val) => setSortBy(val as SortOption)}>
+                    <SelectTrigger className="h-8 bg-card text-xs" aria-label="Sort other vehicles">
+                      <SelectValue placeholder="Sort by" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {sortOptions.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {filteredAndSortedVehicles.length === 0 ? (
+                <p className="rounded-lg border border-dashed border-border p-8 text-center text-xs text-muted-foreground">
+                  No vehicles match your search
+                </p>
+              ) : (
+                <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
+                  {filteredAndSortedVehicles.map((vehicle) => (
+                    <VehicleCard key={vehicle.id} vehicle={vehicle} />
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
+        </>
       )}
+
+      <PartsSheet target={partsTarget} onClose={() => setPartsTarget(null)} />
     </div>
   );
 }

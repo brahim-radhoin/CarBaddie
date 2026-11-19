@@ -1,9 +1,11 @@
-import { BODY_TYPES, drawableBodyType, guessBodyType } from "@carbaddie/core";
+import { BODY_TYPES, drawableBodyType, guessBodyType, splitGarage } from "@carbaddie/core";
 import { useState, useEffect, FormEvent } from "react";
 import { VehicleCreate, VehicleRead } from "../types";
+import { useVehicles } from "../api";
 import { useGetMakes, useGetModels, useGetYears } from "../hooks/useVehicleDefinitions";
 import { useUnits } from "../hooks/useUnits";
 import { cn } from "@/lib/utils";
+import { Switch } from "@/components/ui/switch";
 
 // UI Components & Icons
 import { Button } from "@/components/ui/button";
@@ -36,6 +38,12 @@ export function VehicleForm({ initialData, isSubmitting, backendErrors, onSubmit
   // Until the user picks one, a new vehicle's type follows its make (a Yamaha is a motorbike) and an
   // existing one keeps what it has, including a type this version can't draw.
   const [pickedType, setPickedType] = useState<string | null>(null);
+  // The deck switch (edit only, like the phone): it shows where the vehicle is now, and is sent
+  // only once the user flips it, so an unset vehicle stays unset and resolves the same everywhere.
+  const [pickedFavourite, setPickedFavourite] = useState<boolean | null>(null);
+  const { data: allVehicles = [] } = useVehicles();
+  const onDeck = !!initialData?.id && splitGarage(allVehicles).deck.some((v) => v.id === initialData.id);
+  const favourite = pickedFavourite ?? onDeck;
   const shownMileage = (km?: number | null) => (km != null ? units.toDisplay(km).toString() : "");
   const [formData, setFormData] = useState<VehicleFormData>({
     make: initialData?.make || "",
@@ -98,6 +106,7 @@ export function VehicleForm({ initialData, isSubmitting, backendErrors, onSubmit
       initial_mileage: formData.initial_mileage ? units.fromDisplay(parseInt(formData.initial_mileage, 10), initialData?.initial_mileage) : undefined,
       acquisition_date: formData.acquisition_date || undefined,
       ...(mode === "edit" ? (pickedType !== null ? { body_type: pickedType } : {}) : { body_type: shownType }),
+      ...(mode === "edit" && pickedFavourite !== null ? { is_favorite: pickedFavourite } : {}),
     };
     onSubmit(payload);
   };
@@ -203,7 +212,7 @@ export function VehicleForm({ initialData, isSubmitting, backendErrors, onSubmit
           </div>
         </div>
 
-        {/* Type: picks the outline the phone draws for this vehicle */}
+        {/* Type: picks the outline drawn for this vehicle */}
         <div className="space-y-1.5 pt-3 border-t border-border">
           <Label htmlFor="body_type" className="text-xs font-medium text-foreground">
             Type
@@ -221,6 +230,18 @@ export function VehicleForm({ initialData, isSubmitting, backendErrors, onSubmit
             </SelectContent>
           </Select>
         </div>
+
+        {mode === "edit" && (
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <Label htmlFor="is_favorite" className="text-xs font-medium text-foreground">
+                Show on the garage deck
+              </Label>
+              <p className="mt-0.5 text-xs text-muted-foreground">Favourites are the big cards on the vehicles page</p>
+            </div>
+            <Switch id="is_favorite" checked={favourite} onCheckedChange={setPickedFavourite} disabled={isSubmitting} />
+          </div>
+        )}
 
         {/* Starting odometer & Odometer */}
         <div className="pt-3 border-t border-border">

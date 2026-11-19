@@ -16,6 +16,7 @@ import { UpdateOdometerPopover } from "../components/UpdateOdometerPopover";
 import { useUnits } from "../hooks/useUnits";
 import { STATUS_LABEL, daysBetweenISO, formatISO, parseISO, summariseStatuses, todayISO } from "@carbaddie/core";
 import { useUpcomingMaintenance } from "../hooks/useUpcomingMaintenance";
+import { VehiclePartsPanel } from "../components/Garage";
 
 // UI Components
 import { Button } from "@/components/ui/button";
@@ -127,6 +128,9 @@ export function VehicleMaintenancePage() {
       {/* DASHBOARD OVERVIEW */}
       {activeTab === "dashboard" && (
         <div className="space-y-6">
+          {/* The outline: which part of the vehicle is due, tap a part for its services */}
+          <VehiclePartsPanel vehicle={vehicle} />
+
           {/* Telemetry Metric Cards */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             {/* Odometer */}
@@ -221,7 +225,7 @@ export function VehicleMaintenancePage() {
                       variant="outline"
                       size="sm"
                       className="h-8 px-3 text-xs"
-                      onClick={() => navigate(`/vehicles/${vehicle.id}/add-log`)}
+                      onClick={() => navigate(`/vehicles/${vehicle.id}/add-log?service_type_id=${encodeURIComponent(item.serviceTypeId)}`)}
                     >
                       Log this service
                     </Button>
