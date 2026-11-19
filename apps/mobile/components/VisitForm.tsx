@@ -1,10 +1,14 @@
 // The garage visit form (add and edit): a header (date, odometer, shop, notes) and one or more
 // service items, each saved as a maintenance log of the visit.
 import { StyleSheet, ScrollView, TextInput, TouchableOpacity, View, Alert } from "react-native";
-import { useTheme } from "expo-router";
+import { useTheme, type Palette } from "@/src/theme";
 import { useQueryClient } from "@tanstack/react-query";
-import { useState, type ReactNode } from "react";
+import { useState, type ReactNode, useMemo } from "react";
 import { Text } from "@/components/Themed";
+import { Icon } from "@/components/Controls";
+import { DateField } from "@/components/DateField";
+import { PickerField } from "@/components/PickerField";
+import { addDaysISO, todayISO } from "@/src/dates";
 import { useVehicle, useServiceTypes, useCustomFieldsForServiceType } from "@/src/hooks/useDatabase";
 import { restoreDefaultServiceTypes } from "@/src/db/seed";
 import { useUnits } from "@/src/hooks/useUnits";
@@ -52,10 +56,11 @@ const newItem = (serviceTypeId: string | null = null): ItemDraft => ({
   values: {},
 });
 
-const today = () => new Date().toISOString().slice(0, 10);
 
 export function VisitForm({ vehicleId, initial, initialServiceTypeId, saveLabel, onSubmit, onDelete }: VisitFormProps) {
   const { colors } = useTheme();
+
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const queryClient = useQueryClient();
   const { data: vehicle } = useVehicle(vehicleId);
   const { data: serviceTypes = [] } = useServiceTypes();
@@ -63,7 +68,7 @@ export function VisitForm({ vehicleId, initial, initialServiceTypeId, saveLabel,
   const [isSeeding, setIsSeeding] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
-  const [date, setDate] = useState(initial?.date ?? today());
+  const [date, setDate] = useState(initial?.date ?? todayISO());
   const [mileage, setMileage] = useState(initial ? String(units.toDisplay(initial.mileage)) : "");
   const [shop, setShop] = useState(initial?.shop ?? "");
   const [notes, setNotes] = useState(initial?.notes ?? "");
@@ -105,29 +110,24 @@ export function VisitForm({ vehicleId, initial, initialServiceTypeId, saveLabel,
     );
 
   const inputStyle = [styles.input, { backgroundColor: colors.card, color: colors.text, borderColor: colors.border }];
-  const muted = (alpha: string) => (colors.text as string) + alpha;
 
-  const setYesterday = () => {
-    const y = new Date();
-    y.setDate(y.getDate() - 1);
-    setDate(y.toISOString().slice(0, 10));
-  };
+  const setYesterday = () => setDate(addDaysISO(todayISO(), -1));
 
   const handleSave = async () => {
     if (!date.trim() || !mileage.trim()) {
-      Alert.alert("Required", "Date and Mileage are required.");
+      Alert.alert("Required", "Date and mileage are required.");
       return;
     }
     const numMileage = parseInt(mileage, 10);
     if (isNaN(numMileage) || numMileage < 0) {
-      Alert.alert("Invalid Mileage", "Please enter a valid mileage.");
+      Alert.alert("Invalid mileage", "Please enter a valid mileage.");
       return;
     }
     const parsed: ServiceItemUpdate[] = [];
     for (const item of items) {
       const costCents = parseMoney(item.cost);
       if (costCents === null) {
-        Alert.alert("Invalid Cost", "Enter each cost as an amount, e.g. 45.90");
+        Alert.alert("Invalid cost", "Enter each cost as an amount, e.g. 45.90");
         return;
       }
       const values: CustomFieldValueCreate[] = Object.entries(item.values)
@@ -152,7 +152,7 @@ export function VisitForm({ vehicleId, initial, initialServiceTypeId, saveLabel,
         items: parsed,
       });
     } catch (e: any) {
-      Alert.alert("Error Saving Visit", e.message ?? "Could not save the visit.");
+      Alert.alert("Could not save visit", e.message ?? "Could not save the visit.");
     } finally {
       setIsSaving(false);
     }
@@ -163,65 +163,65 @@ export function VisitForm({ vehicleId, initial, initialServiceTypeId, saveLabel,
   const total = items.reduce((sum, item) => sum + (parseMoney(item.cost) ?? 0), 0);
 
   return (
-    <ScrollView
+    <ScrollView automaticallyAdjustKeyboardInsets
       style={[styles.container, { backgroundColor: colors.background }]}
       contentContainerStyle={styles.content}
       keyboardShouldPersistTaps="handled"
     >
       {/* Date Input with Quick Pills */}
       <View style={[styles.dateHeaderRow, { marginTop: 0 }]}>
-        <Text style={[styles.label, { color: colors.text, marginTop: 0 }]}>Date (YYYY-MM-DD) *</Text>
+        <Text style={[styles.label, { color: colors.text, marginTop: 0 }]}>Date *</Text>
         <View style={styles.quickDateRow}>
-          <TouchableOpacity onPress={() => setDate(today())} style={[styles.quickDatePill, { borderColor: colors.border }]}>
+          <TouchableOpacity accessibilityRole="button" onPress={() => setDate(todayISO())} style={[styles.quickDatePill, { borderColor: colors.border }]}>
             <Text style={[styles.quickDateText, { color: colors.primary }]}>Today</Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={setYesterday} style={[styles.quickDatePill, { borderColor: colors.border }]}>
+          <TouchableOpacity accessibilityRole="button" onPress={setYesterday} style={[styles.quickDatePill, { borderColor: colors.border }]}>
             <Text style={[styles.quickDateText, { color: colors.text }]}>Yesterday</Text>
           </TouchableOpacity>
         </View>
       </View>
-      <TextInput style={inputStyle} value={date} onChangeText={setDate} placeholder="YYYY-MM-DD" placeholderTextColor={muted("55")} />
+      <DateField label="Visit date" value={date} onChange={setDate} />
 
       {/* Mileage Input */}
-      <Text style={[styles.label, { color: colors.text }]}>Odometer Mileage ({units.unit}) *</Text>
+      <Text style={[styles.label, { color: colors.text }]}>Odometer ({units.unit}) *</Text>
       <TextInput
         style={inputStyle}
         value={mileage}
         onChangeText={setMileage}
         keyboardType="numeric"
         placeholder={currentOdometer != null ? `e.g. ${units.toDisplay(currentOdometer)} (current)` : "e.g. 55000"}
-        placeholderTextColor={muted("55")}
+        placeholderTextColor={colors.textMuted}
       />
 
       {/* Shop */}
       <Text style={[styles.label, { color: colors.text }]}>Shop / Garage</Text>
-      <TextInput style={inputStyle} value={shop} onChangeText={setShop} placeholder="e.g. Main Street Auto" placeholderTextColor={muted("55")} />
+      <TextInput style={inputStyle} value={shop} onChangeText={setShop} placeholder="e.g. Main Street Auto" placeholderTextColor={colors.textMuted} />
 
       {/* Visit notes */}
-      <Text style={[styles.label, { color: colors.text }]}>Visit Notes</Text>
+      <Text style={[styles.label, { color: colors.text }]}>Visit notes</Text>
       <TextInput
         style={[...inputStyle, styles.textArea]}
         value={notes}
         onChangeText={setNotes}
         multiline
         numberOfLines={3}
-        placeholder="Invoice number, mechanic recommendations..."
-        placeholderTextColor={muted("55")}
+        placeholder="Invoice number, recommendations"
+        placeholderTextColor={colors.textMuted}
       />
 
       {/* Services */}
       <View style={styles.servicesHeader}>
         <Text style={[styles.sectionHeader, { color: colors.primary, marginTop: 0, marginBottom: 0 }]}>Services</Text>
-        <Text style={[styles.servicesTotal, { color: muted("99") }]}>
+        <Text style={[styles.servicesTotal, { color: colors.textSecondary }]}>
           {items.length} item{items.length !== 1 ? "s" : ""} · {units.money(total)}
         </Text>
       </View>
 
       {serviceTypes.length === 0 ? (
         <View style={[styles.emptyStBox, { borderColor: colors.border, backgroundColor: colors.card }]}>
-          <Text style={{ color: muted("88"), fontSize: 13, marginBottom: 8 }}>No service types found.</Text>
-          <TouchableOpacity style={[styles.seedQuickBtn, { backgroundColor: colors.primary }]} onPress={handleSeedDefaults} disabled={isSeeding}>
-            <Text style={styles.seedQuickBtnText}>{isSeeding ? "Loading..." : "Load Default Services"}</Text>
+          <Text style={{ color: colors.textSecondary, fontSize: 13, marginBottom: 8 }}>No service types found.</Text>
+          <TouchableOpacity accessibilityRole="button" style={[styles.seedQuickBtn, { backgroundColor: colors.primary }]} onPress={handleSeedDefaults} disabled={isSeeding}>
+            <Text style={styles.seedQuickBtnText}>{isSeeding ? "Loading" : "Load default services"}</Text>
           </TouchableOpacity>
         </View>
       ) : (
@@ -239,25 +239,26 @@ export function VisitForm({ vehicleId, initial, initialServiceTypeId, saveLabel,
             {index === 0 && suggestedTypes.length > 0 && (
               <View style={[styles.sugBox, { backgroundColor: colors.background, borderColor: colors.border }]}>
                 <Text style={[styles.sugTitle, { color: colors.primary }]}>Co-performed Services</Text>
-                <Text style={[styles.sugDesc, { color: muted("88") }]}>Check to add them to this visit:</Text>
+                <Text style={[styles.sugDesc, { color: colors.textSecondary }]}>Check to add them to this visit:</Text>
                 <View style={styles.sugRow}>
                   {suggestedTypes.map((sug) => {
                     const isChecked = isSuggestionChecked(sug.id);
                     return (
-                      <TouchableOpacity
+                      <TouchableOpacity accessibilityRole="button"
                         key={sug.id}
                         style={[
                           styles.sugChip,
                           {
                             borderColor: isChecked ? colors.primary : colors.border,
-                            backgroundColor: isChecked ? (colors.primary as string) + "25" : "transparent",
+                            backgroundColor: isChecked ? colors.raised : "transparent",
                           },
                         ]}
+                        accessibilityState={{ selected: isChecked }}
                         onPress={() => toggleSuggestion(sug.id)}
                         activeOpacity={0.7}
                       >
-                        <Text style={[styles.sugChipText, { color: isChecked ? colors.primary : colors.text, fontWeight: isChecked ? "700" : "500" }]}>
-                          {isChecked ? "✓ " : "+ "}
+                        {isChecked && <Icon name="check" color={colors.text} size={14} />}
+                        <Text style={[styles.sugChipText, { color: colors.text, fontWeight: isChecked ? "600" : "500" }]}>
                           {sug.name}
                         </Text>
                       </TouchableOpacity>
@@ -271,22 +272,22 @@ export function VisitForm({ vehicleId, initial, initialServiceTypeId, saveLabel,
       )}
 
       {serviceTypes.length > 0 && (
-        <TouchableOpacity
+        <TouchableOpacity accessibilityRole="button"
           style={[styles.addItemBtn, { borderColor: colors.border }]}
           onPress={() => setItems((prev) => [...prev, newItem()])}
           activeOpacity={0.7}
         >
-          <Text style={[styles.addItemText, { color: colors.primary }]}>+ Add another service</Text>
+          <Text style={[styles.addItemText, { color: colors.primary }]}>Add another service</Text>
         </TouchableOpacity>
       )}
 
       {/* Action Buttons */}
-      <TouchableOpacity style={[styles.saveBtn, { backgroundColor: colors.primary }]} onPress={handleSave} disabled={isSaving} activeOpacity={0.8}>
-        <Text style={styles.saveBtnText}>{isSaving ? "Saving..." : saveLabel}</Text>
+      <TouchableOpacity accessibilityRole="button" style={[styles.saveBtn, { backgroundColor: colors.primary }]} onPress={handleSave} disabled={isSaving} activeOpacity={0.8}>
+        <Text style={styles.saveBtnText}>{isSaving ? "Saving" : saveLabel}</Text>
       </TouchableOpacity>
       {onDelete && (
-        <TouchableOpacity style={styles.deleteBtn} onPress={onDelete} disabled={isSaving} activeOpacity={0.8}>
-          <Text style={styles.deleteBtnText}>Delete Visit</Text>
+        <TouchableOpacity accessibilityRole="button" style={styles.deleteBtn} onPress={onDelete} disabled={isSaving} activeOpacity={0.8}>
+          <Text style={styles.deleteBtnText}>Delete visit</Text>
         </TouchableOpacity>
       )}
     </ScrollView>
@@ -307,9 +308,10 @@ interface ServiceItemEditorProps {
 /** One service of the visit: its category, cost, notes and the category's custom fields. */
 function ServiceItemEditor({ item, index, serviceTypes, currency, canRemove, onChange, onRemove, children }: ServiceItemEditorProps) {
   const { colors } = useTheme();
+
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const { data: customFields } = useCustomFieldsForServiceType(item.serviceTypeId ?? undefined);
   const inputStyle = [styles.input, { backgroundColor: colors.background, color: colors.text, borderColor: colors.border }];
-  const muted = (alpha: string) => (colors.text as string) + alpha;
   const selected = serviceTypes.find((st) => st.id === item.serviceTypeId);
   const resetTypes = selected?.resets?.length ? serviceTypes.filter((st) => selected.resets.includes(st.id)) : [];
   const setValue = (fieldId: string, value: string) => onChange({ values: { ...item.values, [fieldId]: value } });
@@ -319,33 +321,25 @@ function ServiceItemEditor({ item, index, serviceTypes, currency, canRemove, onC
       <View style={styles.itemHeader}>
         <Text style={[styles.itemTitle, { color: colors.text }]}>Service {index + 1}</Text>
         {canRemove && (
-          <TouchableOpacity onPress={onRemove} activeOpacity={0.7}>
+          <TouchableOpacity accessibilityRole="button" onPress={onRemove} activeOpacity={0.7}>
             <Text style={styles.removeText}>Remove</Text>
           </TouchableOpacity>
         )}
       </View>
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll}>
-        {serviceTypes.map((st) => (
-          <TouchableOpacity
-            key={st.id}
-            style={[
-              styles.chip,
-              {
-                backgroundColor: item.serviceTypeId === st.id ? colors.primary : colors.background,
-                borderColor: item.serviceTypeId === st.id ? colors.primary : colors.border,
-              },
-            ]}
-            onPress={() => onChange({ serviceTypeId: item.serviceTypeId === st.id ? null : st.id, values: {} })}
-            activeOpacity={0.7}
-          >
-            <Text style={{ color: item.serviceTypeId === st.id ? "#fff" : colors.text, fontSize: 13, fontWeight: "600" }}>{st.name}</Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
+      <PickerField
+        title="Service type"
+        placeholder="Select a service type"
+        value={item.serviceTypeId}
+        options={serviceTypes.map((st) => ({ value: st.id, label: st.name }))}
+        allowClear
+        clearLabel="No service type"
+        onChange={(id) => onChange({ serviceTypeId: id, values: {} })}
+        style={styles.pickerField}
+      />
 
       {resetTypes.length > 0 && (
-        <Text style={[styles.resetNoticeTitle, { color: muted("99") }]}>
+        <Text style={[styles.resetNoticeTitle, { color: colors.textSecondary }]}>
           Resets countdown for: {resetTypes.map((r) => r.name).join(", ")}
         </Text>
       )}
@@ -359,7 +353,7 @@ function ServiceItemEditor({ item, index, serviceTypes, currency, canRemove, onC
         onChangeText={(cost) => onChange({ cost })}
         keyboardType="decimal-pad"
         placeholder="0.00"
-        placeholderTextColor={muted("55")}
+        placeholderTextColor={colors.textMuted}
       />
 
       <Text style={[styles.label, { color: colors.text }]}>Notes</Text>
@@ -369,8 +363,8 @@ function ServiceItemEditor({ item, index, serviceTypes, currency, canRemove, onC
         onChangeText={(notes) => onChange({ notes })}
         multiline
         numberOfLines={2}
-        placeholder="Parts replaced, observations..."
-        placeholderTextColor={muted("55")}
+        placeholder="Parts replaced, observations"
+        placeholderTextColor={colors.textMuted}
       />
 
       {customFields?.map((field) => {
@@ -384,7 +378,7 @@ function ServiceItemEditor({ item, index, serviceTypes, currency, canRemove, onC
             {field.field_type === "boolean" ? (
               <View style={styles.booleanRow}>
                 {(["true", "false"] as const).map((v) => (
-                  <TouchableOpacity
+                  <TouchableOpacity accessibilityRole="button"
                     key={v}
                     style={[
                       styles.booleanPill,
@@ -396,14 +390,14 @@ function ServiceItemEditor({ item, index, serviceTypes, currency, canRemove, onC
                     onPress={() => setValue(field.id, v)}
                     activeOpacity={0.7}
                   >
-                    <Text style={{ color: currentValue === v ? "#fff" : colors.text, fontWeight: currentValue === v ? "700" : "500", fontSize: 13 }}>
+                    <Text style={{ color: currentValue === v ? colors.onPrimary : colors.text, fontWeight: currentValue === v ? "600" : "500", fontSize: 13 }}>
                       {v === "true" ? "Yes" : "No"}
                     </Text>
                   </TouchableOpacity>
                 ))}
                 {currentValue !== "" && (
-                  <TouchableOpacity style={[styles.booleanPillClear, { borderColor: colors.border }]} onPress={() => setValue(field.id, "")}>
-                    <Text style={{ color: muted("66"), fontSize: 11 }}>Clear</Text>
+                  <TouchableOpacity accessibilityRole="button" style={[styles.booleanPillClear, { borderColor: colors.border }]} onPress={() => setValue(field.id, "")}>
+                    <Text style={{ color: colors.textMuted, fontSize: 12 }}>Clear</Text>
                   </TouchableOpacity>
                 )}
               </View>
@@ -414,7 +408,7 @@ function ServiceItemEditor({ item, index, serviceTypes, currency, canRemove, onC
                 onChangeText={(v) => setValue(field.id, v)}
                 keyboardType={field.field_type === "number" ? "numeric" : "default"}
                 placeholder={`Enter ${field.name.toLowerCase()}${field.unit ? ` in ${field.unit}` : ""}`}
-                placeholderTextColor={muted("55")}
+                placeholderTextColor={colors.textMuted}
               />
             )}
           </View>
@@ -424,43 +418,44 @@ function ServiceItemEditor({ item, index, serviceTypes, currency, canRemove, onC
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Palette) => StyleSheet.create({
   container: { flex: 1 },
   content: { padding: 20, paddingBottom: 50 },
   label: { fontSize: 13, fontWeight: "600", marginBottom: 6, marginTop: 16 },
   input: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15 },
   textArea: { minHeight: 70, textAlignVertical: "top" },
+  pickerField: { marginTop: 4, marginBottom: 4 },
   chipScroll: { flexDirection: "row", marginTop: 4, marginBottom: 4 },
   chip: { borderWidth: 1, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8, marginRight: 8 },
   emptyStBox: { borderWidth: 1, borderRadius: 12, padding: 14, alignItems: "center" },
-  seedQuickBtn: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 },
-  seedQuickBtnText: { color: "#fff", fontWeight: "700", fontSize: 13 },
+  seedQuickBtn: { minHeight: 48, justifyContent: "center", paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 },
+  seedQuickBtnText: { color: colors.onPrimary, fontWeight: "600", fontSize: 13 },
   servicesHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 24, marginBottom: 10 },
   servicesTotal: { fontSize: 12, fontWeight: "600" },
   itemCard: { borderWidth: 1, borderRadius: 14, padding: 14, marginBottom: 12 },
   itemHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 },
-  itemTitle: { fontSize: 13, fontWeight: "700" },
-  removeText: { color: "#ef4444", fontSize: 12, fontWeight: "700" },
+  itemTitle: { fontSize: 13, fontWeight: "600" },
+  removeText: { color: colors.danger, fontSize: 12, fontWeight: "600" },
   sugBox: { borderWidth: 1, borderRadius: 12, padding: 12, marginTop: 10 },
-  sugTitle: { fontSize: 13, fontWeight: "700", marginBottom: 4 },
+  sugTitle: { fontSize: 13, fontWeight: "600", marginBottom: 4 },
   sugDesc: { fontSize: 12, lineHeight: 16, marginBottom: 10 },
   sugRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  sugChip: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 7 },
+  sugChip: { minHeight: 40, flexDirection: "row", alignItems: "center", gap: 6, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 7 },
   sugChipText: { fontSize: 12 },
-  resetNoticeTitle: { fontSize: 12, fontStyle: "italic", marginTop: 6 },
+  resetNoticeTitle: { fontSize: 12, marginTop: 6 },
   dateHeaderRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 16, marginBottom: 6 },
   quickDateRow: { flexDirection: "row", gap: 6 },
-  quickDatePill: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
-  quickDateText: { fontSize: 11, fontWeight: "600" },
+  quickDatePill: { minHeight: 40, justifyContent: "center", borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
+  quickDateText: { fontSize: 12, fontWeight: "600" },
   customFieldRow: { marginBottom: 4 },
   booleanRow: { flexDirection: "row", gap: 8, alignItems: "center" },
-  booleanPill: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 18, paddingVertical: 9 },
-  booleanPillClear: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8 },
-  sectionHeader: { fontSize: 15, fontWeight: "700", marginTop: 12, marginBottom: 4 },
+  booleanPill: { minHeight: 40, justifyContent: "center", borderWidth: 1, borderRadius: 8, paddingHorizontal: 18, paddingVertical: 9 },
+  booleanPillClear: { minHeight: 40, justifyContent: "center", borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8 },
+  sectionHeader: { fontSize: 15, fontWeight: "600", marginTop: 12, marginBottom: 4 },
   addItemBtn: { borderWidth: 1, borderStyle: "dashed", borderRadius: 12, paddingVertical: 12, alignItems: "center" },
-  addItemText: { fontSize: 14, fontWeight: "700" },
+  addItemText: { fontSize: 14, fontWeight: "600" },
   saveBtn: { marginTop: 28, borderRadius: 12, paddingVertical: 16, alignItems: "center" },
-  saveBtnText: { color: "#fff", fontSize: 16, fontWeight: "700" },
-  deleteBtn: { marginTop: 12, borderRadius: 12, paddingVertical: 14, alignItems: "center", backgroundColor: "#ef444415", borderWidth: 1, borderColor: "#ef444430" },
-  deleteBtnText: { color: "#ef4444", fontSize: 14, fontWeight: "700" },
+  saveBtnText: { color: colors.onPrimary, fontSize: 16, fontWeight: "600" },
+  deleteBtn: { marginTop: 12, borderRadius: 12, paddingVertical: 14, alignItems: "center", backgroundColor: colors.dangerBg, borderWidth: 1, borderColor: colors.border },
+  deleteBtnText: { color: colors.danger, fontSize: 14, fontWeight: "600" },
 });

@@ -1,9 +1,12 @@
 import { StyleSheet, ScrollView, TextInput, TouchableOpacity, View, Alert, ActivityIndicator } from "react-native";
-import { useLocalSearchParams, useTheme } from "expo-router";
+import { formatISO } from "@/src/dates";
+import { DateField } from "@/components/DateField";
+import { useLocalSearchParams } from "expo-router";
+import { useTheme, type Palette } from "@/src/theme";
 import { ValidationError } from "@carbaddie/core";
 import { useVehicle, useAddOdometerReading, useDeleteOdometerReading } from "@/src/hooks/useDatabase";
 import { Text } from "@/components/Themed";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useUnits } from "@/src/hooks/useUnits";
 
 /** Today as "YYYY-MM-DD" in local time. */
@@ -16,6 +19,8 @@ function localToday(): string {
 export default function OdometerScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { colors } = useTheme();
+
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const { data: vehicle } = useVehicle(id);
   const addMutation = useAddOdometerReading();
   const deleteMutation = useDeleteOdometerReading();
@@ -26,12 +31,12 @@ export default function OdometerScreen() {
   const [note, setNote] = useState("");
 
   const inputStyle = [styles.input, { backgroundColor: colors.card, color: colors.text, borderColor: colors.border }];
-  const muted = (colors.text as string) + "88";
+  const muted = colors.textSecondary;
 
   if (!vehicle) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <Text style={{ color: colors.text, textAlign: "center", marginTop: 40 }}>Loading vehicle...</Text>
+        <Text style={{ color: colors.text, textAlign: "center", marginTop: 40 }}>Loading vehicle</Text>
       </View>
     );
   }
@@ -60,7 +65,7 @@ export default function OdometerScreen() {
   };
 
   const handleDelete = (readingId: string, label: string) => {
-    Alert.alert("Delete Reading", `Delete ${label}?`, [
+    Alert.alert("Delete reading", `Delete ${label}?`, [
       { text: "Cancel", style: "cancel" },
       {
         text: "Delete",
@@ -71,7 +76,7 @@ export default function OdometerScreen() {
   };
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: colors.background }]} contentContainerStyle={styles.content}>
+    <ScrollView keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets style={[styles.container, { backgroundColor: colors.background }]} contentContainerStyle={styles.content}>
       <View style={[styles.currentCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <Text style={[styles.currentLabel, { color: muted }]}>Current odometer</Text>
         <Text style={[styles.currentValue, { color: colors.text }]}>
@@ -92,19 +97,19 @@ export default function OdometerScreen() {
         placeholderTextColor={muted}
       />
 
-      <Text style={[styles.label, { color: colors.text }]}>Date (YYYY-MM-DD) *</Text>
-      <TextInput style={inputStyle} value={date} onChangeText={setDate} placeholder="2025-01-31" placeholderTextColor={muted} />
+      <Text style={[styles.label, { color: colors.text }]}>Date *</Text>
+      <DateField label="Reading date" value={date} onChange={setDate} />
 
       <Text style={[styles.label, { color: colors.text }]}>Note</Text>
       <TextInput style={inputStyle} value={note} onChangeText={setNote} placeholder="Optional" placeholderTextColor={muted} />
 
-      <TouchableOpacity
+      <TouchableOpacity accessibilityRole="button"
         style={[styles.saveBtn, { backgroundColor: colors.primary }]}
         onPress={handleSave}
         disabled={addMutation.isPending}
         activeOpacity={0.8}
       >
-        {addMutation.isPending ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>Save Reading</Text>}
+        {addMutation.isPending ? <ActivityIndicator color={colors.onPrimary} /> : <Text style={styles.saveBtnText}>Save reading</Text>}
       </TouchableOpacity>
 
       <Text style={[styles.sectionTitle, { color: colors.text }]}>Readings ({vehicle.odometer_readings.length})</Text>
@@ -118,7 +123,7 @@ export default function OdometerScreen() {
             <View style={{ flex: 1 }}>
               <View style={styles.readingTop}>
                 <Text style={[styles.readingMileage, { color: colors.text }]}>{units.distance(r.mileage)}</Text>
-                <Text style={[styles.readingDate, { color: muted }]}>{r.date}</Text>
+                <Text style={[styles.readingDate, { color: muted }]}>{formatISO(r.date)}</Text>
               </View>
               {r.note && (
                 <Text style={[styles.readingNote, { color: muted }]} numberOfLines={2}>
@@ -126,9 +131,9 @@ export default function OdometerScreen() {
                 </Text>
               )}
             </View>
-            <TouchableOpacity
+            <TouchableOpacity accessibilityRole="button"
               style={styles.deleteBtn}
-              onPress={() => handleDelete(r.id, `${units.distance(r.mileage)} on ${r.date}`)}
+              onPress={() => handleDelete(r.id, `${units.distance(r.mileage)} on ${formatISO(r.date)}`)}
               activeOpacity={0.7}
             >
               <Text style={styles.deleteBtnText}>Delete</Text>
@@ -140,25 +145,25 @@ export default function OdometerScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Palette) => StyleSheet.create({
   container: { flex: 1 },
   content: { padding: 20, paddingBottom: 50 },
   currentCard: { borderRadius: 16, borderWidth: 1, padding: 16, alignItems: "center" },
   currentLabel: { fontSize: 12, fontWeight: "600" },
-  currentValue: { fontSize: 24, fontWeight: "800", marginTop: 4 },
-  currentHint: { fontSize: 11, marginTop: 4, textAlign: "center" },
+  currentValue: { fontSize: 24, fontWeight: "600", marginTop: 4 },
+  currentHint: { fontSize: 12, marginTop: 4, textAlign: "center" },
   label: { fontSize: 13, fontWeight: "600", marginBottom: 6, marginTop: 16 },
   input: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15 },
   saveBtn: { marginTop: 24, borderRadius: 12, paddingVertical: 16, alignItems: "center" },
-  saveBtnText: { color: "#fff", fontSize: 16, fontWeight: "700" },
-  sectionTitle: { fontSize: 15, fontWeight: "700", marginTop: 28, marginBottom: 10 },
+  saveBtnText: { color: colors.onPrimary, fontSize: 16, fontWeight: "600" },
+  sectionTitle: { fontSize: 15, fontWeight: "600", marginTop: 28, marginBottom: 10 },
   emptyCard: { borderRadius: 12, borderWidth: 1, padding: 20, alignItems: "center" },
   emptyText: { fontSize: 13 },
   readingCard: { borderRadius: 12, borderWidth: 1, padding: 14, marginBottom: 8, flexDirection: "row", alignItems: "center", gap: 10 },
   readingTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  readingMileage: { fontSize: 14, fontWeight: "700" },
+  readingMileage: { fontSize: 14, fontWeight: "600" },
   readingDate: { fontSize: 12 },
-  readingNote: { fontSize: 12, marginTop: 4, fontStyle: "italic" },
-  deleteBtn: { borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: "#ef444415", borderWidth: 1, borderColor: "#ef444430" },
-  deleteBtnText: { color: "#ef4444", fontSize: 12, fontWeight: "700" },
+  readingNote: { fontSize: 12, marginTop: 4 },
+  deleteBtn: { minHeight: 48, justifyContent: "center", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: colors.dangerBg, borderWidth: 1, borderColor: colors.border },
+  deleteBtnText: { color: colors.danger, fontSize: 12, fontWeight: "600" },
 });

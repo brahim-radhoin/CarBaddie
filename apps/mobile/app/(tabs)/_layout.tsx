@@ -1,57 +1,60 @@
-import { Tabs } from "expo-router";
-import { useColorScheme } from "@/components/useColorScheme";
+import { Tabs, useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
 import { View, Image, Text } from "react-native";
+import { useTheme } from "@/src/theme";
+import { IconButton } from "@/components/Controls";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === "dark";
-  const tint = isDark ? "#f59e0b" : "#d97706";
-  const inactive = isDark ? "#64748b" : "#94a3b8";
-  const tabBg = isDark ? "#161922" : "#ffffff";
-  const borderColor = isDark ? "#262a36" : "#e2e8f0";
+  const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
+  const router = useRouter();
 
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: tint,
-        tabBarInactiveTintColor: inactive,
+        tabBarActiveTintColor: colors.accent,
+        tabBarInactiveTintColor: colors.textMuted,
+        tabBarLabelStyle: { fontSize: 12, fontWeight: "500" },
         tabBarStyle: {
-          backgroundColor: tabBg,
-          borderTopColor: borderColor,
-          height: 60,
-          paddingBottom: 8,
+          backgroundColor: colors.card,
+          borderTopColor: colors.border,
+          height: 72 + insets.bottom,
+          paddingTop: 8,
+          paddingBottom: insets.bottom + 8,
         },
-        headerStyle: { backgroundColor: tabBg },
-        headerTintColor: isDark ? "#f1f5f9" : "#0f172a",
+        headerStyle: { backgroundColor: colors.card },
+        headerShadowVisible: false,
+        headerTintColor: colors.text,
+        headerTitleStyle: { fontWeight: "600", fontSize: 17 },
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
           title: "Vehicles",
+          headerRight: () => <IconButton name="add" label="Add vehicle" color={colors.text} onPress={() => router.push("/vehicle/new")} />,
           headerTitle: () => (
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }} accessibilityRole="header">
               <Image
                 source={require("@/assets/images/icon.png")}
-                style={{ width: 24, height: 24, borderRadius: 5 }}
+                style={{ width: 24, height: 24, borderRadius: 6 }}
+                accessibilityIgnoresInvertColors
               />
-              <Text style={{ fontSize: 17, fontWeight: "700", color: isDark ? "#f1f5f9" : "#0f172a" }}>
-                CarBaddie
-              </Text>
+              <Text style={{ fontSize: 17, fontWeight: "600", color: colors.text }}>CarBaddie</Text>
             </View>
           ),
           tabBarIcon: ({ color }) => (
-            <SymbolView name={{ ios: "car.fill", android: "directions_car", web: "directions_car" }} tintColor={color} size={26} />
+            <SymbolView name={{ ios: "car.fill", android: "directions_car", web: "directions_car" }} tintColor={color} size={24} />
           ),
         }}
       />
       <Tabs.Screen
         name="service-types"
         options={{
-          title: "Services",
+          title: "Service types",
           tabBarIcon: ({ color }) => (
-            <SymbolView name={{ ios: "wrench.and.screwdriver.fill", android: "build", web: "build" }} tintColor={color} size={26} />
+            <SymbolView name={{ ios: "wrench.and.screwdriver.fill", android: "build", web: "build" }} tintColor={color} size={24} />
           ),
         }}
       />
@@ -60,7 +63,7 @@ export default function TabLayout() {
         options={{
           title: "Settings",
           tabBarIcon: ({ color }) => (
-            <SymbolView name={{ ios: "gearshape.fill", android: "settings", web: "settings" }} tintColor={color} size={26} />
+            <SymbolView name={{ ios: "gearshape.fill", android: "settings", web: "settings" }} tintColor={color} size={24} />
           ),
         }}
       />

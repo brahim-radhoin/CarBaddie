@@ -13,7 +13,7 @@ export default function AddLogScreen() {
     <VisitForm
       vehicleId={vehicleId!}
       initialServiceTypeId={params.serviceTypeId || null}
-      saveLabel="Save Visit"
+      saveLabel="Save visit"
       onSubmit={async (data) => {
         await addMutation.mutateAsync({ vehicleId: vehicleId!, data });
         router.back();

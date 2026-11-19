@@ -1,19 +1,7 @@
-const amberDark = '#f59e0b';
-const amberLight = '#d97706';
+import { PALETTES, DEFAULT_ACCENT, accentColor } from "@carbaddie/core";
 
+// Kept for the Themed text/view defaults; the values come from the shared palette in @carbaddie/core.
 export default {
-  light: {
-    text: '#0f172a',
-    background: '#f8fafc',
-    tint: amberLight,
-    tabIconDefault: '#94a3b8',
-    tabIconSelected: amberLight,
-  },
-  dark: {
-    text: '#f1f5f9',
-    background: '#0d0f12',
-    tint: amberDark,
-    tabIconDefault: '#64748b',
-    tabIconSelected: amberDark,
-  },
+  light: { text: PALETTES.light.text, background: PALETTES.light.background, tint: accentColor(DEFAULT_ACCENT, "light"), tabIconDefault: PALETTES.light.textMuted, tabIconSelected: accentColor(DEFAULT_ACCENT, "light") },
+  dark: { text: PALETTES.dark.text, background: PALETTES.dark.background, tint: accentColor(DEFAULT_ACCENT, "dark"), tabIconDefault: PALETTES.dark.textMuted, tabIconSelected: accentColor(DEFAULT_ACCENT, "dark") },
 };

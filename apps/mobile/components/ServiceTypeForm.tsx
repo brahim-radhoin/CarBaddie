@@ -1,6 +1,8 @@
+import { useMemo } from "react";
 import React, { useState, useEffect } from "react";
 import { StyleSheet, ScrollView, TextInput, TouchableOpacity, View, Alert, ActivityIndicator } from "react-native";
-import { useRouter, useTheme } from "expo-router";
+import { useRouter } from "expo-router";
+import { useTheme, type Palette } from "@/src/theme";
 import {
   useServiceType,
   useServiceTypes,
@@ -9,6 +11,7 @@ import {
   useDeleteServiceType,
 } from "@/src/hooks/useDatabase";
 import { Text } from "@/components/Themed";
+import { Icon } from "@/components/Controls";
 import type { CustomFieldCreate } from "@/src/types";
 import { useUnits } from "@/src/hooks/useUnits";
 
@@ -26,6 +29,7 @@ const FIELD_TYPES: Array<{ type: CustomFieldCreate["field_type"]; label: string 
 export default function ServiceTypeForm({ serviceTypeId }: { serviceTypeId?: string }) {
   const isEdit = !!serviceTypeId;
   const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const router = useRouter();
 
   const { data: existing, isLoading: isLoadingExisting } = useServiceType(isEdit ? serviceTypeId : undefined);
@@ -91,7 +95,7 @@ export default function ServiceTypeForm({ serviceTypeId }: { serviceTypeId?: str
 
   const handleSave = () => {
     if (!name.trim()) {
-      Alert.alert("Required", "Service category name is required.");
+      Alert.alert("Required", "Name is required.");
       return;
     }
 
@@ -118,13 +122,13 @@ export default function ServiceTypeForm({ serviceTypeId }: { serviceTypeId?: str
         { id: serviceTypeId, data: payload },
         {
           onSuccess: () => router.back(),
-          onError: (err) => Alert.alert("Error", err.message || "Failed to update category."),
+          onError: (err) => Alert.alert("Error", err.message || "Failed to update service type."),
         }
       );
     } else {
       addMutation.mutate(payload, {
         onSuccess: () => router.back(),
-        onError: (err) => Alert.alert("Error", err.message || "Failed to create category."),
+        onError: (err) => Alert.alert("Error", err.message || "Failed to create service type."),
       });
     }
   };
@@ -132,7 +136,7 @@ export default function ServiceTypeForm({ serviceTypeId }: { serviceTypeId?: str
   const handleDelete = () => {
     if (!isEdit) return;
     Alert.alert(
-      "Delete Service Category",
+      "Delete service type",
       `Delete "${existing?.name || name}"? Historical maintenance logs referencing it will retain their text records.`,
       [
         { text: "Cancel", style: "cancel" },
@@ -142,7 +146,7 @@ export default function ServiceTypeForm({ serviceTypeId }: { serviceTypeId?: str
           onPress: () => {
             deleteMutation.mutate(serviceTypeId, {
               onSuccess: () => router.back(),
-              onError: (err) => Alert.alert("Error", err.message || "Failed to delete category."),
+              onError: (err) => Alert.alert("Error", err.message || "Failed to delete service type."),
             });
           },
         },
@@ -165,19 +169,19 @@ export default function ServiceTypeForm({ serviceTypeId }: { serviceTypeId?: str
   }
 
   return (
-    <ScrollView
+    <ScrollView automaticallyAdjustKeyboardInsets
       style={[styles.container, { backgroundColor: colors.background }]}
       contentContainerStyle={styles.content}
       keyboardShouldPersistTaps="handled"
     >
       {/* Category Name */}
-      <Text style={[styles.label, { color: colors.text }]}>Category Name *</Text>
+      <Text style={[styles.label, { color: colors.text }]}>Name *</Text>
       <TextInput
         style={inputStyle}
         value={name}
         onChangeText={setName}
         placeholder="e.g. Engine Oil & Filter Change"
-        placeholderTextColor={(colors.text as string) + "55"}
+        placeholderTextColor={colors.textMuted}
       />
 
       {/* Interval Targets */}
@@ -190,7 +194,7 @@ export default function ServiceTypeForm({ serviceTypeId }: { serviceTypeId?: str
             onChangeText={setIntervalKm}
             keyboardType="numeric"
             placeholder="e.g. 10000"
-            placeholderTextColor={(colors.text as string) + "55"}
+            placeholderTextColor={colors.textMuted}
           />
         </View>
         <View style={styles.halfCol}>
@@ -201,7 +205,7 @@ export default function ServiceTypeForm({ serviceTypeId }: { serviceTypeId?: str
             onChangeText={setIntervalDays}
             keyboardType="numeric"
             placeholder="e.g. 180"
-            placeholderTextColor={(colors.text as string) + "55"}
+            placeholderTextColor={colors.textMuted}
           />
         </View>
       </View>
@@ -209,45 +213,47 @@ export default function ServiceTypeForm({ serviceTypeId }: { serviceTypeId?: str
       {/* Resets Section (Inheritance) */}
       <View style={[styles.section, { borderTopColor: colors.border }]}>
         <View style={styles.sectionHeader}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Resets Interval Countdown</Text>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Resets interval countdown</Text>
           {resets.length > 0 && (
-            <View style={[styles.badge, { backgroundColor: "#10b98120" }]}>
-              <Text style={[styles.badgeText, { color: "#10b981" }]}>{resets.length} selected</Text>
+            <View style={[styles.badge, { backgroundColor: colors.okBg }]}>
+              <Text style={[styles.badgeText, { color: colors.ok }]}>{resets.length} selected</Text>
             </View>
           )}
         </View>
-        <Text style={[styles.sectionSubtitle, { color: (colors.text as string) + "88" }]}>
-          When this service is performed, also reset the scheduled countdown for these categories (e.g. Major Service resets Oil Change).
+        <Text style={[styles.sectionSubtitle, { color: colors.textSecondary }]}>
+          When this service is performed, also reset the scheduled countdown for these service types (e.g. Major Service resets Oil Change).
         </Text>
 
         {candidateCategories.length === 0 ? (
-          <Text style={[styles.emptyNote, { color: (colors.text as string) + "55" }]}>
-            No other service categories exist yet.
+          <Text style={[styles.emptyNote, { color: colors.textMuted }]}>
+            No other service types exist yet.
           </Text>
         ) : (
           <View style={styles.chipGrid}>
             {candidateCategories.map((st) => {
               const selected = resets.includes(st.id);
               return (
-                <TouchableOpacity
+                <TouchableOpacity accessibilityRole="button"
                   key={`reset-${st.id}`}
                   style={[
                     styles.chip,
                     {
-                      backgroundColor: selected ? "#10b98125" : colors.card,
-                      borderColor: selected ? "#10b981" : colors.border,
+                      backgroundColor: selected ? colors.okBg : colors.card,
+                      borderColor: selected ? colors.ok : colors.border,
                     },
                   ]}
+                  accessibilityState={{ selected }}
                   onPress={() => toggleReset(st.id)}
                   activeOpacity={0.7}
                 >
+                  {selected && <Icon name="check" color={colors.ok} size={14} />}
                   <Text
                     style={[
                       styles.chipText,
-                      { color: selected ? "#10b981" : colors.text, fontWeight: selected ? "700" : "500" },
+                      { color: selected ? colors.ok : colors.text, fontWeight: selected ? "600" : "500" },
                     ]}
                   >
-                    {selected ? "✓ " : ""}{st.name}
+                    {st.name}
                   </Text>
                 </TouchableOpacity>
               );
@@ -261,31 +267,31 @@ export default function ServiceTypeForm({ serviceTypeId }: { serviceTypeId?: str
         <View style={styles.sectionHeader}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Co-Performance Suggestions</Text>
           {suggestions.length > 0 && (
-            <View style={[styles.badge, { backgroundColor: "#f59e0b20" }]}>
-              <Text style={[styles.badgeText, { color: "#f59e0b" }]}>{suggestions.length} selected</Text>
+            <View style={[styles.badge, { backgroundColor: colors.warnBg }]}>
+              <Text style={[styles.badgeText, { color: colors.warn }]}>{suggestions.length} selected</Text>
             </View>
           )}
         </View>
-        <Text style={[styles.sectionSubtitle, { color: (colors.text as string) + "88" }]}>
+        <Text style={[styles.sectionSubtitle, { color: colors.textSecondary }]}>
           When logging this service, suggest these additional maintenance items to perform together (e.g. Brake Pads suggests Brake Rotors).
         </Text>
 
         {candidateCategories.length === 0 ? (
-          <Text style={[styles.emptyNote, { color: (colors.text as string) + "55" }]}>
-            No other service categories exist yet.
+          <Text style={[styles.emptyNote, { color: colors.textMuted }]}>
+            No other service types exist yet.
           </Text>
         ) : (
           <View style={styles.chipGrid}>
             {candidateCategories.map((st) => {
               const selected = suggestions.includes(st.id);
               return (
-                <TouchableOpacity
+                <TouchableOpacity accessibilityRole="button"
                   key={`sug-${st.id}`}
                   style={[
                     styles.chip,
                     {
-                      backgroundColor: selected ? "#f59e0b25" : colors.card,
-                      borderColor: selected ? "#f59e0b" : colors.border,
+                      backgroundColor: selected ? colors.warnBg : colors.card,
+                      borderColor: selected ? colors.warn : colors.border,
                     },
                   ]}
                   onPress={() => toggleSuggestion(st.id)}
@@ -294,7 +300,7 @@ export default function ServiceTypeForm({ serviceTypeId }: { serviceTypeId?: str
                   <Text
                     style={[
                       styles.chipText,
-                      { color: selected ? "#f59e0b" : colors.text, fontWeight: selected ? "700" : "500" },
+                      { color: selected ? colors.warn : colors.text, fontWeight: selected ? "600" : "500" },
                     ]}
                   >
                     {selected ? "★ " : ""}{st.name}
@@ -309,18 +315,18 @@ export default function ServiceTypeForm({ serviceTypeId }: { serviceTypeId?: str
       {/* Custom Fields Section */}
       <View style={[styles.section, { borderTopColor: colors.border }]}>
         <View style={styles.sectionHeader}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Custom Fields</Text>
-          <TouchableOpacity onPress={addField} style={styles.addFieldBtn}>
-            <Text style={[styles.addFieldBtnText, { color: colors.primary }]}>+ Add Field</Text>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Custom fields</Text>
+          <TouchableOpacity accessibilityRole="button" onPress={addField} style={styles.addFieldBtn}>
+            <Text style={[styles.addFieldBtnText, { color: colors.primary }]}>Add field</Text>
           </TouchableOpacity>
         </View>
-        <Text style={[styles.sectionSubtitle, { color: (colors.text as string) + "88" }]}>
-          Track specialized telemetry on logs (e.g., Oil Viscosity, Tire Tread Depth, Torque Specs).
+        <Text style={[styles.sectionSubtitle, { color: colors.textSecondary }]}>
+          Extra values to record on each log, such as oil viscosity or tire tread depth.
         </Text>
 
         {fields.length === 0 ? (
-          <Text style={[styles.emptyNote, { color: (colors.text as string) + "55" }]}>
-            No custom fields configured for this category.
+          <Text style={[styles.emptyNote, { color: colors.textMuted }]}>
+            No custom fields for this service type.
           </Text>
         ) : (
           fields.map((field, idx) => (
@@ -329,29 +335,29 @@ export default function ServiceTypeForm({ serviceTypeId }: { serviceTypeId?: str
               style={[styles.fieldCard, { backgroundColor: colors.card, borderColor: colors.border }]}
             >
               <View style={styles.fieldCardHeader}>
-                <Text style={[styles.fieldCardIndex, { color: (colors.text as string) + "66" }]}>
+                <Text style={[styles.fieldCardIndex, { color: colors.textMuted }]}>
                   Field #{idx + 1}
                 </Text>
-                <TouchableOpacity onPress={() => removeField(field._key)} style={styles.removeFieldBtn}>
+                <TouchableOpacity accessibilityRole="button" onPress={() => removeField(field._key)} style={styles.removeFieldBtn}>
                   <Text style={styles.removeFieldBtnText}>Remove</Text>
                 </TouchableOpacity>
               </View>
 
-              <Text style={[styles.subLabel, { color: colors.text }]}>Field Name *</Text>
+              <Text style={[styles.subLabel, { color: colors.text }]}>Field name *</Text>
               <TextInput
                 style={inputStyle}
                 value={field.name}
                 onChangeText={(v) => updateField(field._key, { name: v })}
                 placeholder="e.g. Viscosity / Pressure"
-                placeholderTextColor={(colors.text as string) + "55"}
+                placeholderTextColor={colors.textMuted}
               />
 
-              <Text style={[styles.subLabel, { color: colors.text }]}>Field Type</Text>
+              <Text style={[styles.subLabel, { color: colors.text }]}>Field type</Text>
               <View style={styles.typeSelector}>
                 {FIELD_TYPES.map((t) => {
                   const isSelected = field.field_type === t.type;
                   return (
-                    <TouchableOpacity
+                    <TouchableOpacity accessibilityRole="button"
                       key={t.type}
                       style={[
                         styles.typePill,
@@ -367,8 +373,8 @@ export default function ServiceTypeForm({ serviceTypeId }: { serviceTypeId?: str
                         style={[
                           styles.typePillText,
                           {
-                            color: isSelected ? "#fff" : (colors.text as string),
-                            fontWeight: isSelected ? "700" : "500",
+                            color: isSelected ? colors.onPrimary : colors.text,
+                            fontWeight: isSelected ? "600" : "500",
                           },
                         ]}
                       >
@@ -381,13 +387,13 @@ export default function ServiceTypeForm({ serviceTypeId }: { serviceTypeId?: str
 
               {(field.field_type === "number" || field.field_type === "text") && (
                 <View style={{ marginTop: 8 }}>
-                  <Text style={[styles.subLabel, { color: colors.text }]}>Unit of Measurement (Optional)</Text>
+                  <Text style={[styles.subLabel, { color: colors.text }]}>Unit of measurement (optional)</Text>
                   <TextInput
                     style={inputStyle}
                     value={field.unit ?? ""}
                     onChangeText={(v) => updateField(field._key, { unit: v })}
                     placeholder="e.g. psi, mm, L, Nm, bar"
-                    placeholderTextColor={(colors.text as string) + "55"}
+                    placeholderTextColor={colors.textMuted}
                   />
                 </View>
               )}
@@ -397,31 +403,31 @@ export default function ServiceTypeForm({ serviceTypeId }: { serviceTypeId?: str
       </View>
 
       {/* Save Button */}
-      <TouchableOpacity
+      <TouchableOpacity accessibilityRole="button"
         style={[styles.saveBtn, { backgroundColor: colors.primary }]}
         onPress={handleSave}
         disabled={isSaving}
         activeOpacity={0.8}
       >
         {isSaving ? (
-          <ActivityIndicator color="#fff" size="small" />
+          <ActivityIndicator color={colors.onPrimary} size="small" />
         ) : (
-          <Text style={styles.saveBtnText}>{isEdit ? "Save Category Changes" : "Create Service Category"}</Text>
+          <Text style={styles.saveBtnText}>{isEdit ? "Save changes" : "Create service type"}</Text>
         )}
       </TouchableOpacity>
 
       {/* Delete Button (Edit mode only) */}
       {isEdit && (
-        <TouchableOpacity
+        <TouchableOpacity accessibilityRole="button"
           style={styles.deleteBtn}
           onPress={handleDelete}
           disabled={isDeleting}
           activeOpacity={0.8}
         >
           {isDeleting ? (
-            <ActivityIndicator color="#ef4444" size="small" />
+            <ActivityIndicator color={colors.danger} size="small" />
           ) : (
-            <Text style={styles.deleteBtnText}>Delete Service Category</Text>
+            <Text style={styles.deleteBtnText}>Delete service type</Text>
           )}
         </TouchableOpacity>
       )}
@@ -429,12 +435,12 @@ export default function ServiceTypeForm({ serviceTypeId }: { serviceTypeId?: str
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Palette) => StyleSheet.create({
   container: { flex: 1 },
   loadingContainer: { flex: 1, alignItems: "center", justifyContent: "center" },
   content: { padding: 20, paddingBottom: 50 },
-  label: { fontSize: 13, fontWeight: "700", marginBottom: 6, marginTop: 14, letterSpacing: 0.2 },
-  subLabel: { fontSize: 11, fontWeight: "600", marginBottom: 4, marginTop: 10, letterSpacing: 0.1 },
+  label: { fontSize: 13, fontWeight: "600", marginBottom: 6, marginTop: 14 },
+  subLabel: { fontSize: 12, fontWeight: "600", marginBottom: 4, marginTop: 10 },
   row: { flexDirection: "row", gap: 12 },
   halfCol: { flex: 1 },
   input: {
@@ -456,7 +462,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 15,
-    fontWeight: "700",
+    fontWeight: "600",
   },
   sectionSubtitle: {
     fontSize: 12,
@@ -466,7 +472,6 @@ const styles = StyleSheet.create({
   },
   emptyNote: {
     fontSize: 12,
-    fontStyle: "italic",
     marginVertical: 6,
   },
   badge: {
@@ -475,8 +480,8 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   badgeText: {
-    fontSize: 11,
-    fontWeight: "700",
+    fontSize: 12,
+    fontWeight: "600",
   },
   chipGrid: {
     flexDirection: "row",
@@ -485,6 +490,10 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   chip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    minHeight: 40,
     borderWidth: 1,
     borderRadius: 8,
     paddingHorizontal: 12,
@@ -499,7 +508,7 @@ const styles = StyleSheet.create({
   },
   addFieldBtnText: {
     fontSize: 13,
-    fontWeight: "700",
+    fontWeight: "600",
   },
   fieldCard: {
     borderWidth: 1,
@@ -514,16 +523,15 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   fieldCardIndex: {
-    fontSize: 11,
-    fontWeight: "700",
-    textTransform: "uppercase",
+    fontSize: 12,
+    fontWeight: "600",
   },
   removeFieldBtn: {
     paddingVertical: 2,
     paddingHorizontal: 6,
   },
   removeFieldBtnText: {
-    color: "#ef4444",
+    color: colors.danger,
     fontSize: 12,
     fontWeight: "600",
   },
@@ -551,21 +559,21 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   saveBtnText: {
-    color: "#fff",
+    color: colors.onPrimary,
     fontSize: 15,
-    fontWeight: "700",
+    fontWeight: "600",
   },
   deleteBtn: {
     marginTop: 12,
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: "center",
-    backgroundColor: "#ef444415",
+    backgroundColor: colors.dangerBg,
   },
   deleteBtnText: {
-    color: "#ef4444",
+    color: colors.danger,
     fontSize: 14,
-    fontWeight: "700",
+    fontWeight: "600",
   },
 });
 

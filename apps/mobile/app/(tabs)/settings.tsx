@@ -1,3 +1,7 @@
+import { useMemo } from "react";
+import Constants from "expo-constants";
+import { Icon } from "@/components/Controls";
+import { AppearanceCard } from "@/components/AppearanceCard";
 import React, { useState, useEffect } from "react";
 import {
   StyleSheet,
@@ -10,7 +14,7 @@ import {
   Switch,
   Image,
 } from "react-native";
-import { useTheme } from "expo-router";
+import { useTheme, type Palette } from "@/src/theme";
 import { Text } from "@/components/Themed";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
@@ -41,6 +45,7 @@ import { useQueryClient } from "@tanstack/react-query";
 
 export default function SettingsScreen() {
   const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const queryClient = useQueryClient();
 
   // Queries for garage stats
@@ -89,12 +94,12 @@ export default function SettingsScreen() {
         await refreshDriveStatus();
         await syncNow();
         await refreshDriveStatus();
-        Alert.alert("Connected", `Signed in as ${res.email || "Google Account"}. Your devices now sync through Google Drive.`);
+        Alert.alert("Connected", `Signed in as ${res.email || "Google account"}. Your devices now sync through Google Drive.`);
       } else if (res.error) {
-        Alert.alert("Sign In", res.error);
+        Alert.alert("Sign in", res.error);
       }
     } catch (e: any) {
-      Alert.alert("Sync Error", e.message || "Signed in, but the first sync failed.");
+      Alert.alert("Sync error", e.message || "Signed in, but the first sync failed.");
     } finally {
       setIsSigningIn(false);
     }
@@ -112,7 +117,7 @@ export default function SettingsScreen() {
           : "Everything is in sync.",
       );
     } catch (e: any) {
-      Alert.alert("Sync Error", e.message || "Failed to sync with Google Drive.");
+      Alert.alert("Sync error", e.message || "Failed to sync with Google Drive.");
     } finally {
       setIsSyncing(false);
     }
@@ -128,7 +133,7 @@ export default function SettingsScreen() {
     try {
       const granted = await setRemindersOn(value);
       if (value && !granted) {
-        Alert.alert("Notifications Off", "Allow notifications for CarBaddie in Android settings to get maintenance reminders.");
+        Alert.alert("Notifications off", "Allow notifications for CarBaddie in Android settings to get maintenance reminders.");
       }
     } catch (e: any) {
       Alert.alert("Reminders", e.message || "Failed to update maintenance reminders.");
@@ -144,7 +149,7 @@ export default function SettingsScreen() {
     Alert.alert("Sign Out of Google Drive", "Cloud backups will pause until you sign back in.", [
       { text: "Cancel", style: "cancel" },
       {
-        text: "Sign Out",
+        text: "Sign out",
         style: "destructive",
         onPress: async () => {
           await disconnectGoogleDrive();
@@ -172,7 +177,7 @@ export default function SettingsScreen() {
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-        Alert.alert("Success", "Backup downloaded successfully!");
+        Alert.alert("Success", "Backup downloaded");
       } else {
         const fileUri = FileSystem.cacheDirectory + fileName;
         await FileSystem.writeAsStringAsync(fileUri, json, { encoding: FileSystem.EncodingType.UTF8 });
@@ -180,13 +185,13 @@ export default function SettingsScreen() {
         if (await Sharing.isAvailableAsync()) {
           await Sharing.shareAsync(fileUri, {
             mimeType: "application/json",
-            dialogTitle: "Save CarBaddie Backup",
+            dialogTitle: "Save CarBaddie backup",
           });
         }
-        Alert.alert("Success", "Backup exported successfully!");
+        Alert.alert("Success", "Backup exported");
       }
     } catch (e: any) {
-      Alert.alert("Export Failed", e.message ?? "Unknown error");
+      Alert.alert("Export failed", e.message ?? "Unknown error");
     } finally {
       setIsExporting(false);
     }
@@ -231,7 +236,7 @@ export default function SettingsScreen() {
       if (!content || !content.trim()) throw new Error("File is empty.");
       await processRestorePlan(parseBackup(JSON.parse(content)));
     } catch (e: any) {
-      Alert.alert("Import Failed", e.message ?? "Unknown error");
+      Alert.alert("Import failed", e.message ?? "Unknown error");
     } finally {
       setIsImporting(false);
     }
@@ -243,8 +248,8 @@ export default function SettingsScreen() {
     const conflictCount = analysis.conflicting_vehicles.length;
 
     let message = "";
-    if (newCount > 0) message += `• ${newCount} new vehicle(s) will be added\n`;
-    if (conflictCount > 0) message += `• ${conflictCount} existing vehicle(s) will be replaced\n`;
+    if (newCount > 0) message += `${newCount} new vehicle(s) will be added\n`;
+    if (conflictCount > 0) message += `${conflictCount} existing vehicle(s) will be replaced\n`;
 
     const performRestore = async () => {
       try {
@@ -256,18 +261,18 @@ export default function SettingsScreen() {
           })),
         });
         queryClient.invalidateQueries();
-        Alert.alert("Success", "Backup restored successfully!");
+        Alert.alert("Success", "Backup restored");
       } catch (err: any) {
-        Alert.alert("Import Failed", err.message ?? "Unknown error");
+        Alert.alert("Import failed", err.message ?? "Unknown error");
       }
     };
 
     Alert.alert(
-      "Restore Backup",
+      "Restore backup",
       `${message || "No vehicle conflicts found."}\nProceed with restoring records?`,
       [
         { text: "Cancel", style: "cancel" },
-        { text: "Restore Data", style: "default", onPress: performRestore },
+        { text: "Restore data", style: "default", onPress: performRestore },
       ]
     );
   };
@@ -287,12 +292,12 @@ export default function SettingsScreen() {
 
   const handleWipeDatabase = () => {
     Alert.alert(
-      "Wipe Garage Database",
+      "Wipe garage database",
       "Are you sure you want to delete ALL vehicles and maintenance logs? This action is permanent and cannot be undone.",
       [
         { text: "Cancel", style: "cancel" },
         {
-          text: "Wipe Everything",
+          text: "Wipe everything",
           style: "destructive",
           onPress: async () => {
             try {
@@ -325,38 +330,38 @@ export default function SettingsScreen() {
         />
         <View style={styles.brandMeta}>
           <Text style={[styles.brandTitle, { color: colors.text }]}>CarBaddie</Text>
-          <Text style={[styles.brandSubtitle, { color: (colors.text as string) + "88" }]}>
-            Automotive Fleet & Maintenance Telemetry
+          <Text style={[styles.brandSubtitle, { color: colors.textSecondary }]}>
+            Maintenance tracker for your vehicles
           </Text>
         </View>
       </View>
 
       {/* SECTION 1: CLOUD SYNC */}
       <View style={styles.sectionGroup}>
-        <Text style={[styles.groupHeader, { color: colors.primary }]}>CLOUD SYNCHRONIZATION</Text>
+        <Text style={[styles.groupHeader, { color: colors.textSecondary }]}>Sync</Text>
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <View style={styles.cardHeaderRow}>
             <View style={{ flex: 1 }}>
               <Text style={[styles.cardTitle, { color: colors.text }]}>Google Drive</Text>
-              <Text style={[styles.cardDesc, { color: (colors.text as string) + "88" }]}>
-                Keeps your garage records seamlessly synchronized between phone and PC.
+              <Text style={[styles.cardDesc, { color: colors.textSecondary }]}>
+                Syncs your records between phone and PC through your own Google Drive.
               </Text>
             </View>
             <View
               style={[
                 styles.statusBadge,
                 {
-                  backgroundColor: driveStatus.isConnected ? "#10b98120" : (colors.text as string) + "10",
+                  backgroundColor: driveStatus.isConnected ? colors.okBg : colors.raised,
                 },
               ]}
             >
               <Text
                 style={[
                   styles.statusBadgeText,
-                  { color: driveStatus.isConnected ? "#10b981" : (colors.text as string) + "77" },
+                  { color: driveStatus.isConnected ? colors.ok : colors.textMuted },
                 ]}
               >
-                {driveStatus.isConnected ? "✓ Active" : "Off"}
+                {driveStatus.isConnected ? "Active" : "Off"}
               </Text>
             </View>
           </View>
@@ -369,9 +374,9 @@ export default function SettingsScreen() {
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.accountEmail, { color: colors.text }]}>
-                    {driveStatus.email || "Google Account"}
+                    {driveStatus.email || "Google account"}
                   </Text>
-                  <Text style={[styles.accountMeta, { color: (colors.text as string) + "77" }]}>
+                  <Text style={[styles.accountMeta, { color: colors.textMuted }]}>
                     {driveStatus.lastSyncTime
                       ? `Last synced: ${new Date(driveStatus.lastSyncTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
                       : "Automatic background sync active"}
@@ -381,47 +386,47 @@ export default function SettingsScreen() {
 
               <View style={[styles.switchRow, { borderTopColor: colors.border }]}>
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.switchTitle, { color: colors.text }]}>Automatic Sync</Text>
-                  <Text style={[styles.switchDesc, { color: (colors.text as string) + "77" }]}>
+                  <Text style={[styles.switchTitle, { color: colors.text }]}>Automatic sync</Text>
+                  <Text style={[styles.switchDesc, { color: colors.textMuted }]}>
                     Syncs changes automatically when you add logs or open the app.
                   </Text>
                 </View>
                 <Switch
                   value={driveStatus.autoSyncEnabled}
                   onValueChange={handleToggleAutoSync}
-                  trackColor={{ false: "#333", true: colors.primary }}
+                  trackColor={{ false: colors.textMuted, true: colors.accent }} thumbColor="#ffffff"
                 />
               </View>
 
               <View style={styles.cloudActionRow}>
-                <TouchableOpacity
+                <TouchableOpacity accessibilityRole="button"
                   style={[styles.primaryActionBtn, { backgroundColor: colors.primary }]}
                   onPress={handleSyncNow}
                   disabled={isSyncing}
                   activeOpacity={0.8}
                 >
                   {isSyncing ? (
-                    <ActivityIndicator color="#fff" size="small" />
+                    <ActivityIndicator color={colors.onPrimary} size="small" />
                   ) : (
-                    <Text style={styles.primaryActionText}>Sync Now</Text>
+                    <Text style={styles.primaryActionText}>Sync now</Text>
                   )}
                 </TouchableOpacity>
 
-                <TouchableOpacity style={styles.ghostActionBtn} onPress={handleDisconnectDrive}>
-                  <Text style={styles.ghostActionText}>Sign Out</Text>
+                <TouchableOpacity accessibilityRole="button" style={styles.ghostActionBtn} onPress={handleDisconnectDrive}>
+                  <Text style={styles.ghostActionText}>Sign out</Text>
                 </TouchableOpacity>
               </View>
             </View>
           ) : (
             <View style={{ marginTop: 8 }}>
-              <TouchableOpacity
+              <TouchableOpacity accessibilityRole="button"
                 style={styles.googleSignInBtn}
                 onPress={handleGoogleSignIn}
                 disabled={isSigningIn}
                 activeOpacity={0.85}
               >
                 {isSigningIn ? (
-                  <ActivityIndicator color="#0f172a" size="small" />
+                  <ActivityIndicator color="#1f2937" size="small" />
                 ) : (
                   <View style={styles.googleBtnInner}>
                     <View style={styles.googleBadge}>
@@ -431,7 +436,7 @@ export default function SettingsScreen() {
                   </View>
                 )}
               </TouchableOpacity>
-              <Text style={[styles.googleSignInHint, { color: (colors.text as string) + "66" }]}>
+              <Text style={[styles.googleSignInHint, { color: colors.textMuted }]}>
                 Sign in to sync your garage between devices through your personal Google Drive.
               </Text>
 
@@ -442,48 +447,48 @@ export default function SettingsScreen() {
 
       {/* SECTION 2: GARAGE TELEMETRY & PREFERENCES */}
       <View style={styles.sectionGroup}>
-        <Text style={[styles.groupHeader, { color: colors.primary }]}>GARAGE PREFERENCES</Text>
+        <Text style={[styles.groupHeader, { color: colors.textSecondary }]}>Preferences</Text>
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
           {/* Stats Bar */}
           <View style={styles.kpiContainer}>
             <View style={styles.kpiItem}>
               <Text style={[styles.kpiVal, { color: colors.text }]}>{vehicles.length}</Text>
-              <Text style={[styles.kpiLbl, { color: (colors.text as string) + "77" }]}>Vehicles</Text>
+              <Text style={[styles.kpiLbl, { color: colors.textMuted }]}>Vehicles</Text>
             </View>
             <View style={[styles.kpiDivider, { backgroundColor: colors.border }]} />
             <View style={styles.kpiItem}>
               <Text style={[styles.kpiVal, { color: colors.text }]}>{totalLogsCount}</Text>
-              <Text style={[styles.kpiLbl, { color: (colors.text as string) + "77" }]}>Service Logs</Text>
+              <Text style={[styles.kpiLbl, { color: colors.textMuted }]}>Service logs</Text>
             </View>
             <View style={[styles.kpiDivider, { backgroundColor: colors.border }]} />
             <View style={styles.kpiItem}>
               <Text style={[styles.kpiVal, { color: colors.text }]}>{serviceTypes.length}</Text>
-              <Text style={[styles.kpiLbl, { color: (colors.text as string) + "77" }]}>Categories</Text>
+              <Text style={[styles.kpiLbl, { color: colors.textMuted }]}>Service types</Text>
             </View>
           </View>
 
           {/* Unit Switcher */}
           <View style={[styles.prefRow, { borderTopColor: colors.border }]}>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.prefLabel, { color: colors.text }]}>Distance Units</Text>
-              <Text style={[styles.prefDesc, { color: (colors.text as string) + "77" }]}>
+              <Text style={[styles.prefLabel, { color: colors.text }]}>Distance units</Text>
+              <Text style={[styles.prefDesc, { color: colors.textMuted }]}>
                 Stored in km; switching converts what you see
               </Text>
             </View>
             <View style={[styles.pillSelector, { borderColor: colors.border, backgroundColor: colors.background }]}>
-              <TouchableOpacity
+              <TouchableOpacity accessibilityRole="button"
                 style={[styles.pillOption, odometerUnit === "km" && { backgroundColor: colors.primary }]}
                 onPress={() => handleSetUnit("km")}
               >
-                <Text style={{ color: odometerUnit === "km" ? "#fff" : colors.text, fontSize: 12, fontWeight: "700" }}>
+                <Text style={{ color: odometerUnit === "km" ? colors.onPrimary : colors.text, fontSize: 12, fontWeight: "600" }}>
                   km
                 </Text>
               </TouchableOpacity>
-              <TouchableOpacity
+              <TouchableOpacity accessibilityRole="button"
                 style={[styles.pillOption, odometerUnit === "mi" && { backgroundColor: colors.primary }]}
                 onPress={() => handleSetUnit("mi")}
               >
-                <Text style={{ color: odometerUnit === "mi" ? "#fff" : colors.text, fontSize: 12, fontWeight: "700" }}>
+                <Text style={{ color: odometerUnit === "mi" ? colors.onPrimary : colors.text, fontSize: 12, fontWeight: "600" }}>
                   miles
                 </Text>
               </TouchableOpacity>
@@ -493,101 +498,110 @@ export default function SettingsScreen() {
           {/* Currency */}
           <View style={[styles.prefRow, { borderTopColor: colors.border, flexDirection: "column", alignItems: "stretch" }]}>
             <Text style={[styles.prefLabel, { color: colors.text }]}>Currency</Text>
-            <Text style={[styles.prefDesc, { color: (colors.text as string) + "77" }]}>
+            <Text style={[styles.prefDesc, { color: colors.textMuted }]}>
               All costs are shown in it; changing it doesn't convert amounts
             </Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 10 }}>
-              <View style={[styles.pillSelector, { borderColor: colors.border, backgroundColor: colors.background }]}>
-                {currencies.map((code) => (
+            <View style={styles.currencyGrid} accessibilityRole="radiogroup">
+              {currencies.map((code) => {
+                const active = units.currency === code;
+                return (
                   <TouchableOpacity
                     key={code}
-                    style={[styles.pillOption, units.currency === code && { backgroundColor: colors.primary }]}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: active }}
+                    accessibilityLabel={code}
+                    style={[styles.currencyPill, { borderColor: active ? colors.primary : colors.border, backgroundColor: active ? colors.primary : colors.background }]}
                     onPress={() => setPreference({ key: "currency", value: code })}
+                    activeOpacity={0.7}
                   >
-                    <Text style={{ color: units.currency === code ? "#fff" : colors.text, fontSize: 12, fontWeight: "700" }}>
-                      {code}
-                    </Text>
+                    <Text style={{ color: active ? colors.onPrimary : colors.text, fontSize: 14, fontWeight: "600" }}>{code}</Text>
                   </TouchableOpacity>
-                ))}
-              </View>
-            </ScrollView>
+                );
+              })}
+            </View>
           </View>
 
           {/* Maintenance reminders (this phone only) */}
           <View style={[styles.prefRow, { borderTopColor: colors.border }]}>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.prefLabel, { color: colors.text }]}>Maintenance Reminders</Text>
-              <Text style={[styles.prefDesc, { color: (colors.text as string) + "77" }]}>
+              <Text style={[styles.prefLabel, { color: colors.text }]}>Maintenance reminders</Text>
+              <Text style={[styles.prefDesc, { color: colors.textMuted }]}>
                 A notification when a service is due soon or overdue
               </Text>
             </View>
             <Switch
               value={remindersOn}
               onValueChange={handleToggleReminders}
-              trackColor={{ false: "#333", true: colors.primary }}
+              trackColor={{ false: colors.textMuted, true: colors.accent }} thumbColor="#ffffff"
             />
           </View>
         </View>
       </View>
 
+      {/* SECTION: APPEARANCE */}
+      <View style={styles.sectionGroup}>
+        <Text style={[styles.groupHeader, { color: colors.textSecondary }]} accessibilityRole="header">Appearance</Text>
+        <AppearanceCard />
+      </View>
+
       {/* SECTION 3: DATA MANAGEMENT */}
       <View style={styles.sectionGroup}>
-        <Text style={[styles.groupHeader, { color: colors.primary }]}>LOCAL DATA & BACKUP</Text>
+        <Text style={[styles.groupHeader, { color: colors.textSecondary }]}>Data and backup</Text>
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, padding: 0 }]}>
-          <TouchableOpacity
+          <TouchableOpacity accessibilityRole="button"
             style={[styles.menuRow, { borderBottomColor: colors.border }]}
             onPress={handleExport}
             disabled={isExporting}
             activeOpacity={0.7}
           >
             <View style={{ flex: 1 }}>
-              <Text style={[styles.menuRowTitle, { color: colors.text }]}>Export Offline Backup (JSON)</Text>
-              <Text style={[styles.menuRowDesc, { color: (colors.text as string) + "77" }]}>
+              <Text style={[styles.menuRowTitle, { color: colors.text }]}>Export backup (JSON)</Text>
+              <Text style={[styles.menuRowDesc, { color: colors.textMuted }]}>
                 Download or share your entire fleet database file
               </Text>
             </View>
             {isExporting ? (
               <ActivityIndicator color={colors.primary} size="small" />
             ) : (
-              <Text style={[styles.menuRowArrow, { color: (colors.text as string) + "44" }]}>›</Text>
+              <Icon name="chevron" color={colors.textMuted} size={16} />
             )}
           </TouchableOpacity>
 
-          <TouchableOpacity
+          <TouchableOpacity accessibilityRole="button"
             style={[styles.menuRow, { borderBottomColor: colors.border }]}
             onPress={handleImport}
             disabled={isImporting}
             activeOpacity={0.7}
           >
             <View style={{ flex: 1 }}>
-              <Text style={[styles.menuRowTitle, { color: colors.text }]}>Import from Backup File</Text>
-              <Text style={[styles.menuRowDesc, { color: (colors.text as string) + "77" }]}>
+              <Text style={[styles.menuRowTitle, { color: colors.text }]}>Import from backup file</Text>
+              <Text style={[styles.menuRowDesc, { color: colors.textMuted }]}>
                 Restore records from a CarBaddie backup JSON
               </Text>
             </View>
             {isImporting ? (
               <ActivityIndicator color={colors.primary} size="small" />
             ) : (
-              <Text style={[styles.menuRowArrow, { color: (colors.text as string) + "44" }]}>›</Text>
+              <Icon name="chevron" color={colors.textMuted} size={16} />
             )}
           </TouchableOpacity>
 
-          <TouchableOpacity
+          <TouchableOpacity accessibilityRole="button"
             style={styles.menuRow}
             onPress={handleSeedDefaults}
             disabled={isSeeding}
             activeOpacity={0.7}
           >
             <View style={{ flex: 1 }}>
-              <Text style={[styles.menuRowTitle, { color: colors.text }]}>Reset Factory Service Categories</Text>
-              <Text style={[styles.menuRowDesc, { color: (colors.text as string) + "77" }]}>
+              <Text style={[styles.menuRowTitle, { color: colors.text }]}>Reset built-in service types</Text>
+              <Text style={[styles.menuRowDesc, { color: colors.textMuted }]}>
                 Load 25 standard automotive service schedules & suggestions
               </Text>
             </View>
             {isSeeding ? (
               <ActivityIndicator color={colors.primary} size="small" />
             ) : (
-              <Text style={[styles.menuRowArrow, { color: (colors.text as string) + "44" }]}>›</Text>
+              <Icon name="chevron" color={colors.textMuted} size={16} />
             )}
           </TouchableOpacity>
         </View>
@@ -595,25 +609,25 @@ export default function SettingsScreen() {
 
       {/* SECTION 4: DANGER ZONE */}
       <View style={styles.sectionGroup}>
-        <Text style={[styles.groupHeader, { color: "#ef4444" }]}>DANGER ZONE</Text>
-        <View style={[styles.card, { backgroundColor: colors.card, borderColor: "#ef444430" }]}>
+        <Text style={[styles.groupHeader, { color: colors.danger }]}>Danger zone</Text>
+        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <View style={styles.wipeRow}>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.wipeTitle, { color: "#ef4444" }]}>Wipe Garage Database</Text>
-              <Text style={[styles.wipeDesc, { color: (colors.text as string) + "77" }]}>
+              <Text style={[styles.wipeTitle, { color: colors.danger }]}>Wipe garage database</Text>
+              <Text style={[styles.wipeDesc, { color: colors.textMuted }]}>
                 Permanently delete all vehicles, logs, and interval overrides on this device.
               </Text>
             </View>
-            <TouchableOpacity
-              style={[styles.wipeBtn, { backgroundColor: "#ef444415", borderColor: "#ef444440" }]}
+            <TouchableOpacity accessibilityRole="button"
+              style={[styles.wipeBtn, { backgroundColor: colors.dangerBg, borderColor: colors.border }]}
               onPress={handleWipeDatabase}
               disabled={isWiping}
               activeOpacity={0.8}
             >
               {isWiping ? (
-                <ActivityIndicator color="#ef4444" size="small" />
+                <ActivityIndicator color={colors.danger} size="small" />
               ) : (
-                <Text style={styles.wipeBtnText}>Wipe All</Text>
+                <Text style={styles.wipeBtnText}>Wipe all</Text>
               )}
             </TouchableOpacity>
           </View>
@@ -622,15 +636,15 @@ export default function SettingsScreen() {
 
       {/* Footer Info */}
       <View style={styles.footerInfo}>
-        <Text style={[styles.footerText, { color: (colors.text as string) + "55" }]}>
-          CarBaddie v1.0.0 • Offline SQLite Engine • Unslop Edition
+        <Text style={[styles.footerText, { color: colors.textMuted }]}>
+          CarBaddie {Constants.expoConfig?.version ?? ""}
         </Text>
       </View>
     </ScrollView>
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Palette) => StyleSheet.create({
   container: { flex: 1 },
   content: { padding: 16, paddingBottom: 60 },
   brandHeader: {
@@ -648,7 +662,7 @@ const styles = StyleSheet.create({
   brandMeta: { flex: 1 },
   brandTitle: {
     fontSize: 20,
-    fontWeight: "800",
+    fontWeight: "600",
     letterSpacing: -0.3,
   },
   brandSubtitle: {
@@ -659,9 +673,8 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   groupHeader: {
-    fontSize: 11,
-    fontWeight: "700",
-    letterSpacing: 0.8,
+    fontSize: 12,
+    fontWeight: "600",
     marginBottom: 8,
     paddingHorizontal: 4,
   },
@@ -678,7 +691,7 @@ const styles = StyleSheet.create({
   },
   cardTitle: {
     fontSize: 16,
-    fontWeight: "700",
+    fontWeight: "600",
     marginBottom: 3,
   },
   cardDesc: {
@@ -692,8 +705,8 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   statusBadgeText: {
-    fontSize: 11,
-    fontWeight: "700",
+    fontSize: 12,
+    fontWeight: "600",
   },
   connectedBox: {
     marginTop: 8,
@@ -713,16 +726,16 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   googleG: {
-    color: "#fff",
-    fontWeight: "900",
+    color: "#ffffff",
+    fontWeight: "600",
     fontSize: 14,
   },
   accountEmail: {
     fontSize: 14,
-    fontWeight: "700",
+    fontWeight: "600",
   },
   accountMeta: {
-    fontSize: 11,
+    fontSize: 12,
     marginTop: 2,
   },
   switchRow: {
@@ -736,7 +749,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   switchDesc: {
-    fontSize: 11,
+    fontSize: 12,
     marginTop: 2,
     maxWidth: 240,
   },
@@ -754,21 +767,24 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   primaryActionText: {
-    color: "#fff",
+    color: colors.onPrimary,
     fontSize: 13,
-    fontWeight: "700",
+    fontWeight: "600",
   },
   ghostActionBtn: {
     paddingVertical: 10,
     paddingHorizontal: 12,
   },
   ghostActionText: {
-    color: "#ef4444",
+    color: colors.danger,
     fontSize: 13,
     fontWeight: "600",
   },
   googleSignInBtn: {
     backgroundColor: "#ffffff",
+    borderWidth: 1,
+    borderColor: "#dadce0",
+    minHeight: 48,
     borderRadius: 12,
     paddingVertical: 13,
     paddingHorizontal: 16,
@@ -784,10 +800,10 @@ const styles = StyleSheet.create({
   googleSignInText: {
     color: "#1f2937",
     fontSize: 14,
-    fontWeight: "700",
+    fontWeight: "600",
   },
   googleSignInHint: {
-    fontSize: 11,
+    fontSize: 12,
     marginTop: 8,
     textAlign: "center",
     lineHeight: 15,
@@ -804,10 +820,10 @@ const styles = StyleSheet.create({
   },
   kpiVal: {
     fontSize: 18,
-    fontWeight: "800",
+    fontWeight: "600",
   },
   kpiLbl: {
-    fontSize: 11,
+    fontSize: 12,
     marginTop: 2,
     fontWeight: "600",
   },
@@ -827,9 +843,11 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   prefDesc: {
-    fontSize: 11,
+    fontSize: 12,
     marginTop: 2,
   },
+  currencyGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12 },
+  currencyPill: { minWidth: 64, minHeight: 44, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, alignItems: "center", justifyContent: "center" },
   pillSelector: {
     flexDirection: "row",
     borderWidth: 1,
@@ -854,7 +872,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   menuRowDesc: {
-    fontSize: 11,
+    fontSize: 12,
     marginTop: 2,
   },
   menuRowArrow: {
@@ -868,10 +886,10 @@ const styles = StyleSheet.create({
   },
   wipeTitle: {
     fontSize: 13,
-    fontWeight: "700",
+    fontWeight: "600",
   },
   wipeDesc: {
-    fontSize: 11,
+    fontSize: 12,
     marginTop: 2,
     lineHeight: 15,
   },
@@ -882,16 +900,15 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   wipeBtnText: {
-    color: "#ef4444",
+    color: colors.danger,
     fontSize: 12,
-    fontWeight: "700",
+    fontWeight: "600",
   },
   footerInfo: {
     marginTop: 16,
     alignItems: "center",
   },
   footerText: {
-    fontSize: 11,
-    letterSpacing: 0.2,
+    fontSize: 12,
   },
 });

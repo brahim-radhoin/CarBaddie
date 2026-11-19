@@ -1,6 +1,7 @@
 // Edit a garage visit: its header and its list of services.
 import { ActivityIndicator, Alert, StyleSheet, View } from "react-native";
-import { useLocalSearchParams, useRouter, useTheme } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useTheme } from "@/src/theme";
 import { useServiceEvent, useUpdateServiceEvent, useDeleteServiceEvent } from "@/src/hooks/useDatabase";
 import { Text } from "@/components/Themed";
 import { VisitForm } from "@/components/VisitForm";
@@ -29,7 +30,7 @@ export default function EditVisitScreen() {
   }
 
   const handleDelete = () => {
-    Alert.alert("Delete Visit", `Delete this visit and its ${visit.items.length} service record(s)?`, [
+    Alert.alert("Delete visit", `Delete this visit and its ${visit.items.length} service record(s)?`, [
       { text: "Cancel", style: "cancel" },
       {
         text: "Delete",
@@ -51,7 +52,7 @@ export default function EditVisitScreen() {
       key={visit.id}
       vehicleId={vehicleId!}
       initial={visit}
-      saveLabel="Save Changes"
+      saveLabel="Save changes"
       onSubmit={async (data) => {
         await updateMutation.mutateAsync({ visitId: visit.id, data });
         router.back();
