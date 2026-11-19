@@ -692,8 +692,13 @@ export function createRepository(db: SqlDriver, w: WriteContext) {
       if (data.body_type !== undefined) { sets.push("body_type = ?"); vals.push(data.body_type); }
       if (data.is_favorite !== undefined) { sets.push("is_favorite = ?"); vals.push(data.is_favorite === null ? null : data.is_favorite ? 1 : 0); }
       if (sets.length > 0) {
-        const [touch, touchVals] = touched();
-        await run(`UPDATE vehicles SET ${sets.join(", ")}, ${touch} WHERE id = ? AND deleted_at IS NULL`, [...vals, ...touchVals, id]);
+        // In a transaction of its own even though it is one statement: on the single connection, a
+        // write outside one lands in whatever transaction is open (e.g. a sync merge) and is lost
+        // if that one rolls back. The stamp is taken inside, so it sorts after anything already pushed.
+        await tx(async () => {
+          const [touch, touchVals] = touched();
+          await run(`UPDATE vehicles SET ${sets.join(", ")}, ${touch} WHERE id = ? AND deleted_at IS NULL`, [...vals, ...touchVals, id]);
+        });
       }
       return (await repo.getVehicleById(id))!;
     },
@@ -931,7 +936,7 @@ export function createRepository(db: SqlDriver, w: WriteContext) {
       data: VehicleServiceIntervalOverrideCreate,
     ): Promise<VehicleServiceIntervalOverrideRead> {
       validateIntervalOverride(data);
-      await writeOverride(vehicleId, serviceTypeId, data);
+      await tx(() => writeOverride(vehicleId, serviceTypeId, data));
       return (await first<VehicleServiceIntervalOverrideRead>(
         `SELECT id, vehicle_id, service_type_id, override_interval_km, override_interval_days
          FROM vehicle_service_interval_overrides WHERE vehicle_id = ? AND service_type_id = ?`,
@@ -939,14 +944,15 @@ export function createRepository(db: SqlDriver, w: WriteContext) {
       ))!;
     },
 
-    async deleteIntervalOverride(vehicleId: Id, serviceTypeId: Id): Promise<void> {
-      const [del, delVals] = tombstoned();
-      await run(
-        `UPDATE vehicle_service_interval_overrides SET ${del}
-         WHERE vehicle_id = ? AND service_type_id = ? AND deleted_at IS NULL`,
-        [...delVals, vehicleId, serviceTypeId],
-      );
-    },
+    deleteIntervalOverride: (vehicleId: Id, serviceTypeId: Id): Promise<void> =>
+      tx(async () => {
+        const [del, delVals] = tombstoned();
+        await run(
+          `UPDATE vehicle_service_interval_overrides SET ${del}
+           WHERE vehicle_id = ? AND service_type_id = ? AND deleted_at IS NULL`,
+          [...delVals, vehicleId, serviceTypeId],
+        );
+      }),
 
     // --- Summaries ---
     async getMaintenanceSummary(vehicleId: Id, today: Date = new Date()): Promise<MaintenanceSummary> {
@@ -1052,10 +1058,12 @@ export function createRepository(db: SqlDriver, w: WriteContext) {
     /** Only sets it if the device has no value yet (adopting an old per-device setting). */
     async setPreference<K extends keyof Preferences>(key: K, value: Preferences[K], opts: { ifUnset?: boolean } = {}): Promise<void> {
       validatePreference(key, value);
-      await run(
-        `INSERT INTO preferences (key, value, updated_at, deleted_at, device_id) VALUES (?, ?, ?, NULL, ?)
-         ON CONFLICT(key) DO ${opts.ifUnset ? "NOTHING" : "UPDATE SET value = excluded.value, deleted_at = NULL, updated_at = excluded.updated_at, device_id = excluded.device_id"}`,
-        [key, value, w.stamp(), w.deviceId],
+      await tx(() =>
+        run(
+          `INSERT INTO preferences (key, value, updated_at, deleted_at, device_id) VALUES (?, ?, ?, NULL, ?)
+           ON CONFLICT(key) DO ${opts.ifUnset ? "NOTHING" : "UPDATE SET value = excluded.value, deleted_at = NULL, updated_at = excluded.updated_at, device_id = excluded.device_id"}`,
+          [key, value, w.stamp(), w.deviceId],
+        ),
       );
     },
 
@@ -1063,9 +1071,11 @@ export function createRepository(db: SqlDriver, w: WriteContext) {
     async getSetting(key: string): Promise<string | null> {
       return (await first<{ value: string }>("SELECT value FROM app_settings WHERE key = ?", [key]))?.value ?? null;
     },
+    // Transactions of their own too (see updateVehicle): a reminder key or a toggle must not vanish
+    // with someone else's rollback.
     setSetting: (key: string, value: string): Promise<void> =>
-      run("INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)", [key, value]),
-    removeSetting: (key: string): Promise<void> => run("DELETE FROM app_settings WHERE key = ?", [key]),
+      tx(() => run("INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)", [key, value])),
+    removeSetting: (key: string): Promise<void> => tx(() => run("DELETE FROM app_settings WHERE key = ?", [key])),
   };
 
   return repo;

@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { parseBackup } from "../src/backup/format.ts";
 import { openRepository } from "../src/db/open.ts";
+import { transaction } from "../src/db/transaction.ts";
 import { ValidationError } from "../src/validation.ts";
 import { builtinServiceTypeId, BUILTIN_SERVICE_TYPES } from "../src/service-types/builtin.ts";
 import { openTestDb } from "./helpers/sqlite.ts";
@@ -181,4 +182,37 @@ test("user edits are validated like the old backend did", async () => {
   assert.equal((await repo.updateVehicle(v.id, { model: "Auris" })).model, "Auris", "partial updates only check given fields");
   await assert.rejects(repo.createServiceType({ name: "X", fields: [], recommended_interval_km: -5 }), ValidationError);
   await assert.rejects(repo.upsertIntervalOverride(v.id, builtinServiceTypeId("oil-change"), { override_interval_days: 1.5 }), ValidationError);
+});
+
+test("edits made while another transaction rolls back are kept", async () => {
+  const { db, repo } = await freshRepo();
+  const v = await repo.createVehicle({ make: "Toyota", model: "Corolla" });
+  const oil = builtinServiceTypeId("oil-change");
+  const tick = () => new Promise((resolve) => setTimeout(resolve, 2));
+
+  // Stands in for a sync merge or an import that fails after a few awaits on the one connection.
+  const failing = assert.rejects(
+    transaction(db, async () => {
+      await tick();
+      await tick();
+      throw new Error("merge failed");
+    }),
+    /merge failed/,
+  );
+  await tick(); // it is open now
+  const edits = Promise.all([
+    repo.updateVehicle(v.id, { make: "Lexus", is_favorite: true }),
+    repo.upsertIntervalOverride(v.id, oil, { override_interval_km: 8000 }),
+    repo.setPreference("currency", "USD"),
+    repo.setSetting("reminders.enabled", "false"),
+  ]);
+  await failing;
+  await edits;
+
+  const after = await repo.getVehicleById(v.id);
+  assert.equal(after?.make, "Lexus");
+  assert.equal(after?.is_favorite, true);
+  assert.equal(after?.interval_overrides[0]?.override_interval_km, 8000);
+  assert.equal((await repo.getPreferences()).currency, "USD");
+  assert.equal(await repo.getSetting("reminders.enabled"), "false");
 });
