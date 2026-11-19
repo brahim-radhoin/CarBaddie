@@ -30,6 +30,17 @@ fn err(e: impl std::fmt::Display) -> String {
     e.to_string()
 }
 
+/// Debug builds only: `CARBADDIE_SANDBOX_DIR` runs the app on another data folder (e.g. a copy of
+/// the real database) so a development build can be tried on real data without upgrading or
+/// syncing the real one. secrets.rs then uses its own keychain entry: no sign-in, so no sync.
+/// Release builds ignore it.
+pub fn sandbox_dir() -> Option<PathBuf> {
+    if !cfg!(debug_assertions) {
+        return None;
+    }
+    std::env::var_os("CARBADDIE_SANDBOX_DIR").filter(|v| !v.is_empty()).map(PathBuf::from)
+}
+
 /// Schema version and whether the file holds any tables, read without modifying it.
 fn inspect(path: &Path) -> Result<(i64, bool), String> {
     let conn = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY).map_err(err)?;
@@ -44,7 +55,13 @@ fn inspect(path: &Path) -> Result<(i64, bool), String> {
 /// older than `latest_version`, a complete copy is saved next to it before anything touches it.
 #[tauri::command]
 pub async fn db_open(app: AppHandle, state: State<'_, Db>, latest_version: i64) -> Result<OpenInfo, String> {
-    let dir: PathBuf = app.path().app_data_dir().map_err(err)?;
+    let dir: PathBuf = match sandbox_dir() {
+        Some(dir) => {
+            log::warn!("Sandbox: using the data folder {} (CARBADDIE_SANDBOX_DIR)", dir.display());
+            dir
+        }
+        None => app.path().app_data_dir().map_err(err)?,
+    };
     std::fs::create_dir_all(&dir).map_err(err)?;
     let path = dir.join(DB_FILE);
 

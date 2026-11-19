@@ -4,9 +4,13 @@
 use keyring::Entry;
 
 const SERVICE: &str = "com.carbaddie.app";
+/// A sandboxed debug run (db.rs `sandbox_dir`) keeps its own secrets, so it is never signed in
+/// to the real account and cannot sync a copied database as the real device.
+const SANDBOX_SERVICE: &str = "com.carbaddie.app.sandbox";
 
 fn entry(name: &str) -> Result<Entry, String> {
-    Entry::new(SERVICE, name).map_err(|e| e.to_string())
+    let service = if crate::db::sandbox_dir().is_some() { SANDBOX_SERVICE } else { SERVICE };
+    Entry::new(service, name).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
