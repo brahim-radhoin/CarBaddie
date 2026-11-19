@@ -28,7 +28,7 @@ export function Header() {
   const activeLinkClasses = "text-foreground font-semibold";
 
   const navLinks = [
-    { href: "/vehicles", label: "My Vehicles" },
+    { href: "/vehicles", label: "Vehicles" },
     // { href: "/reports", label: "Reports" },
   ];
 
@@ -39,7 +39,7 @@ export function Header() {
         <div className="flex items-center">
           <Link to="/vehicles" className="mr-6 flex items-center space-x-2">
             <CarIcon className="h-7 w-7 text-primary" />
-            <span className="hidden font-bold sm:inline-block text-lg">CarBaddie</span>
+            <span className="hidden font-semibold sm:inline-block text-lg">CarBaddie</span>
           </Link>
           <nav className="hidden md:flex items-center gap-6 text-sm">
             {navLinks.map((link) => (
@@ -92,12 +92,12 @@ export function Header() {
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" size="icon">
                       <Settings className="h-5 w-5" />
-                      <span className="sr-only">Settings & Management</span>
+                      <span className="sr-only">Settings</span>
                     </Button>
                   </DropdownMenuTrigger>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>Settings & Management</p>
+                  <p>Settings</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
@@ -106,12 +106,12 @@ export function Header() {
               <DropdownMenuSeparator />
               <DropdownMenuItem onSelect={() => navigate("/service-types/manage")}>
                 <Wrench className="mr-2 h-4 w-4" />
-                <span>Manage Service Types</span>
+                <span>Manage service types</span>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onSelect={() => navigate("/settings")}>
                 <Settings className="mr-2 h-4 w-4" />
-                <span>Application Settings</span>
+                <span>Application settings</span>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

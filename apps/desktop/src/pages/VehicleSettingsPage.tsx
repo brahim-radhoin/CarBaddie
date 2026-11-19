@@ -33,7 +33,7 @@ export function VehicleSettingsPage() {
       (key) => payload[key] !== vehicle[key]
     );
     if (!hasChanges) {
-      toast.info("No changes were made.");
+      toast.info("No changes were made");
       return;
     }
     updateVehicle({ id: vehicleId!, vehicleData: payload });
@@ -78,10 +78,10 @@ export function VehicleSettingsPage() {
         className="w-full"
         items={[
           { value: "details", label: "Specifications" },
-          { value: "intervals", label: "Service Overrides" },
+          { value: "intervals", label: "Interval overrides" },
           { value: "odometer", label: "Odometer" },
-          { value: "backup", label: "Data Management" },
-          { value: "danger", label: "Danger Zone" },
+          { value: "backup", label: "Data and backup" },
+          { value: "danger", label: "Danger zone" },
         ]}
         renderPanel={(value) => {
           switch (value) {

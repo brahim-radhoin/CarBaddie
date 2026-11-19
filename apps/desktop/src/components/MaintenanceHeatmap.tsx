@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import { toISO, parseISO } from "@carbaddie/core";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
@@ -12,7 +13,7 @@ import { MaintenanceLogRead } from "../types";
 const getAvailableYears = (logs: MaintenanceLogRead[]): number[] => {
   if (!logs || logs.length === 0) return [new Date().getFullYear()];
   const years = new Set<number>([new Date().getFullYear()]);
-  logs.forEach((log) => years.add(new Date(log.date).getFullYear()));
+  logs.forEach((log) => years.add(parseISO(log.date)?.y ?? 0));
   return Array.from(years).sort((a, b) => a - b);
 };
 
@@ -30,7 +31,7 @@ const generateFullYearData = (year: number, logsForYear: Record<string, { count:
   const endDate = (year === currentYear) ? today : new Date(year, 11, 31);
 
   for (let d = startDate; d <= endDate; d.setDate(d.getDate() + 1)) {
-    const dateString = d.toISOString().split("T")[0];
+    const dateString = toISO(d.getFullYear(), d.getMonth(), d.getDate());
     const logData = logsForYear[dateString];
 
     let level: 0 | 1 | 2 | 3 | 4 = 0;
@@ -73,7 +74,7 @@ export function MaintenanceHeatmap({ logs, initialYear, onDayClick }: Maintenanc
 
   const dataForYear = useMemo(() => {
     return logs
-      .filter((log) => log.date && new Date(log.date).getFullYear() === selectedYear)
+      .filter((log) => log.date && parseISO(log.date)?.y === selectedYear)
       .reduce<Record<string, { count: number; logs: MaintenanceLogRead[] }>>((acc, log) => {
         const dateStr = log.date.split("T")[0];
         if (!acc[dateStr]) acc[dateStr] = { count: 0, logs: [] };

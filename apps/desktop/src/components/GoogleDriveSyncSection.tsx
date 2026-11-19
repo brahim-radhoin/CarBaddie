@@ -53,11 +53,11 @@ export function GoogleDriveSyncSection() {
         toast.success(
           result.applied > 0
             ? `Synced: ${result.applied} change${result.applied === 1 ? "" : "s"} from your other devices.`
-            : "Everything is in sync.",
+            : "Everything is in sync",
         );
       }
     } catch (e) {
-      toast.error(errorText(e, "Sync failed."));
+      toast.error(errorText(e, "Sync failed"));
     } finally {
       setBusy(null);
     }
@@ -83,9 +83,9 @@ export function GoogleDriveSyncSection() {
   const handleDisconnect = async () => {
     try {
       await disconnectGoogleDrive();
-      toast.info("Google Drive disconnected.");
+      toast.info("Google Drive disconnected");
     } catch (e) {
-      toast.error(errorText(e, "Failed to disconnect."));
+      toast.error(errorText(e, "Could not disconnect"));
     }
     await refreshStatus();
   };
@@ -93,7 +93,7 @@ export function GoogleDriveSyncSection() {
   const handleToggleAutoSync = (enabled: boolean) => {
     setAutoSyncEnabled(enabled);
     setStatus((p) => ({ ...p, autoSyncEnabled: enabled }));
-    toast.info(enabled ? "Automatic background sync enabled." : "Automatic sync paused.");
+    toast.info(enabled ? "Automatic sync on" : "Automatic sync paused");
   };
 
   /** Writes the visible backup file (readable by the mobile app and older versions). */
@@ -103,9 +103,9 @@ export function GoogleDriveSyncSection() {
       const backup = await (await getRepository()).exportBackup({ include_maintenance_logs: true });
       await uploadBackupToGoogleDrive(backup);
       await refreshStatus();
-      toast.success("Backup file saved to Google Drive.");
+      toast.success("Backup saved to Google Drive");
     } catch (e) {
-      toast.error(errorText(e, "Backup upload failed."));
+      toast.error(errorText(e, "Backup upload failed"));
     } finally {
       setBusy(null);
     }
@@ -134,7 +134,7 @@ export function GoogleDriveSyncSection() {
           (skipped ? `; kept your copy of ${skipped} already here.` : "."),
       );
     } catch (e) {
-      toast.error(errorText(e, "Import failed."));
+      toast.error(errorText(e, "Import failed"));
     } finally {
       setBusy(null);
     }
@@ -146,15 +146,12 @@ export function GoogleDriveSyncSection() {
         <div>
           <div className="flex items-center gap-2">
             <Cloud className="h-4 w-4 text-primary" />
-            <h3 className="text-sm font-medium text-foreground">Cloud Sync</h3>
+            <h3 className="text-sm font-medium text-foreground">Google Drive</h3>
             <span
-              className={`text-[10px] font-semibold px-2 py-0.5 rounded ${
-                status.isConnected
-                  ? "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20"
-                  : "bg-muted text-muted-foreground border border-border"
-              }`}
+              className={`inline-flex items-center gap-1.5 text-xs font-medium ${status.isConnected ? "text-ok" : "text-muted-foreground"}`}
             >
-              {status.isConnected ? "✓ Active" : "Off"}
+              {status.isConnected && <span className="status-dot bg-ok" />}
+              {status.isConnected ? "Active" : "Off"}
             </span>
           </div>
           <p className="text-xs text-muted-foreground mt-1">
@@ -170,7 +167,7 @@ export function GoogleDriveSyncSection() {
             className="h-7 text-xs text-destructive hover:bg-destructive/10"
           >
             <LogOut className="h-3 w-3 mr-1" />
-            Sign Out
+            Sign out
           </Button>
         )}
       </div>
@@ -179,13 +176,13 @@ export function GoogleDriveSyncSection() {
         <div className="pt-3 border-t border-border/60 space-y-4">
           <div className="flex items-center justify-between text-xs">
             <div className="flex items-center gap-2.5">
-              <div className="w-5 h-5 rounded-full bg-[#4285F4] text-white flex items-center justify-center font-bold text-[11px]">
+              <div className="w-5 h-5 rounded-full bg-[#4285F4] text-white flex items-center justify-center font-semibold text-xs">
                 G
               </div>
-              <span className="font-medium text-foreground">{status.email || "Connected Google Account"}</span>
+              <span className="font-medium text-foreground">{status.email || "Connected Google account"}</span>
             </div>
             {lastSync && (
-              <span className="text-muted-foreground font-mono text-[11px]">
+              <span className="text-muted-foreground font-mono text-xs">
                 Last synced: {new Date(lastSync).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
               </span>
             )}
@@ -193,8 +190,8 @@ export function GoogleDriveSyncSection() {
 
           <div className="flex items-center justify-between py-2 border-y border-border/40 text-xs">
             <div>
-              <p className="font-medium text-foreground">Automatic Background Sync</p>
-              <p className="text-[11px] text-muted-foreground">
+              <p className="font-medium text-foreground">Automatic sync</p>
+              <p className="text-xs text-muted-foreground">
                 Sync at start, every few minutes, when the window is focused and after each change.
               </p>
             </div>
@@ -204,7 +201,7 @@ export function GoogleDriveSyncSection() {
           <div className="flex flex-wrap gap-2 pt-1">
             <Button size="sm" onClick={() => runSync()} disabled={busy !== null} className="h-8 text-xs font-medium gap-1.5">
               <RotateCw className={`h-3.5 w-3.5 ${busy === "sync" ? "animate-spin" : ""}`} />
-              {busy === "sync" ? "Syncing..." : "Sync Now"}
+              {busy === "sync" ? "Syncing" : "Sync now"}
             </Button>
             <Button
               size="sm"
@@ -215,7 +212,7 @@ export function GoogleDriveSyncSection() {
               title={`Writes carbaddie_backup.json to your Drive${status.lastBackupTime ? ` (last: ${new Date(status.lastBackupTime).toLocaleString()})` : ""}`}
             >
               <Upload className="h-3.5 w-3.5" />
-              {busy === "upload" ? "Saving..." : "Save backup file"}
+              {busy === "upload" ? "Saving" : "Save backup file"}
             </Button>
             <Button
               size="sm"
@@ -226,7 +223,7 @@ export function GoogleDriveSyncSection() {
               title="Adds vehicles from carbaddie_backup.json (e.g. written by the mobile app) that aren't here yet"
             >
               <Download className="h-3.5 w-3.5" />
-              {busy === "download" ? "Importing..." : "Import backup file"}
+              {busy === "download" ? "Importing" : "Import backup file"}
             </Button>
           </div>
         </div>
@@ -237,27 +234,27 @@ export function GoogleDriveSyncSection() {
             disabled={isSigningIn}
             className="w-full sm:w-auto h-9 bg-white hover:bg-zinc-100 text-zinc-900 font-medium text-xs gap-2.5 shadow-sm border border-border"
           >
-            <div className="w-4 h-4 rounded-full bg-[#4285F4] text-white flex items-center justify-center font-bold text-[10px]">
+            <div className="w-4 h-4 rounded-full bg-[#4285F4] text-white flex items-center justify-center font-semibold text-xs">
               G
             </div>
-            {isSigningIn ? "Connecting to Google..." : "Sign in with Google"}
+            {isSigningIn ? "Connecting to Google" : "Sign in with Google"}
           </Button>
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             Sign in to sync your garage between devices through your personal Google Drive.
           </p>
 
           <button
             type="button"
             onClick={() => setShowAdvanced(!showAdvanced)}
-            className="text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-1 pt-1 cursor-pointer"
+            className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 pt-1 cursor-pointer"
           >
             {showAdvanced ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-            Advanced Configuration
+            Advanced
           </button>
 
           {showAdvanced && (
             <div className="p-3 rounded-lg border border-border/60 bg-background/50 space-y-1">
-              <label className="text-[11px] font-medium text-foreground">Custom Google Client ID (Optional)</label>
+              <label className="text-xs font-medium text-foreground">Custom Google Client ID (Optional)</label>
               <Input
                 placeholder="Enter custom OAuth Client ID"
                 value={customClientId}

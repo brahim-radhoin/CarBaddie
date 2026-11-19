@@ -22,7 +22,7 @@ const availableFieldTypes = [
   { value: "text", label: "Text" },
   { value: "number", label: "Number" },
   { value: "date", label: "Date" },
-  { value: "boolean", label: "Yes/No (Boolean)" },
+  { value: "boolean", label: "Yes or no" },
 ];
 
 function ServiceTypeCheckboxList({
@@ -40,7 +40,7 @@ function ServiceTypeCheckboxList({
   return (
     <div className="space-y-1.5 border border-border rounded p-3 bg-background max-h-48 overflow-y-auto">
       {filtered.length === 0 && (
-        <p className="text-xs text-muted-foreground italic">No other service categories available.</p>
+        <p className="text-xs text-muted-foreground">No other service types available.</p>
       )}
       {filtered.map((st) => (
         <label key={st.id} className="flex items-center gap-2 cursor-pointer text-xs">
@@ -183,7 +183,7 @@ export function AddEditServiceTypePage() {
     return (
       <div className="max-w-3xl space-y-4">
         <div className="rounded-lg border border-destructive/20 bg-destructive/10 p-4 text-xs text-destructive">
-          {(queryError as Error | null)?.message || "Could not load service category."}
+          {(queryError as Error | null)?.message || "Could not load the service type."}
         </div>
       </div>
     );
@@ -195,15 +195,15 @@ export function AddEditServiceTypePage() {
       <div className="flex items-center gap-2 text-xs text-muted-foreground pb-4 border-b border-border">
         <Link to="/service-types" className="hover:text-foreground transition-colors flex items-center gap-1">
           <ChevronLeft className="h-3.5 w-3.5" />
-          <span>Categories</span>
+          <span>Service types</span>
         </Link>
         <span className="opacity-40">/</span>
-        <span className="font-medium text-foreground">{isEditMode ? "Edit Category" : "New Category"}</span>
+        <span className="font-medium text-foreground">{isEditMode ? "Edit service type" : "New service type"}</span>
       </div>
 
       <div>
         <h1 className="text-xl font-medium tracking-tight text-foreground">
-          {isEditMode ? `Edit Category: ${name}` : "Create Service Category"}
+          {isEditMode ? `Edit Category: ${name}` : "Create service type"}
         </h1>
         <p className="text-xs text-muted-foreground mt-0.5">
           Configure default intervals, co-service suggestions, auto-resets, and custom telemetry fields.
@@ -272,7 +272,7 @@ export function AddEditServiceTypePage() {
               <Label className="text-xs font-medium text-foreground">
                 Auto-Resets (Cascading Reset)
               </Label>
-              <p className="text-[11px] text-muted-foreground mt-0.5 mb-2">
+              <p className="text-xs text-muted-foreground mt-0.5 mb-2">
                 When this service is performed, automatically reset intervals for these sub-services:
               </p>
               <ServiceTypeCheckboxList
@@ -287,7 +287,7 @@ export function AddEditServiceTypePage() {
               <Label className="text-xs font-medium text-foreground">
                 Smart Co-Service Suggestions
               </Label>
-              <p className="text-[11px] text-muted-foreground mt-0.5 mb-2">
+              <p className="text-xs text-muted-foreground mt-0.5 mb-2">
                 Prompt the mechanic to check or co-perform these services when logging this category:
               </p>
               <ServiceTypeCheckboxList
@@ -303,8 +303,8 @@ export function AddEditServiceTypePage() {
           <div className="pt-3 border-t border-border space-y-3">
             <div className="flex items-center justify-between">
               <div>
-                <Label className="text-xs font-medium text-foreground">Custom Fields</Label>
-                <p className="text-[11px] text-muted-foreground mt-0.5">
+                <Label className="text-xs font-medium text-foreground">Custom fields</Label>
+                <p className="text-xs text-muted-foreground mt-0.5">
                   Extra parameters recorded during service (viscosity, brand, tire pressure, etc.)
                 </p>
               </div>
@@ -378,10 +378,10 @@ export function AddEditServiceTypePage() {
             size="sm"
             loading={isSubmitting}
             disabled={isSubmitting}
-            pendingLabel={isEditMode ? "Saving..." : "Creating..."}
+            pendingLabel={isEditMode ? "Saving" : "Creating"}
             className="h-8 text-xs px-3"
           >
-            {isEditMode ? "Save Category" : "Create Category"}
+            {isEditMode ? "Save service type" : "Create service type"}
           </LoadingButton>
         </div>
       </form>

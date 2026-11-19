@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { useAppPreferences } from "../components/AppPreferencesProvider";
+import { AppearanceSection } from "../components/AppearanceSection";
+import { useAppVersion } from "../hooks/useAppVersion";
 import { useVehicles, useServiceTypes, useExportBackup, useWipeDatabase, useSetPreference } from "../api";
-import { COMMON_CURRENCIES, getRemindersEnabled, setRemindersEnabled } from "@carbaddie/core";
+import { COMMON_CURRENCIES, getRemindersEnabled, setRemindersEnabled, todayISO } from "@carbaddie/core";
 import { getRepository } from "../db";
 import { checkRemindersNow } from "../hooks/useReminders";
 import { Switch } from "@/components/ui/switch";
@@ -10,41 +11,19 @@ import { useUnits } from "../hooks/useUnits";
 import { GoogleDriveSyncSection } from "../components/GoogleDriveSyncSection";
 import { RestoreSection } from "../components/RestoreSection";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { useTheme } from "next-themes";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import {
   ChevronLeft,
-  RotateCcw,
   Car,
   Wrench,
   FileText,
-  Database,
   Download,
   AlertTriangle,
-  Sun,
-  Moon,
-  Monitor,
-  Palette,
-  Image as ImageIcon,
 } from "lucide-react";
 
 export function SettingsPage() {
-  const {
-    primaryColor,
-    setPrimaryColor,
-    accentColor,
-    setAccentColor,
-    backgroundImage,
-    setBackgroundImage,
-    resetPreferences,
-  } = useAppPreferences();
-
-  const { theme, setTheme } = useTheme();
-  const [imageUrl, setImageUrl] = useState(backgroundImage || "");
-
+  const version = useAppVersion();
   const { data: allVehicles = [] } = useVehicles();
   const { data: allServiceTypes = [] } = useServiceTypes();
   const totalLogs = allVehicles.reduce(
@@ -74,7 +53,7 @@ export function SettingsPage() {
     try {
       await setRemindersEnabled(await getRepository(), enabled);
     } catch {
-      toast.error("Failed to save the reminder setting.");
+      toast.error("Could not save the reminder setting");
       return;
     }
     if (enabled) checkRemindersNow().catch((error) => console.warn("Reminder check failed:", error));
@@ -87,7 +66,7 @@ export function SettingsPage() {
       const url = URL.createObjectURL(
         new Blob([text], { type: "application/json" })
       );
-      const timestamp = new Date().toISOString().slice(0, 10);
+      const timestamp = todayISO();
       const a = document.createElement("a");
       a.href = url;
       a.download = `carbaddie_backup_${timestamp}.json`;
@@ -95,19 +74,10 @@ export function SettingsPage() {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      toast.success("Backup exported successfully.");
+      toast.success("Backup exported");
     } catch {
-      toast.error("Failed to export backup.");
+      toast.error("Could not export the backup");
     }
-  };
-
-  const handleImageSave = () => {
-    setBackgroundImage(imageUrl.trim() || null);
-  };
-
-  const handleImageClear = () => {
-    setImageUrl("");
-    setBackgroundImage(null);
   };
 
   const [showWipeConfirm, setShowWipeConfirm] = useState(false);
@@ -133,50 +103,46 @@ export function SettingsPage() {
           <span>Overview</span>
         </Link>
         <span className="opacity-40">/</span>
-        <span className="font-medium text-foreground">Preferences</span>
+        <span className="font-medium text-foreground">Settings</span>
       </div>
 
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-xl font-medium tracking-tight text-foreground">
-            System Preferences
+            Settings
           </h1>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Cloud sync, garage telemetry, appearance, and data management.
+            Sync, preferences, appearance and backup
           </p>
-        </div>
-        <div className="hidden sm:flex items-center gap-2 text-xs font-mono text-muted-foreground bg-secondary/50 px-2.5 py-1 rounded border border-border">
-          <Database className="h-3 w-3 text-primary" />
-          <span>SQLite WAL</span>
         </div>
       </div>
 
       {/* ──────────────────────────────────────────────────── */}
       {/* SECTION 1: CLOUD SYNC                               */}
       {/* ──────────────────────────────────────────────────── */}
-      <SectionHeader label="CLOUD SYNCHRONIZATION" />
+      <SectionHeader label="Sync" />
       <GoogleDriveSyncSection />
 
       {/* ──────────────────────────────────────────────────── */}
       {/* SECTION 2: GARAGE TELEMETRY & PREFERENCES            */}
       {/* ──────────────────────────────────────────────────── */}
-      <SectionHeader label="GARAGE PREFERENCES" />
+      <SectionHeader label="Preferences" />
       <div className="rounded-lg border border-border bg-card p-5 space-y-5">
         {/* KPI Stats */}
         <div>
           <h3 className="text-sm font-medium text-foreground mb-1">
-            Garage Telemetry
+            Totals
           </h3>
           <p className="text-xs text-muted-foreground mb-4">
-            Live totals stored in the local SQLite database.
+            Stored on this computer
           </p>
           <div className="grid grid-cols-3 gap-4 text-center">
             <KpiCard icon={Car} value={allVehicles.length} label="Vehicles" />
-            <KpiCard icon={FileText} value={totalLogs} label="Service Logs" />
+            <KpiCard icon={FileText} value={totalLogs} label="Service logs" />
             <KpiCard
               icon={Wrench}
               value={allServiceTypes.length}
-              label="Categories"
+              label="Service types"
             />
           </div>
         </div>
@@ -185,7 +151,7 @@ export function SettingsPage() {
         <div className="flex items-center justify-between pt-4 border-t border-border/60">
           <div>
             <p className="text-sm font-medium text-foreground">
-              Distance Units
+              Distance units
             </p>
             <p className="text-xs text-muted-foreground mt-0.5">
               Odometer and intervals; stored in km, so switching converts what you see
@@ -246,147 +212,13 @@ export function SettingsPage() {
       {/* ──────────────────────────────────────────────────── */}
       {/* SECTION 3: APPEARANCE                                */}
       {/* ──────────────────────────────────────────────────── */}
-      <SectionHeader label="APPEARANCE" />
-      <div className="rounded-lg border border-border bg-card p-5 space-y-5">
-        {/* Theme Mode */}
-        <div>
-          <h3 className="text-sm font-medium text-foreground">Theme Mode</h3>
-          <p className="text-xs text-muted-foreground mt-0.5 mb-3">
-            Choose between dark graphite telemetry or clean light mode.
-          </p>
-          <div className="flex gap-2">
-            <ThemeButton
-              icon={Moon}
-              label="Dark"
-              active={theme === "dark"}
-              onClick={() => setTheme("dark")}
-            />
-            <ThemeButton
-              icon={Sun}
-              label="Light"
-              active={theme === "light"}
-              onClick={() => setTheme("light")}
-            />
-            <ThemeButton
-              icon={Monitor}
-              label="System"
-              active={theme === "system"}
-              onClick={() => setTheme("system")}
-            />
-          </div>
-        </div>
-
-        {/* Color Customization */}
-        <div className="pt-4 border-t border-border/60">
-          <div className="flex items-center gap-2 mb-3">
-            <Palette className="h-3.5 w-3.5 text-muted-foreground" />
-            <h3 className="text-sm font-medium text-foreground">
-              Color Customization
-            </h3>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <Label
-                htmlFor="primary-color"
-                className="text-xs text-muted-foreground"
-              >
-                Primary Surface
-              </Label>
-              <div className="flex items-center gap-2">
-                <div
-                  className="w-7 h-7 rounded border border-border flex-shrink-0"
-                  style={{ backgroundColor: primaryColor }}
-                />
-                <Input
-                  id="primary-color"
-                  value={primaryColor}
-                  onChange={(e) => setPrimaryColor(e.target.value)}
-                  placeholder="oklch(...) or hex"
-                  className="h-8 text-xs font-mono bg-background"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label
-                htmlFor="accent-color"
-                className="text-xs text-muted-foreground"
-              >
-                Accent Highlight
-              </Label>
-              <div className="flex items-center gap-2">
-                <div
-                  className="w-7 h-7 rounded border border-border flex-shrink-0"
-                  style={{ backgroundColor: accentColor }}
-                />
-                <Input
-                  id="accent-color"
-                  value={accentColor}
-                  onChange={(e) => setAccentColor(e.target.value)}
-                  placeholder="oklch(...) or hex"
-                  className="h-8 text-xs font-mono bg-background"
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Custom Backdrop */}
-        <div className="pt-4 border-t border-border/60">
-          <div className="flex items-center gap-2 mb-3">
-            <ImageIcon className="h-3.5 w-3.5 text-muted-foreground" />
-            <h3 className="text-sm font-medium text-foreground">
-              Custom Backdrop
-            </h3>
-          </div>
-          <p className="text-xs text-muted-foreground mb-2">
-            Optional wallpaper URL applied with reduced opacity.
-          </p>
-          <div className="flex gap-2">
-            <Input
-              placeholder="https://images.unsplash.com/..."
-              value={imageUrl}
-              onChange={(e) => setImageUrl(e.target.value)}
-              className="h-8 text-xs font-mono bg-background flex-1"
-            />
-            <Button
-              size="sm"
-              onClick={handleImageSave}
-              className="h-8 text-xs px-3"
-            >
-              Apply
-            </Button>
-            {backgroundImage && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleImageClear}
-                className="h-8 text-xs px-3"
-              >
-                Clear
-              </Button>
-            )}
-          </div>
-        </div>
-
-        {/* Reset All */}
-        <div className="pt-4 border-t border-border/60 flex justify-end">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={resetPreferences}
-            className="h-8 text-xs px-3 text-muted-foreground hover:text-destructive"
-          >
-            <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
-            Reset Theme to Defaults
-          </Button>
-        </div>
-      </div>
+      <SectionHeader label="Appearance" />
+      <AppearanceSection />
 
       {/* ──────────────────────────────────────────────────── */}
       {/* SECTION 4: LOCAL DATA & BACKUP                       */}
       {/* ──────────────────────────────────────────────────── */}
-      <SectionHeader label="LOCAL DATA & BACKUP" />
+      <SectionHeader label="Data and backup" />
       <div className="rounded-lg border border-border bg-card divide-y divide-border">
         {/* Export */}
         <button
@@ -418,13 +250,13 @@ export function SettingsPage() {
       {/* ──────────────────────────────────────────────────── */}
       {/* SECTION 5: DANGER ZONE                               */}
       {/* ──────────────────────────────────────────────────── */}
-      <SectionHeader label="DANGER ZONE" variant="destructive" />
+      <SectionHeader label="Danger zone" variant="destructive" />
       <div className="rounded-lg border border-destructive/20 bg-card p-5">
         <div className="flex items-start gap-4">
           <AlertTriangle className="h-5 w-5 text-destructive flex-shrink-0 mt-0.5" />
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-destructive">
-              Wipe Garage Database
+              Wipe garage database
             </p>
             <p className="text-xs text-muted-foreground mt-0.5">
               Permanently delete all vehicles, maintenance logs, and interval
@@ -438,7 +270,7 @@ export function SettingsPage() {
               onClick={() => setShowWipeConfirm(true)}
               className="h-8 text-xs px-3 text-destructive border-destructive/30 hover:bg-destructive/10 flex-shrink-0"
             >
-              Wipe All
+              Wipe all
             </Button>
           ) : (
             <div className="flex items-center gap-2 flex-shrink-0">
@@ -457,7 +289,7 @@ export function SettingsPage() {
                 disabled={isWiping}
                 className="h-8 text-xs px-3"
               >
-                {isWiping ? "Wiping..." : "Confirm Wipe"}
+                {isWiping ? "Wiping" : "Confirm wipe"}
               </Button>
             </div>
           )}
@@ -466,8 +298,8 @@ export function SettingsPage() {
 
       {/* Footer */}
       <div className="text-center pb-8 pt-2">
-        <p className="text-[11px] text-muted-foreground/50 tracking-wide">
-          CarBaddie v1.0.0 • SQLite WAL Engine • Unslop Edition
+        <p className="text-xs text-muted-foreground/50">
+          CarBaddie {version}
         </p>
       </div>
     </div>
@@ -487,7 +319,7 @@ function SectionHeader({
 }) {
   return (
     <p
-      className={`text-[11px] font-semibold tracking-wider px-1 ${
+      className={`text-xs font-semibold px-1 ${
         variant === "destructive" ? "text-destructive" : "text-primary"
       }`}
     >
@@ -508,8 +340,8 @@ function KpiCard({
   return (
     <div className="p-3 rounded-md bg-secondary/40 border border-border/60">
       <Icon className="h-4 w-4 mx-auto mb-1 text-muted-foreground" />
-      <p className="text-lg font-bold text-foreground font-mono">{value}</p>
-      <p className="text-[11px] text-muted-foreground font-medium">{label}</p>
+      <p className="text-lg font-semibold text-foreground font-mono">{value}</p>
+      <p className="text-xs text-muted-foreground font-medium">{label}</p>
     </div>
   );
 }
@@ -543,27 +375,3 @@ function PillSelector({
   );
 }
 
-function ThemeButton({
-  icon: Icon,
-  label,
-  active,
-  onClick,
-}: {
-  icon: React.ComponentType<{ className?: string }>;
-  label: string;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <Button
-      type="button"
-      variant={active ? "default" : "outline"}
-      size="sm"
-      onClick={onClick}
-      className="h-8 text-xs px-4 gap-1.5"
-    >
-      <Icon className="h-3.5 w-3.5" />
-      {label}
-    </Button>
-  );
-}

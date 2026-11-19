@@ -21,7 +21,7 @@ export function EditVehiclePage() {
       (key) => payload[key as keyof VehicleUpdate] !== vehicle?.[key as keyof typeof vehicle]
     );
     if (!hasChanges) {
-      toast.info("No changes were made.");
+      toast.info("No changes were made");
       return;
     }
 
@@ -52,7 +52,7 @@ export function EditVehiclePage() {
     return (
       <div className="max-w-2xl space-y-4">
         <div className="rounded-lg border border-destructive/20 bg-destructive/10 p-4 text-xs text-destructive">
-          Error loading vehicle: {(queryError as any)?.message || "Vehicle not found."}
+          Error loading vehicle: {(queryError as any)?.message || "Vehicle not found"}
         </div>
       </div>
     );
@@ -78,7 +78,7 @@ export function EditVehiclePage() {
 
       <div>
         <h1 className="text-xl font-medium tracking-tight text-foreground">
-          Edit Vehicle Specifications
+          Edit vehicle
         </h1>
         <p className="text-xs text-muted-foreground mt-0.5">
           Update identification, year, or initial odometer telemetry.

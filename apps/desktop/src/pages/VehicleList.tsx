@@ -14,12 +14,12 @@ import { Plus, Search, Car } from "lucide-react";
 
 type SortOption = "make_asc" | "make_desc" | "model_asc" | "model_desc" | "newest" | "oldest";
 const sortOptions: { value: SortOption; label: string }[] = [
-  { value: "newest", label: "Date Added (Newest)" },
-  { value: "oldest", label: "Date Added (Oldest)" },
-  { value: "make_asc", label: "Make (A→Z)" },
-  { value: "make_desc", label: "Make (Z→A)" },
-  { value: "model_asc", label: "Model (A→Z)" },
-  { value: "model_desc", label: "Model (Z→A)" },
+  { value: "newest", label: "Newest first" },
+  { value: "oldest", label: "Oldest first" },
+  { value: "make_asc", label: "Make, A to Z" },
+  { value: "make_desc", label: "Make, Z to A" },
+  { value: "model_asc", label: "Model, A to Z" },
+  { value: "model_desc", label: "Model, Z to A" },
 ];
 
 export function VehicleList() {
@@ -57,10 +57,10 @@ export function VehicleList() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-border">
         <div>
           <h1 className="text-xl font-medium tracking-tight text-foreground">
-            Vehicle Fleet
+            Vehicles
           </h1>
           <p className="text-xs text-muted-foreground mt-0.5">
-            {allVehicles.length} vehicle{allVehicles.length !== 1 ? "s" : ""} registered in garage database
+            {allVehicles.length} vehicle{allVehicles.length !== 1 ? "s" : ""}
           </p>
         </div>
         <Button
@@ -68,7 +68,7 @@ export function VehicleList() {
           className="h-8 px-3 text-xs font-medium gap-1.5 self-start sm:self-auto"
         >
           <Plus className="h-3.5 w-3.5" />
-          Add Vehicle
+          Add vehicle
         </Button>
       </div>
 
@@ -77,7 +77,7 @@ export function VehicleList() {
         <div className="relative flex-1">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground opacity-60" />
           <Input
-            placeholder="Search make, model, or VIN..."
+            placeholder="Search make, model or VIN"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="pl-8 h-8 text-xs bg-card"
@@ -116,7 +116,7 @@ export function VehicleList() {
             <Car className="h-4 w-4" />
           </div>
           <h3 className="text-sm font-medium text-foreground">
-            {searchTerm ? "No vehicles match your search" : "No vehicles in database"}
+            {searchTerm ? "No vehicles match your search" : "No vehicles yet"}
           </h3>
           <p className="text-xs text-muted-foreground mt-1 max-w-sm mx-auto">
             {searchTerm
@@ -130,7 +130,7 @@ export function VehicleList() {
               className="mt-4 h-8 text-xs gap-1.5"
             >
               <Plus className="h-3.5 w-3.5" />
-              Add First Vehicle
+              Add first vehicle
             </Button>
           )}
         </div>

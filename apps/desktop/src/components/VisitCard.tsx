@@ -8,6 +8,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { formatISO } from "@carbaddie/core";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -40,14 +41,14 @@ export function VisitCard({ visit, onDeleteLog, onDeleteVisit }: VisitCardProps)
     return <LogCard log={visit.items[0]} onDelete={onDeleteLog} />;
   }
 
-  const displayDate = new Date(visit.date).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+  const displayDate = formatISO(visit.date);
 
   const confirmDelete = async () => {
     setIsDeleting(true);
     try {
       await onDeleteVisit(visit.id);
     } catch (error) {
-      console.error("Failed to delete visit:", error);
+      console.error("Could not delete the visit:", error);
     } finally {
       setIsDeleting(false);
       setShowDeleteConfirm(false);
@@ -59,7 +60,7 @@ export function VisitCard({ visit, onDeleteLog, onDeleteVisit }: VisitCardProps)
       <div className="flex items-start justify-between gap-3">
         <div>
           <h4 className="text-sm font-medium text-foreground leading-snug">
-            {visit.items.map((item) => item.service_type?.name ?? "General Maintenance").join(" + ") || "Garage Visit"}
+            {visit.items.map((item) => item.service_type?.name ?? "General maintenance").join(" + ") || "Visit"}
           </h4>
           <div className="flex flex-wrap items-center gap-3 mt-1.5 text-xs text-muted-foreground">
             <span className="flex items-center gap-1 font-mono">
@@ -95,12 +96,12 @@ export function VisitCard({ visit, onDeleteLog, onDeleteVisit }: VisitCardProps)
           <DropdownMenuContent align="end" className="text-xs">
             <DropdownMenuItem onClick={() => navigate(`/vehicles/${visit.vehicle_id}/visits/${visit.id}/edit`)}>
               <Edit3 className="mr-2 h-3.5 w-3.5 opacity-70" />
-              Edit Visit
+              Edit visit
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setShowDeleteConfirm(true)}>
               <Trash2 className="mr-2 h-3.5 w-3.5 opacity-70" />
-              Delete Visit
+              Delete visit
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -111,7 +112,7 @@ export function VisitCard({ visit, onDeleteLog, onDeleteVisit }: VisitCardProps)
         {visit.items.map((item) => (
           <div key={item.id} className="text-xs">
             <div className="flex items-baseline justify-between gap-2">
-              <span className="text-foreground">{item.service_type?.name ?? "General Maintenance"}</span>
+              <span className="text-foreground">{item.service_type?.name ?? "General maintenance"}</span>
               <span className="font-mono text-muted-foreground">{units.money(item.cost_cents)}</span>
             </div>
             {item.notes && <p className="mt-0.5 text-muted-foreground leading-relaxed">{item.notes}</p>}
@@ -120,7 +121,7 @@ export function VisitCard({ visit, onDeleteLog, onDeleteVisit }: VisitCardProps)
                 {item.custom_field_values.map((cf) => (
                   <span
                     key={cf.id}
-                    className="font-mono text-[11px] px-2 py-0.5 rounded bg-secondary text-muted-foreground border border-border"
+                    className="font-mono text-xs px-2 py-0.5 rounded bg-secondary text-muted-foreground border border-border"
                   >
                     {cf.custom_field?.name ?? "Field"}: {cf.value} {cf.custom_field?.unit ?? ""}
                   </span>
@@ -150,7 +151,7 @@ export function VisitCard({ visit, onDeleteLog, onDeleteVisit }: VisitCardProps)
               disabled={isDeleting}
               className="h-8 text-xs bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {isDeleting ? "Deleting..." : "Delete Visit"}
+              {isDeleting ? "Deleting..." : "Delete visit"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { formatISO } from "@carbaddie/core";
 import { ServiceEventRead } from "../types";
 import { format, parseISO } from "date-fns";
 import { Gauge, Search, ArrowUpDown } from "lucide-react";
@@ -63,7 +64,7 @@ export function ActivityTimeline({ visits, onSelectDate }: ActivityTimelineProps
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground opacity-60" />
           <Input
             type="search"
-            placeholder="Search records by category or notes..."
+            placeholder="Search by service type or notes"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="pl-8 h-8 text-xs bg-background"
@@ -76,7 +77,7 @@ export function ActivityTimeline({ visits, onSelectDate }: ActivityTimelineProps
           onClick={() => setSortOrder(sortOrder === "desc" ? "asc" : "desc")}
         >
           <ArrowUpDown className="h-3 w-3 opacity-60" />
-          {sortOrder === "desc" ? "Newest First" : "Oldest First"}
+          {sortOrder === "desc" ? "Newest first" : "Oldest first"}
         </Button>
       </div>
 
@@ -92,7 +93,7 @@ export function ActivityTimeline({ visits, onSelectDate }: ActivityTimelineProps
               <div className="flex items-center gap-2">
                 <span className="text-xs font-medium text-foreground tracking-tight">{month}</span>
                 <span className="h-px flex-1 bg-border/60" />
-                <span className="font-mono text-[10px] text-muted-foreground">{monthLogs.length} events</span>
+                <span className="font-mono text-xs text-muted-foreground">{monthLogs.length} events</span>
               </div>
 
               <div className="space-y-2 pl-2 border-l border-border/80 ml-1">
@@ -104,13 +105,13 @@ export function ActivityTimeline({ visits, onSelectDate }: ActivityTimelineProps
                   >
                     <div className="flex items-baseline justify-between gap-2">
                       <span className="font-medium text-foreground">{visitTitle(log)}</span>
-                      <span className="font-mono text-[11px] font-medium text-foreground">
+                      <span className="font-mono text-xs font-medium text-foreground">
                         {units.money(log.total_cost_cents)}
                       </span>
                     </div>
 
-                    <div className="flex items-center gap-3 mt-1.5 font-mono text-[11px] text-muted-foreground">
-                      <span>{log.date}</span>
+                    <div className="flex items-center gap-3 mt-1.5 font-mono text-xs text-muted-foreground">
+                      <span>{formatISO(log.date)}</span>
                       <span className="opacity-30">/</span>
                       <span className="flex items-center gap-1">
                         <Gauge className="h-3 w-3 opacity-60" />
@@ -125,7 +126,7 @@ export function ActivityTimeline({ visits, onSelectDate }: ActivityTimelineProps
                     </div>
 
                     {visitNotes(log) && (
-                      <p className="mt-2 text-[11px] text-muted-foreground/90 leading-relaxed pt-1.5 border-t border-border/40">
+                      <p className="mt-2 text-xs text-muted-foreground/90 leading-relaxed pt-1.5 border-t border-border/40">
                         {visitNotes(log)}
                       </p>
                     )}

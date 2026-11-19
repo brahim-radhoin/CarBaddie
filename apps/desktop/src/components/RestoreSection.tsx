@@ -32,9 +32,9 @@ export function RestoreSection() {
       analyzeMutation.reset();
       setRestorePlan({ vehicles_to_add: [], conflict_resolutions: [] });
 
-      toast.success("Backup loaded successfully");
+      toast.success("Backup loaded");
     } catch (error) {
-      console.error("Failed to load backup:", error);
+      console.error("Could not load the backup:", error);
       toast.error(`Invalid backup: ${error instanceof Error ? error.message : String(error)}`);
       handleClearFile();
     }
@@ -72,7 +72,7 @@ export function RestoreSection() {
         processFileContent(content, file.name);
       };
       reader.onerror = () => {
-        toast.error("Failed to read the file");
+        toast.error("Could not read the file");
       };
       reader.readAsText(file);
     };
@@ -108,7 +108,7 @@ export function RestoreSection() {
       { backup_data: parsedBackupData, plan: restorePlan },
       {
         onSuccess: () => {
-          toast.success("Database restored successfully!");
+          toast.success("Database restored");
           handleClearFile();
         },
       }
@@ -134,8 +134,8 @@ export function RestoreSection() {
           className="rounded border border-dashed border-border p-6 text-center hover:bg-accent/20 cursor-pointer transition-colors"
         >
           <Upload className="h-5 w-5 mx-auto text-muted-foreground opacity-60 mb-2" />
-          <p className="text-xs font-medium text-foreground">Select Backup JSON File</p>
-          <p className="text-[11px] text-muted-foreground mt-0.5">Click to choose a backup file from your disk</p>
+          <p className="text-xs font-medium text-foreground">Select backup file</p>
+          <p className="text-xs text-muted-foreground mt-0.5">Click to choose a backup file from your disk</p>
         </div>
       ) : (
         <div className="space-y-4 pt-2">
@@ -156,7 +156,7 @@ export function RestoreSection() {
                 pendingLabel="Analyzing..."
                 className="h-8 text-xs px-3"
               >
-                Analyze Conflicts
+                Check for conflicts
               </LoadingButton>
             </div>
           )}
@@ -229,7 +229,7 @@ export function RestoreSection() {
               <div className="pt-2 flex justify-end">
                 <HoldToConfirm
                   onConfirm={handleRestore}
-                  confirmLabel="Restoring Database..."
+                  confirmLabel="Restoring"
                   duration={1500}
                   className="h-8 text-xs"
                 >

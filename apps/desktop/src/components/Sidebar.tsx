@@ -12,12 +12,14 @@ import { useVehicles } from "../api";
 import { useUnits } from "../hooks/useUnits";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { useAppVersion } from "../hooks/useAppVersion";
 
 export function Sidebar() {
   const { data: vehicles = [] } = useVehicles();
   const navigate = useNavigate();
   const units = useUnits();
   const [vehiclesOpen, setVehiclesOpen] = useState(true);
+  const version = useAppVersion();
 
   return (
     <aside className="app-shell-sidebar">
@@ -66,7 +68,7 @@ export function Sidebar() {
                 )}
               />
               <span>Vehicles</span>
-              <span className="font-mono text-[11px] opacity-70">
+              <span className="font-mono text-xs opacity-70">
                 ({vehicles.length})
               </span>
             </button>
@@ -75,7 +77,7 @@ export function Sidebar() {
               size="icon"
               className="h-5 w-5 rounded text-muted-foreground hover:text-foreground hover:bg-sidebar-accent"
               onClick={() => navigate("/vehicles/new")}
-              title="Add Vehicle"
+              title="Add vehicle"
             >
               <Plus className="h-3 w-3" />
             </Button>
@@ -107,7 +109,7 @@ export function Sidebar() {
                       {v.make} {v.model}
                     </span>
                     {v.initial_mileage && (
-                      <span className="font-mono text-[10px] text-muted-foreground opacity-60 ml-1.5 flex-shrink-0">
+                      <span className="font-mono text-xs text-muted-foreground opacity-60 ml-1.5 flex-shrink-0">
                         {units.distance(v.initial_mileage)}
                       </span>
                     )}
@@ -130,7 +132,7 @@ export function Sidebar() {
             }
           >
             <Wrench className="h-4 w-4 flex-shrink-0 opacity-70" />
-            <span>Service Types</span>
+            <span>Service types</span>
           </NavLink>
           <NavLink
             to="/settings"
@@ -139,15 +141,14 @@ export function Sidebar() {
             }
           >
             <Settings className="h-4 w-4 flex-shrink-0 opacity-70" />
-            <span>Backup & Settings</span>
+            <span>Settings</span>
           </NavLink>
         </div>
       </nav>
 
       {/* Footer Info */}
       <div className="px-4 py-3 border-t border-sidebar-border flex items-center justify-between text-xs text-muted-foreground">
-        <span className="font-mono text-[11px] opacity-75">CarBaddie v0.1.0</span>
-        <span className="text-[11px] font-mono opacity-50">Local DB</span>
+        <span className="font-mono text-xs">CarBaddie {version}</span>
       </div>
     </aside>
   );

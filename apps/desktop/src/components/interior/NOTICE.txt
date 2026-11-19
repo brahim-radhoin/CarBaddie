@@ -1,0 +1,4 @@
+Files in this folder are copied from https://github.com/ddoemonn/interior (MIT, see LICENSE),
+then adapted here: segmented-control.tsx uses this app's colour tokens and takes a per-option
+ariaLabel and a compact size. Reviewed and not copied: icon-morph (no sun/moon preset; hand-drawn
+path morphs), press-depth (3D tilt, wrong for small swatches), tooltip-group (Radix tooltip exists).

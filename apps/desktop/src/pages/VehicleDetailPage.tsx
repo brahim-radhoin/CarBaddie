@@ -47,7 +47,7 @@ export function VehicleDetailPage() {
   }
 
   if (isError) {
-    toast.error((error as Error | null)?.message || "Vehicle not found.");
+    toast.error((error as Error | null)?.message || "Vehicle not found");
     return <Navigate to="/vehicles" replace />;
   }
 
@@ -91,19 +91,19 @@ export function VehicleDetailPage() {
           {isAddLog && (
             <>
               <span className="opacity-40">/</span>
-              <span>New Visit</span>
+              <span>New visit</span>
             </>
           )}
           {isEditLog && (
             <>
               <span className="opacity-40">/</span>
-              <span>Edit Log</span>
+              <span>Edit log</span>
             </>
           )}
           {isEditVisit && (
             <>
               <span className="opacity-40">/</span>
-              <span>Edit Visit</span>
+              <span>Edit visit</span>
             </>
           )}
         </div>
@@ -118,7 +118,7 @@ export function VehicleDetailPage() {
                 onClick={() => navigate(`/vehicles/${vehicle.id}/add-log`)}
               >
                 <Plus className="h-3.5 w-3.5" />
-                Add Visit
+                Add visit
               </Button>
               <Button
                 variant="outline"
@@ -141,7 +141,7 @@ export function VehicleDetailPage() {
             <DropdownMenuContent align="end" className="text-xs">
               <DropdownMenuItem onClick={() => navigate(`/vehicles/${vehicle.id}/settings`)}>
                 <Settings className="mr-2 h-3.5 w-3.5 opacity-70" />
-                Vehicle Settings
+                Vehicle settings
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

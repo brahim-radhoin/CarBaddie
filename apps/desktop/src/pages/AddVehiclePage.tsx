@@ -32,12 +32,12 @@ export function AddVehiclePage() {
           <span>Vehicles</span>
         </Link>
         <span className="opacity-40">/</span>
-        <span className="font-medium text-foreground">Add Vehicle</span>
+        <span className="font-medium text-foreground">Add vehicle</span>
       </div>
 
       <div>
         <h1 className="text-xl font-medium tracking-tight text-foreground">
-          Register New Vehicle
+          Add vehicle
         </h1>
         <p className="text-xs text-muted-foreground mt-0.5">
           Enter make, model, year, and starting odometer reading to initialize telemetry.

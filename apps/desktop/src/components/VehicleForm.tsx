@@ -1,3 +1,4 @@
+import { BODY_TYPES, drawableBodyType, guessBodyType } from "@carbaddie/core";
 import { useState, useEffect, FormEvent } from "react";
 import { VehicleCreate, VehicleRead } from "../types";
 import { useGetMakes, useGetModels, useGetYears } from "../hooks/useVehicleDefinitions";
@@ -32,6 +33,9 @@ function withCurrent<T>(options: T[], current: T | undefined): T[] {
 export function VehicleForm({ initialData, isSubmitting, backendErrors, onSubmit, mode }: VehicleFormProps) {
   const navigate = useNavigate();
   const units = useUnits();
+  // Until the user picks one, a new vehicle's type follows its make (a Yamaha is a motorbike) and an
+  // existing one keeps what it has, including a type this version can't draw.
+  const [pickedType, setPickedType] = useState<string | null>(null);
   const shownMileage = (km?: number | null) => (km != null ? units.toDisplay(km).toString() : "");
   const [formData, setFormData] = useState<VehicleFormData>({
     make: initialData?.make || "",
@@ -81,6 +85,9 @@ export function VehicleForm({ initialData, isSubmitting, backendErrors, onSubmit
     });
   };
 
+  const suggestedType = guessBodyType(formData.make);
+  const shownType = pickedType ?? (mode === "edit" ? drawableBodyType(initialData?.body_type, formData.make) : suggestedType);
+
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     const payload: VehicleCreate = {
@@ -90,6 +97,7 @@ export function VehicleForm({ initialData, isSubmitting, backendErrors, onSubmit
       vin: formData.vin ? formData.vin.trim() || undefined : undefined,
       initial_mileage: formData.initial_mileage ? units.fromDisplay(parseInt(formData.initial_mileage, 10), initialData?.initial_mileage) : undefined,
       acquisition_date: formData.acquisition_date || undefined,
+      ...(mode === "edit" ? (pickedType !== null ? { body_type: pickedType } : {}) : { body_type: shownType }),
     };
     onSubmit(payload);
   };
@@ -109,7 +117,7 @@ export function VehicleForm({ initialData, isSubmitting, backendErrors, onSubmit
             </Label>
             <Select value={formData.make} onValueChange={(val) => handleSelectChange("make", val)} disabled={isSubmitting}>
               <SelectTrigger id="make" className={cn("h-8 text-xs bg-background", getFieldError("make") && "border-destructive")}>
-                <SelectValue placeholder="Select Make" />
+                <SelectValue placeholder="Select make" />
               </SelectTrigger>
               <SelectContent>
                 {makes.map((make) => (
@@ -119,7 +127,7 @@ export function VehicleForm({ initialData, isSubmitting, backendErrors, onSubmit
                 ))}
               </SelectContent>
             </Select>
-            {getFieldError("make") && <p className="text-[11px] text-destructive">{getFieldError("make")}</p>}
+            {getFieldError("make") && <p className="text-xs text-destructive">{getFieldError("make")}</p>}
           </div>
 
           <div className="space-y-1.5">
@@ -135,7 +143,7 @@ export function VehicleForm({ initialData, isSubmitting, backendErrors, onSubmit
                 id="model"
                 className={cn("h-8 text-xs bg-background", getFieldError("model") && "border-destructive")}
               >
-                <SelectValue placeholder={modelsLoading ? "Loading..." : !formData.make ? "Select make first" : "Select Model"} />
+                <SelectValue placeholder={modelsLoading ? "Loading" : !formData.make ? "Select make first" : "Select model"} />
               </SelectTrigger>
               <SelectContent>
                 {models.map((model) => (
@@ -145,7 +153,7 @@ export function VehicleForm({ initialData, isSubmitting, backendErrors, onSubmit
                 ))}
               </SelectContent>
             </Select>
-            {getFieldError("model") && <p className="text-[11px] text-destructive">{getFieldError("model")}</p>}
+            {getFieldError("model") && <p className="text-xs text-destructive">{getFieldError("model")}</p>}
           </div>
         </div>
 
@@ -157,7 +165,7 @@ export function VehicleForm({ initialData, isSubmitting, backendErrors, onSubmit
             </Label>
             <Select value={formData.year} onValueChange={(val) => handleSelectChange("year", val)} disabled={isSubmitting}>
               <SelectTrigger id="year" className={cn("h-8 text-xs bg-background", getFieldError("year") && "border-destructive")}>
-                <SelectValue placeholder={yearsLoading ? "..." : "Select Year"} />
+                <SelectValue placeholder={yearsLoading ? "..." : "Select year"} />
               </SelectTrigger>
               <SelectContent>
                 {years.map((year) => (
@@ -174,7 +182,7 @@ export function VehicleForm({ initialData, isSubmitting, backendErrors, onSubmit
                   ))}
               </SelectContent>
             </Select>
-            {getFieldError("year") && <p className="text-[11px] text-destructive">{getFieldError("year")}</p>}
+            {getFieldError("year") && <p className="text-xs text-destructive">{getFieldError("year")}</p>}
           </div>
 
           <div className="space-y-1.5">
@@ -189,16 +197,35 @@ export function VehicleForm({ initialData, isSubmitting, backendErrors, onSubmit
               minLength={11}
               maxLength={17}
               placeholder="e.g. 1HGCR2F83HA..."
-              className={cn("h-8 text-xs font-mono uppercase bg-background", getFieldError("vin") && "border-destructive")}
+              className={cn("h-8 text-xs font-mono bg-background", getFieldError("vin") && "border-destructive")}
             />
-            {getFieldError("vin") && <p className="text-[11px] text-destructive">{getFieldError("vin")}</p>}
+            {getFieldError("vin") && <p className="text-xs text-destructive">{getFieldError("vin")}</p>}
           </div>
         </div>
 
-        {/* Initial Telemetry & Odometer */}
+        {/* Type: picks the outline the phone draws for this vehicle */}
+        <div className="space-y-1.5 pt-3 border-t border-border">
+          <Label htmlFor="body_type" className="text-xs font-medium text-foreground">
+            Type
+          </Label>
+          <Select value={shownType} onValueChange={setPickedType} disabled={isSubmitting}>
+            <SelectTrigger id="body_type" className="h-8 w-full text-xs sm:w-56 bg-background">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {BODY_TYPES.map((t) => (
+                <SelectItem key={t.id} value={t.id} className="text-xs">
+                  {t.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Starting odometer & Odometer */}
         <div className="pt-3 border-t border-border">
           <p className="text-xs font-medium text-foreground mb-3">
-            Initial Telemetry
+            Starting odometer
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
@@ -216,13 +243,13 @@ export function VehicleForm({ initialData, isSubmitting, backendErrors, onSubmit
                 className={cn("h-8 text-xs font-mono bg-background", getFieldError("initial_mileage") && "border-destructive")}
               />
               {getFieldError("initial_mileage") && (
-                <p className="text-[11px] text-destructive">{getFieldError("initial_mileage")}</p>
+                <p className="text-xs text-destructive">{getFieldError("initial_mileage")}</p>
               )}
             </div>
 
             <div className="space-y-1.5">
               <Label htmlFor="acquisition_date" className="text-xs font-medium text-muted-foreground">
-                Acquisition Date
+                Acquisition date
               </Label>
               <Input
                 id="acquisition_date"
@@ -233,7 +260,7 @@ export function VehicleForm({ initialData, isSubmitting, backendErrors, onSubmit
                 className={cn("h-8 text-xs font-mono bg-background", getFieldError("acquisition_date") && "border-destructive")}
               />
               {getFieldError("acquisition_date") && (
-                <p className="text-[11px] text-destructive">{getFieldError("acquisition_date")}</p>
+                <p className="text-xs text-destructive">{getFieldError("acquisition_date")}</p>
               )}
             </div>
           </div>
@@ -258,10 +285,10 @@ export function VehicleForm({ initialData, isSubmitting, backendErrors, onSubmit
           size="sm"
           loading={isSubmitting}
           disabled={isSubmitting}
-          pendingLabel={mode === "add" ? "Registering..." : "Saving..."}
+          pendingLabel={mode === "add" ? "Adding" : "Saving"}
           className="h-8 text-xs px-3"
         >
-          {mode === "add" ? "Register Vehicle" : "Save Changes"}
+          {mode === "add" ? "Add vehicle" : "Save changes"}
         </LoadingButton>
       </div>
     </form>

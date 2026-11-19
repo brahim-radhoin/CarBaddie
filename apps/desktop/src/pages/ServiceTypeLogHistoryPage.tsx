@@ -48,7 +48,7 @@ export function ServiceTypeLogHistoryPage() {
     return (
       <div className="max-w-4xl space-y-4">
         <div className="rounded-lg border border-destructive/20 bg-destructive/10 p-4 text-xs text-destructive">
-          {(error as Error | null)?.message || "Could not load the requested history."}
+          {(error as Error | null)?.message || "Could not load that history"}
         </div>
       </div>
     );
@@ -81,7 +81,7 @@ export function ServiceTypeLogHistoryPage() {
           onClick={() => navigate(`/vehicles/${vehicle.id}/add-log?service_type_id=${serviceTypeId}`)}
         >
           <Plus className="h-3.5 w-3.5" />
-          Log This Service
+          Log this service
         </Button>
       </div>
 

@@ -45,7 +45,7 @@ export function ManageServiceTypesPage() {
     return (
       <div className="max-w-4xl space-y-4">
         <div className="rounded-lg border border-destructive/20 bg-destructive/10 p-4 text-xs text-destructive">
-          {(error as Error | null)?.message || "Could not fetch service types."}
+          {(error as Error | null)?.message || "Could not load service types"}
         </div>
       </div>
     );
@@ -60,13 +60,13 @@ export function ManageServiceTypesPage() {
           <span>Overview</span>
         </Link>
         <span className="opacity-40">/</span>
-        <span className="font-medium text-foreground">Service Types</span>
+        <span className="font-medium text-foreground">Service types</span>
       </div>
 
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="text-xl font-medium tracking-tight text-foreground">
-            Service Categories
+            Service types
           </h1>
           <p className="text-xs text-muted-foreground mt-0.5">
             Configure maintenance intervals, custom fields, and inter-service relationships.
@@ -75,7 +75,7 @@ export function ManageServiceTypesPage() {
         <Button asChild size="sm" className="h-8 px-3 text-xs gap-1.5 self-start sm:self-auto">
           <Link to="/service-types/new">
             <Plus className="h-3.5 w-3.5" />
-            Add Category
+            Add service type
           </Link>
         </Button>
       </div>
@@ -86,7 +86,7 @@ export function ManageServiceTypesPage() {
           <table className="w-full text-left text-xs">
             <thead className="bg-muted/40 border-b border-border text-muted-foreground font-medium">
               <tr>
-                <th className="py-2.5 px-3.5">Category Name</th>
+                <th className="py-2.5 px-3.5">Name</th>
                 <th className="py-2.5 px-3.5">Interval ({units.unit})</th>
                 <th className="py-2.5 px-3.5">Interval (days)</th>
                 <th className="py-2.5 px-3.5 text-right">Actions</th>

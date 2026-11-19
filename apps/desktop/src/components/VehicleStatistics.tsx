@@ -105,7 +105,7 @@ export function VehicleStatistics({
               {units.toDisplay(vehicleStats.currentMileage).toLocaleString()}
               <span className="text-xs font-normal text-muted-foreground ml-1">{units.unit}</span>
             </div>
-            <p className="text-[11px] text-muted-foreground mt-0.5">
+            <p className="text-xs text-muted-foreground mt-0.5">
               +{units.distance(Math.max(0, vehicleStats.currentMileage - (vehicle.initial_mileage ?? 0)))} logged
             </p>
           </div>
@@ -113,14 +113,14 @@ export function VehicleStatistics({
 
         <div className="kpi-card">
           <div className="flex items-center justify-between text-muted-foreground text-xs">
-            <span>Total Maintenance</span>
+            <span>Total spent</span>
             <DollarSign className="h-3.5 w-3.5 opacity-60" />
           </div>
           <div className="mt-2">
             <div className="font-mono text-xl font-medium text-foreground tracking-tight">
               {units.money(vehicleStats.totalCostCents)}
             </div>
-            <p className="text-[11px] text-muted-foreground mt-0.5 font-mono">
+            <p className="text-xs text-muted-foreground mt-0.5 font-mono">
               {units.money(costPerDistance)}/{units.unit}
             </p>
           </div>
@@ -128,7 +128,7 @@ export function VehicleStatistics({
 
         <div className="kpi-card">
           <div className="flex items-center justify-between text-muted-foreground text-xs">
-            <span>Service History</span>
+            <span>Service history</span>
             <Activity className="h-3.5 w-3.5 opacity-60" />
           </div>
           <div className="mt-2">
@@ -136,7 +136,7 @@ export function VehicleStatistics({
               {vehicleStats.totalLogs}
               <span className="text-xs font-normal text-muted-foreground ml-1">records</span>
             </div>
-            <p className="text-[11px] text-muted-foreground mt-0.5 font-mono">
+            <p className="text-xs text-muted-foreground mt-0.5 font-mono">
               avg {units.money(vehicleStats.averageCostCentsPerService)}/svc
             </p>
           </div>
@@ -144,17 +144,17 @@ export function VehicleStatistics({
 
         <div className="kpi-card">
           <div className="flex items-center justify-between text-muted-foreground text-xs">
-            <span>Last Service</span>
+            <span>Last service</span>
             <Calendar className="h-3.5 w-3.5 opacity-60" />
           </div>
           <div className="mt-2">
             <div className="font-mono text-base font-medium text-foreground truncate mt-1">
               {vehicleStats.lastServiceDate ?? "No logs"}
             </div>
-            <p className="text-[11px] text-muted-foreground mt-0.5">
+            <p className="text-xs text-muted-foreground mt-0.5">
               {vehicleStats.daysSinceLastSvc !== null
                 ? `${vehicleStats.daysSinceLastSvc} days ago`
-                : "Awaiting first service"}
+                : "No service yet"}
             </p>
           </div>
         </div>
@@ -166,8 +166,8 @@ export function VehicleStatistics({
           {/* Cumulative Spend Timeline */}
           <div className="rounded-lg border border-border bg-card p-4 flex flex-col justify-between">
             <div className="flex items-center justify-between pb-3 border-b border-border text-xs">
-              <span className="font-medium text-foreground">Cumulative Spend Timeline</span>
-              <span className="font-mono text-muted-foreground text-[11px]">{spendTimelineData.length} records</span>
+              <span className="font-medium text-foreground">Cumulative spend</span>
+              <span className="font-mono text-muted-foreground text-xs">{spendTimelineData.length} records</span>
             </div>
             <div className="h-56 mt-4 w-full">
               <ResponsiveContainer width="100%" height="100%">
@@ -210,8 +210,8 @@ export function VehicleStatistics({
           {/* Cost by Category */}
           <div className="rounded-lg border border-border bg-card p-4 flex flex-col justify-between">
             <div className="flex items-center justify-between pb-3 border-b border-border text-xs">
-              <span className="font-medium text-foreground">Expenditure by Category</span>
-              <span className="font-mono text-muted-foreground text-[11px]">Top categories</span>
+              <span className="font-medium text-foreground">Spend by service type</span>
+              <span className="font-mono text-muted-foreground text-xs">Top service types</span>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4 items-center">
               <div className="h-48 w-full">
@@ -252,9 +252,9 @@ export function VehicleStatistics({
                         className="w-2 h-2 rounded-full flex-shrink-0"
                         style={{ backgroundColor: CHART_COLORS[index % CHART_COLORS.length] }}
                       />
-                      <span className="truncate text-muted-foreground text-[11px]">{entry.name}</span>
+                      <span className="truncate text-muted-foreground text-xs">{entry.name}</span>
                     </div>
-                    <span className="font-mono text-[11px] font-medium text-foreground ml-2">
+                    <span className="font-mono text-xs font-medium text-foreground ml-2">
                       {units.money(entry.value)}
                     </span>
                   </div>

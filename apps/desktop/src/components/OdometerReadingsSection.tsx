@@ -1,4 +1,5 @@
 import { VehicleRead } from "../types";
+import { formatISO } from "@carbaddie/core";
 import { useDeleteOdometerReading } from "../api";
 import { useUnits } from "../hooks/useUnits";
 import { UpdateOdometerPopover } from "./UpdateOdometerPopover";
@@ -31,7 +32,7 @@ export function OdometerReadingsSection({ vehicle }: OdometerReadingsSectionProp
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h3 className="text-sm font-medium text-foreground">Odometer Readings</h3>
+          <h3 className="text-sm font-medium text-foreground">Odometer readings</h3>
           <p className="text-xs text-muted-foreground mt-0.5">
             Current odometer: {vehicle.current_mileage != null ? units.distance(vehicle.current_mileage) : "unknown"} (the
             highest of the starting odometer, service logs and these readings).
@@ -49,7 +50,7 @@ export function OdometerReadingsSection({ vehicle }: OdometerReadingsSectionProp
           {readings.map((reading) => (
             <div key={reading.id} className="flex items-center justify-between gap-3 px-3 py-2 text-xs">
               <div className="flex items-center gap-4 min-w-0">
-                <span className="font-mono text-muted-foreground flex-shrink-0">{reading.date}</span>
+                <span className="font-mono text-muted-foreground flex-shrink-0">{formatISO(reading.date)}</span>
                 <span className="font-mono font-medium text-foreground flex-shrink-0">{units.distance(reading.mileage)}</span>
                 {reading.note && <span className="text-muted-foreground truncate">{reading.note}</span>}
               </div>
@@ -60,7 +61,7 @@ export function OdometerReadingsSection({ vehicle }: OdometerReadingsSectionProp
                     size="icon"
                     className="h-7 w-7 text-muted-foreground hover:text-destructive flex-shrink-0"
                     disabled={isPending}
-                    aria-label={`Delete reading of ${reading.date}`}
+                    aria-label={`Delete reading of ${formatISO(reading.date)}`}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>
@@ -69,7 +70,7 @@ export function OdometerReadingsSection({ vehicle }: OdometerReadingsSectionProp
                   <AlertDialogHeader>
                     <AlertDialogTitle className="text-sm font-semibold">Delete this odometer reading?</AlertDialogTitle>
                     <AlertDialogDescription className="text-xs text-muted-foreground">
-                      {units.distance(reading.mileage)} on {reading.date} will be removed on every synced device.
+                      {units.distance(reading.mileage)} on {formatISO(reading.date)} will be removed on every synced device.
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter className="pt-3">

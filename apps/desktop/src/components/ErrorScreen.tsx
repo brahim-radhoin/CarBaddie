@@ -17,7 +17,7 @@ export function ErrorScreen({ errorMessage, backendLogs, onRetry }: ErrorScreenP
           </div>
           <div>
             <h1 className="text-base font-medium text-foreground">
-              Database Error
+              Database error
             </h1>
             <p className="text-xs text-muted-foreground">
               The local database could not be opened or upgraded. Your data was not changed.
@@ -35,18 +35,18 @@ export function ErrorScreen({ errorMessage, backendLogs, onRetry }: ErrorScreenP
         {/* Console Logs */}
         <div className="space-y-1.5">
           <span className="text-xs font-medium text-foreground">
-            Startup Telemetry Log ({backendLogs.length} entries)
+            Startup log ({backendLogs.length} entries)
           </span>
           <div className="bg-card border border-border p-3 rounded text-xs font-mono max-h-56 overflow-y-auto space-y-1">
             {backendLogs.length > 0 ? (
               backendLogs.map((log, i) => (
-                <div key={i} className="text-muted-foreground text-[11px] leading-relaxed">
+                <div key={i} className="text-muted-foreground text-xs leading-relaxed">
                   <span className="opacity-40 select-none mr-2">[{i + 1}]</span>
                   {log}
                 </div>
               ))
             ) : (
-              <div className="text-muted-foreground italic">No logs captured.</div>
+              <div className="text-muted-foreground">No logs captured.</div>
             )}
           </div>
         </div>

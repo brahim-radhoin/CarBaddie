@@ -35,10 +35,10 @@ export function DeleteVehicleSection({ vehicleId, vehicleName }: DeleteVehicleSe
     <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-5 space-y-4">
       <div>
         <h3 className="text-sm font-medium text-destructive">
-          Permanently Delete Vehicle
+          Delete vehicle
         </h3>
         <p className="text-xs text-muted-foreground mt-0.5">
-          Remove {vehicleName} and all associated maintenance logs, interval overrides, and telemetry records from the database.
+          Remove {vehicleName} and everything logged for it: visits, interval overrides and odometer readings. This cannot be undone.
         </p>
       </div>
 
@@ -67,7 +67,7 @@ export function DeleteVehicleSection({ vehicleId, vehicleName }: DeleteVehicleSe
               <AlertDialogCancel className="h-8 text-xs">Cancel</AlertDialogCancel>
               <HoldToConfirm
                 onConfirm={handleDelete}
-                confirmLabel="Deleting Vehicle..."
+                confirmLabel="Deleting vehicle"
                 duration={2000}
                 tone="destructive"
                 className="h-8 text-xs"

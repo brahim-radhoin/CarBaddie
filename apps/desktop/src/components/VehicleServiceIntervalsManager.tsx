@@ -115,7 +115,7 @@ export function VehicleServiceIntervalsManager({
               isDirty: false,
             },
           }));
-          toast.success("Interval override updated");
+          toast.success("Interval override saved");
         },
       }
     );
@@ -162,7 +162,7 @@ export function VehicleServiceIntervalsManager({
     <div className="rounded-lg border border-border bg-card p-5 space-y-5">
       <div>
         <h3 className="text-sm font-medium text-foreground">
-          Service Interval Overrides
+          Interval overrides
         </h3>
         <p className="text-xs text-muted-foreground mt-0.5">
           Customize manufacturer recommended maintenance intervals specifically for this vehicle.
@@ -174,7 +174,7 @@ export function VehicleServiceIntervalsManager({
         <div className="flex gap-2">
           <Select value={selectedServiceTypeToAdd} onValueChange={setSelectedServiceTypeToAdd}>
             <SelectTrigger className="h-8 text-xs bg-background flex-1">
-              <SelectValue placeholder="Add interval for additional category..." />
+              <SelectValue placeholder="Add interval for another service type" />
             </SelectTrigger>
             <SelectContent>
               {availableServiceTypesForOverride.map((st) => (
@@ -191,7 +191,7 @@ export function VehicleServiceIntervalsManager({
             className="h-8 text-xs px-3 gap-1"
           >
             <Plus className="h-3.5 w-3.5" />
-            Add Override
+            Add override
           </Button>
         </div>
       )}
@@ -201,10 +201,10 @@ export function VehicleServiceIntervalsManager({
         <table className="w-full text-left text-xs">
           <thead className="bg-muted/40 border-b border-border text-muted-foreground font-medium">
             <tr>
-              <th className="py-2.5 px-3">Service Category</th>
-              <th className="py-2.5 px-3">Default Schedule</th>
+              <th className="py-2.5 px-3">Service type</th>
+              <th className="py-2.5 px-3">Default schedule</th>
               <th className="py-2.5 px-3">Vehicle Override ({units.unit})</th>
-              <th className="py-2.5 px-3">Vehicle Override (days)</th>
+              <th className="py-2.5 px-3">Vehicle override (days)</th>
               <th className="py-2.5 px-3 text-right">Actions</th>
             </tr>
           </thead>
@@ -218,7 +218,7 @@ export function VehicleServiceIntervalsManager({
                   <td className="py-2.5 px-3 font-medium text-foreground">
                     {st.name}
                   </td>
-                  <td className="py-2.5 px-3 font-mono text-[11px] text-muted-foreground">
+                  <td className="py-2.5 px-3 font-mono text-xs text-muted-foreground">
                     {st.recommended_interval_km ? units.distance(st.recommended_interval_km) : "—"} /{" "}
                     {st.recommended_interval_days ? `${st.recommended_interval_days} d` : "—"}
                   </td>
@@ -248,7 +248,7 @@ export function VehicleServiceIntervalsManager({
                         onClick={() => handleSave(st.id)}
                         disabled={!entry.isDirty || upsertMutation.isPending}
                         loading={upsertMutation.isPending}
-                        className="h-7 text-[11px] px-2.5"
+                        className="h-7 text-xs px-2.5"
                       >
                         Save
                       </LoadingButton>

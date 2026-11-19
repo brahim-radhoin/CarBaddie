@@ -7,6 +7,10 @@ import { ThemeProvider } from "./components/ThemeProvider";
 import { AppPreferencesProvider } from "./components/AppPreferencesProvider";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "./queryClient";
+import { initAccent } from "./lib/accent";
+
+// Before the first render, so the page never paints in the wrong accent.
+initAccent();
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

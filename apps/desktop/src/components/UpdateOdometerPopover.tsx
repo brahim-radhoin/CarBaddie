@@ -71,7 +71,7 @@ export function UpdateOdometerPopover({ vehicleId, currentMileage }: UpdateOdome
       }}
     >
       <PopoverTrigger asChild>
-        <Button variant="ghost" size="sm" className="h-6 px-1.5 text-[11px] gap-1 text-muted-foreground hover:text-foreground">
+        <Button variant="ghost" size="sm" className="h-6 px-1.5 text-xs gap-1 text-muted-foreground hover:text-foreground">
           <Gauge className="h-3 w-3" />
           Update
         </Button>
@@ -80,7 +80,7 @@ export function UpdateOdometerPopover({ vehicleId, currentMileage }: UpdateOdome
         <form onSubmit={handleSubmit} className="space-y-3">
           <div>
             <h3 className="text-sm font-medium text-foreground">Update odometer</h3>
-            <p className="text-[11px] text-muted-foreground mt-0.5">
+            <p className="text-xs text-muted-foreground mt-0.5">
               Note the mileage between services so due dates stay accurate.
             </p>
           </div>
@@ -100,7 +100,7 @@ export function UpdateOdometerPopover({ vehicleId, currentMileage }: UpdateOdome
               placeholder={currentMileage != null ? String(units.toDisplay(currentMileage)) : "e.g. 55000"}
               className={cn("h-8 text-xs font-mono bg-background", mileageError && "border-destructive")}
             />
-            {mileageError && <p className="text-[11px] text-destructive">{mileageError}</p>}
+            {mileageError && <p className="text-xs text-destructive">{mileageError}</p>}
           </div>
 
           <div className="space-y-1.5">
@@ -114,7 +114,7 @@ export function UpdateOdometerPopover({ vehicleId, currentMileage }: UpdateOdome
               onChange={(e) => setDate(e.target.value)}
               className={cn("h-8 text-xs font-mono bg-background", fieldErrors.date && "border-destructive")}
             />
-            {fieldErrors.date && <p className="text-[11px] text-destructive">{fieldErrors.date[0]}</p>}
+            {fieldErrors.date && <p className="text-xs text-destructive">{fieldErrors.date[0]}</p>}
           </div>
 
           <div className="space-y-1.5">
@@ -134,7 +134,7 @@ export function UpdateOdometerPopover({ vehicleId, currentMileage }: UpdateOdome
               Cancel
             </Button>
             <Button type="submit" size="sm" className="h-7 text-xs" disabled={isPending}>
-              {isPending ? "Saving..." : "Save"}
+              {isPending ? "Saving" : "Save"}
             </Button>
           </div>
         </form>

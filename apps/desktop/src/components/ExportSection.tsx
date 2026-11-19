@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { todayISO } from "@carbaddie/core";
 import { useExportBackup } from "../api";
 import { VehicleRead } from "../types";
 import { format } from "date-fns";
@@ -50,7 +51,7 @@ export function ExportSection({ allVehicles }: ExportSectionProps) {
     return new Promise<void>((resolve, reject) => {
       exportMutation.mutate(config, {
         onSuccess: async (blob) => {
-          const timestamp = new Date().toISOString().slice(0, 10);
+          const timestamp = todayISO();
           const defaultFilename = `carbaddie_backup_${timestamp}.json`;
           const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
@@ -68,7 +69,7 @@ export function ExportSection({ allVehicles }: ExportSectionProps) {
               }
 
               await writeTextFile(filePath, text);
-              toast.success("Backup file saved successfully");
+              toast.success("Backup saved");
               resolve();
             } catch (fsError) {
               console.error("Tauri file write failed, using fallback:", fsError);
@@ -80,7 +81,7 @@ export function ExportSection({ allVehicles }: ExportSectionProps) {
               link.click();
               link.remove();
               window.URL.revokeObjectURL(url);
-              toast.success("Backup downloaded via browser fallback");
+              toast.success("Backup downloaded");
               resolve();
             }
           } else {
@@ -92,7 +93,7 @@ export function ExportSection({ allVehicles }: ExportSectionProps) {
             link.click();
             link.remove();
             window.URL.revokeObjectURL(url);
-            toast.success("Backup downloaded successfully");
+            toast.success("Backup downloaded");
             resolve();
           }
         },
@@ -108,7 +109,7 @@ export function ExportSection({ allVehicles }: ExportSectionProps) {
     <div className="rounded-lg border border-border bg-card p-5 space-y-4">
       <div>
         <h3 className="text-sm font-medium text-foreground">
-          Export Maintenance Backup
+          Export backup
         </h3>
         <p className="text-xs text-muted-foreground mt-0.5">
           Generate an offline JSON snapshot compatible with both CarBaddie desktop and mobile.
@@ -119,9 +120,9 @@ export function ExportSection({ allVehicles }: ExportSectionProps) {
         {/* Vehicles Selection */}
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-foreground">Select Vehicles</span>
-            <Button variant="ghost" size="sm" onClick={toggleSelectAll} className="h-6 text-[11px] px-2 text-muted-foreground">
-              {allSelected ? "Deselect All" : "Select All"}
+            <span className="text-xs font-medium text-foreground">Select vehicles</span>
+            <Button variant="ghost" size="sm" onClick={toggleSelectAll} className="h-6 text-xs px-2 text-muted-foreground">
+              {allSelected ? "Deselect all" : "Select all"}
             </Button>
           </div>
           <div className="rounded border border-border bg-background p-2.5 max-h-36 overflow-y-auto space-y-1.5">
@@ -147,14 +148,14 @@ export function ExportSection({ allVehicles }: ExportSectionProps) {
         <div className="space-y-4">
           <div className="flex items-center justify-between pt-1">
             <div className="space-y-0.5">
-              <Label className="text-xs font-medium text-foreground">Include Service Records</Label>
-              <p className="text-[11px] text-muted-foreground">Include maintenance history and cost telemetry</p>
+              <Label className="text-xs font-medium text-foreground">Include service records</Label>
+              <p className="text-xs text-muted-foreground">Include maintenance history and costs</p>
             </div>
             <Switch checked={includeLogs} onCheckedChange={setIncludeLogs} />
           </div>
 
           <div className="space-y-1.5">
-            <Label className="text-xs font-medium text-foreground">Date Window (Optional)</Label>
+            <Label className="text-xs font-medium text-foreground">Date range (optional)</Label>
             <Popover>
               <PopoverTrigger asChild>
                 <Button variant="outline" size="sm" className="w-full justify-start text-xs font-mono h-8 bg-background">
@@ -168,7 +169,7 @@ export function ExportSection({ allVehicles }: ExportSectionProps) {
                       format(dateRange.from, "yyyy-MM-dd")
                     )
                   ) : (
-                    <span>All Recorded History</span>
+                    <span>All history</span>
                   )}
                 </Button>
               </PopoverTrigger>
@@ -194,7 +195,7 @@ export function ExportSection({ allVehicles }: ExportSectionProps) {
           onClick={handleExportBackup}
           loading={exportMutation.isPending}
           disabled={exportMutation.isPending}
-          pendingLabel="Exporting..."
+          pendingLabel="Exporting"
           className="h-8 text-xs px-3"
         >
           <Download className="mr-1.5 h-3.5 w-3.5" />

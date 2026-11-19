@@ -16,7 +16,7 @@ import {
   useUpdateMaintenanceLog,
 } from "../api";
 import { CustomFieldValueCreate, CustomFieldValueRead, Id, ServiceItemUpdate, ServiceTypeRead } from "../types";
-import { centsToInput, parseMoney } from "@carbaddie/core";
+import { centsToInput, parseMoney, todayISO } from "@carbaddie/core";
 import { useUnits } from "../hooks/useUnits";
 import { toast } from "sonner";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -82,7 +82,7 @@ export function AddMaintenanceLogPage() {
   const units = useUnits();
 
   // --- Local UI State ---
-  const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
+  const [date, setDate] = useState(todayISO());
   const [mileage, setMileage] = useState("");
   const [shop, setShop] = useState("");
   const [notes, setNotes] = useState("");
@@ -196,7 +196,7 @@ export function AddMaintenanceLogPage() {
     return (
       <div className="max-w-2xl space-y-4">
         <div className="rounded-lg border border-destructive/20 bg-destructive/10 p-4 text-xs text-destructive">
-          {(vehicleError as Error | null)?.message || "Could not load vehicle data."}
+          {(vehicleError as Error | null)?.message || "Could not load the vehicle"}
         </div>
       </div>
     );
@@ -212,7 +212,7 @@ export function AddMaintenanceLogPage() {
   }
 
   const isVisit = mode !== "log";
-  const title = mode === "add" ? "Record a Garage Visit" : mode === "visit" ? "Edit Visit" : "Edit Service Record";
+  const title = mode === "add" ? "Add a visit" : mode === "visit" ? "Edit visit" : "Edit log";
 
   return (
     <div className="max-w-2xl space-y-6">
@@ -223,7 +223,7 @@ export function AddMaintenanceLogPage() {
           <span>{vehicle.make} {vehicle.model}</span>
         </Link>
         <span className="opacity-40">/</span>
-        <span className="font-medium text-foreground">{mode === "add" ? "Add Visit" : mode === "visit" ? "Edit Visit" : "Edit Record"}</span>
+        <span className="font-medium text-foreground">{mode === "add" ? "Add visit" : mode === "visit" ? "Edit visit" : "Edit log"}</span>
       </div>
 
       <div>
@@ -293,7 +293,7 @@ export function AddMaintenanceLogPage() {
 
               <div className="space-y-1.5">
                 <Label htmlFor="visit-notes" className="text-xs font-medium text-foreground">
-                  Visit Notes
+                  Visit notes
                 </Label>
                 <Textarea
                   id="visit-notes"
@@ -311,7 +311,7 @@ export function AddMaintenanceLogPage() {
         <div className="space-y-3">
           {isVisit && (
             <div className="flex items-center justify-between pb-2 border-b border-border">
-              <h2 className="text-sm font-medium text-foreground">Services</h2>
+              <h2 className="text-sm font-medium text-foreground">Service types</h2>
               <span className="text-xs font-mono text-muted-foreground">
                 {items.length} {items.length === 1 ? "item" : "items"} / {units.money(runningTotal)}
               </span>
@@ -332,8 +332,8 @@ export function AddMaintenanceLogPage() {
               {/* Smart Co-Service Suggestions: each one checked is another item of this visit */}
               {isVisit && index === 0 && suggestions.length > 0 && (
                 <div className="rounded border border-amber-500/25 bg-amber-500/5 p-3 text-xs space-y-2">
-                  <div className="font-medium text-foreground">Recommended Co-Service Items</div>
-                  <p className="text-[11px] text-muted-foreground">
+                  <div className="font-medium text-foreground">Also resets</div>
+                  <p className="text-xs text-muted-foreground">
                     Commonly inspected or replaced alongside {mainType?.name}. Select to add them to this visit:
                   </p>
                   <div className="space-y-1.5 pt-1">
@@ -361,7 +361,7 @@ export function AddMaintenanceLogPage() {
               onClick={() => setItems((prev) => [...prev, newItem()])}
             >
               <Plus className="h-3.5 w-3.5" />
-              Add Service
+              Add service
             </Button>
           )}
         </div>
@@ -384,10 +384,10 @@ export function AddMaintenanceLogPage() {
             size="sm"
             loading={isSubmitting}
             disabled={isSubmitting}
-            pendingLabel={mode === "add" ? "Recording..." : "Saving..."}
+            pendingLabel={mode === "add" ? "Saving" : "Saving"}
             className="h-8 text-xs px-3"
           >
-            {mode === "add" ? "Record Visit" : "Save Changes"}
+            {mode === "add" ? "Save visit" : "Save changes"}
           </LoadingButton>
         </div>
       </form>
@@ -421,7 +421,7 @@ function ServiceItemEditor({ item, index, serviceTypes, currency, canRemove, onC
           </Label>
           <Select value={item.serviceTypeId} onValueChange={(value) => onChange({ serviceTypeId: value, values: {} })} required>
             <SelectTrigger id={id("service_type_id")} className="h-8 text-xs bg-background">
-              <SelectValue placeholder="Select service category" />
+              <SelectValue placeholder="Select service type" />
             </SelectTrigger>
             <SelectContent>
               {serviceTypes.map((type) => (
@@ -483,7 +483,7 @@ function ServiceItemEditor({ item, index, serviceTypes, currency, canRemove, onC
       {isLoadingCustomFields && <Skeleton className="h-8 w-1/2" />}
       {customFields && customFields.length > 0 && (
         <div className="pt-3 border-t border-border space-y-3">
-          <p className="text-xs font-medium text-foreground">Category Custom Fields</p>
+          <p className="text-xs font-medium text-foreground">Custom fields</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {customFields.map((field) => (
               <div key={field.id} className="space-y-1">

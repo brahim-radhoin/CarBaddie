@@ -1,4 +1,5 @@
 import { useState, useMemo, ChangeEvent, useEffect } from "react";
+import { todayISO } from "@carbaddie/core";
 import { ServiceEventRead } from "../types";
 import { VisitCard } from "./VisitCard";
 import { save } from "@tauri-apps/plugin-dialog";
@@ -25,7 +26,7 @@ interface LogHistoryListProps {
   isLoading: boolean;
   onDeleteLog: (logId: string) => Promise<void>;
   onDeleteVisit: (visitId: string) => Promise<void>;
-  vehicleId: string; // Needed for "Add First Log" if list is empty
+  vehicleId: string; // Needed for "Add first visit" if list is empty
   externalDateFilter: string | null; // New prop
   onClearExternalDateFilter: () => void; // New prop
 }
@@ -44,7 +45,7 @@ export function LogHistoryList({
 }: LogHistoryListProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
-  const navigate = useNavigate(); // If needed for "Add First Log"
+  const navigate = useNavigate(); // If needed for "Add first visit"
   const units = useUnits();
 
   // Reset current page to 1 if the external date filter changes OR if search term changes
@@ -125,7 +126,7 @@ export function LogHistoryList({
         // Start with the base, static columns
         const row: Record<string, string | number> = {
           Date: log.date,
-          "Service Type": log.service_type?.name || "Uncategorized",
+          "Service type": log.service_type?.name || "No service type",
           [`Mileage (${units.unit})`]: units.toDisplay(log.mileage),
           [`Cost (${units.currency})`]: (log.cost_cents / 100).toFixed(2),
           Shop: shop || "",
@@ -153,14 +154,14 @@ export function LogHistoryList({
 
       // 3. Unparse and save with Tauri
       if (dataForCSV.length === 0) {
-        toast.error("Could not process data for export.");
+        toast.error("Could not prepare the export");
         return;
       }
 
       const csv = Papa.unparse(dataForCSV);
 
       const safeVehicleName = (vehicleName || "vehicle").replace(/[^a-z0-9]/gi, "_").toLowerCase();
-      const timestamp = new Date().toISOString().slice(0, 10);
+      const timestamp = todayISO();
 
       // Show native save dialog
       const filePath = await save({
@@ -181,16 +182,16 @@ export function LogHistoryList({
       // Write file
       await writeTextFile(filePath, csv);
 
-      toast.success("Maintenance history exported successfully!");
+      toast.success("History exported");
     } catch (error) {
-      console.error("Failed to export CSV:", error);
+      console.error("Could not export the CSV:", error);
       toast.error(`Failed to export CSV: ${error instanceof Error ? error.message : String(error)}`);
     }
   };
 
   if (isLoading && allLogs.length === 0) {
     // Show skeletons only on initial load when allLogs is empty
-    return <div className="space-y-4 animate-pulse">{renderSkeletons(3)}</div>;
+    return <div className="space-y-4 motion-safe:animate-pulse">{renderSkeletons(3)}</div>;
   }
 
   return (
@@ -201,7 +202,7 @@ export function LogHistoryList({
           <h2 className="text-2xl font-semibold tracking-tight">
             {externalDateFilter
               ? `Logs for ${new Date(externalDateFilter + "T00:00:00").toLocaleDateString()}` // Add T00:00:00 to ensure correct date parsing if only YYYY-MM-DD
-              : "Full Maintenance History"}
+              : "Full history"}
           </h2>
         </div>
 
@@ -223,7 +224,7 @@ export function LogHistoryList({
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="bottom" align="end" className="max-w-xs text-sm">
-                <p className="font-semibold mb-1">About Exporting Data</p>
+                <p className="font-semibold mb-1">About exporting data</p>
                 <p className="text-muted-foreground">
                   This will export the vehicle's entire maintenance history to a CSV file. The file will include standard log details and
                   any associated custom fields as separate columns.
@@ -249,7 +250,7 @@ export function LogHistoryList({
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             type="search"
-            placeholder="Search visits (service, shop, notes, details)..."
+            placeholder="Search visits"
             value={searchTerm}
             onChange={handleSearchChange}
             className="pl-9 text-sm h-9"
@@ -277,19 +278,19 @@ export function LogHistoryList({
                 )}
               </div>
               <CardTitle className="mt-4 text-xl text-muted-foreground">
-                {searchTerm || externalDateFilter ? "No Logs Match Filters" : "No Logs Yet"}
+                {searchTerm || externalDateFilter ? "No logs match the filters" : "No logs yet"}
               </CardTitle>
             </CardHeader>
             <CardContent>
               <CardDescription>
                 {searchTerm
-                  ? "Try a different search term or clear filters."
+                  ? "Try a different search or clear the filters"
                   : externalDateFilter
                   ? "No logs found for the selected date."
                   : "No maintenance logs recorded for this vehicle."}
               </CardDescription>
               {!searchTerm &&
-                vehicleId && ( // Show "Add First Log" only if not searching and vehicleId is present
+                vehicleId && ( // Show "Add first visit" only if not searching and vehicleId is present
                   <Button onClick={() => navigate(`/vehicles/${vehicleId}/add-log`)} className="mt-6">
                     <PlusCircle className="mr-2 h-4 w-4" /> Add First Log
                   </Button>

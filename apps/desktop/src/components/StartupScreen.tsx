@@ -28,7 +28,7 @@ export function StartupScreen({ backendLogs, progress = 0 }: StartupScreenProps)
             CarBaddie
           </h1>
           <p className="text-xs text-muted-foreground mt-1 font-mono">
-            Initializing local SQLite telemetry database...
+            Opening your local data
           </p>
         </div>
 
@@ -36,11 +36,11 @@ export function StartupScreen({ backendLogs, progress = 0 }: StartupScreenProps)
         <div className="space-y-2">
           <div className="h-1.5 w-full bg-secondary rounded-full overflow-hidden border border-border/40">
             <div
-              className="h-full bg-foreground transition-all duration-300 ease-out"
+              className="h-full bg-foreground transition-colors duration-300 ease-out"
               style={{ width: `${clampedProgress}%` }}
             />
           </div>
-          <div className="flex justify-between items-center text-[11px] font-mono text-muted-foreground">
+          <div className="flex justify-between items-center text-xs font-mono text-muted-foreground">
             <span>Opening local database</span>
             <span>{Math.round(clampedProgress)}%</span>
           </div>
@@ -67,9 +67,9 @@ export function StartupScreen({ backendLogs, progress = 0 }: StartupScreenProps)
 
           {showLogs && (
             <div className="mt-3 p-3 bg-card border border-border rounded-lg text-left max-h-48 overflow-y-auto">
-              <pre className="font-mono text-[10px] text-muted-foreground space-y-0.5 leading-relaxed whitespace-pre-wrap">
+              <pre className="font-mono text-xs text-muted-foreground space-y-0.5 leading-relaxed whitespace-pre-wrap">
                 {backendLogs.length === 0
-                  ? "Awaiting daemon logs..."
+                  ? "Waiting for startup logs"
                   : backendLogs.map((log, index) => <div key={index}>{log}</div>)}
               </pre>
             </div>

@@ -1,121 +1,37 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
-import { toast } from "sonner"; // Optional, for notifications if needed
+import { applyAccent, readStoredAccent, storeAccent, DEFAULT_ACCENT, type AccentId } from "@/lib/accent";
 
 type AppPreferencesContextType = {
-  primaryColor: string;
-  setPrimaryColor: (color: string) => void;
-  accentColor: string;
-  setAccentColor: (color: string) => void;
+  accent: AccentId;
+  setAccent: (id: AccentId) => void;
   backgroundImage: string | null;
-  setBackgroundImage: (url: string | null) => void;
+  /** Returns false (and keeps the old value) when the address is not an embedded or local image. */
+  setBackgroundImage: (url: string | null) => boolean;
   resetPreferences: () => void;
 };
 
 const AppPreferencesContext = createContext<AppPreferencesContextType | undefined>(undefined);
 
-const DEFAULT_PRIMARY = "oklch(0.45 0.15 265)"; // Indigo
-const DEFAULT_ACCENT = "oklch(0.93 0.08 150)"; // Green
-
-// Helper to validate color string — blocks injection patterns like `oklch(...); --background: red`
-const isValidColor = (color: string): boolean => {
-  if (!color || typeof color !== "string") return false;
-  // Reject any value containing CSS block terminators (injection vectors)
-  if (color.includes(";") || color.includes("}") || color.includes("{")) return false;
-  return (
-    color.startsWith("#") ||
-    color.startsWith("rgb") ||
-    color.startsWith("hsl") ||
-    color.startsWith("oklch")
-  );
-};
-
-// Helper to determine foreground color (black or white) based on background lightness
-const getReviewForeground = (color: string) => {
-  let lightness = 0.5;
-
-  // Try parsing OKLCH
-  if (color.startsWith("oklch(")) {
-    // Expected format: oklch(L C H) or oklch(L C H / A)
-    // We want the first number.
-    const match = color.match(/oklch\(\s*([0-9.]+)/);
-    if (match && match[1]) {
-      lightness = parseFloat(match[1]);
-    }
-  }
-  // Very basic Hex support
-  else if (color.startsWith("#")) {
-    const hex = color.replace("#", "");
-    const r = parseInt(hex.substring(0, 2), 16);
-    const g = parseInt(hex.substring(2, 4), 16);
-    const b = parseInt(hex.substring(4, 6), 16);
-    // perceived lightness approximation
-    lightness = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-  }
-
-  // Threshold: if lightness > 0.55, use pure black. Else pure white.
-  return lightness > 0.55 ? "oklch(0 0 0)" : "oklch(1 0 0)";
-};
+/** Only images that live in the app itself: pasted (data:) images and Tauri's own protocols. */
+function isSafeBackdrop(url: string): boolean {
+  return url.startsWith("data:image/") || url.startsWith("asset://") || url.startsWith("tauri://");
+}
 
 export function AppPreferencesProvider({ children }: { children: React.ReactNode }) {
-  // --- State ---
-  const [primaryColor, setPrimaryColor] = useState<string>(() => {
-    return localStorage.getItem("app_primary_color") || DEFAULT_PRIMARY;
-  });
+  const [accent, setAccentState] = useState<AccentId>(readStoredAccent);
 
-  const [accentColor, setAccentColor] = useState<string>(() => {
-    return localStorage.getItem("app_accent_color") || DEFAULT_ACCENT;
+  const [backgroundImage, setBackgroundImageState] = useState<string | null>(() => {
+    const stored = localStorage.getItem("app_background_image");
+    return stored && isSafeBackdrop(stored) ? stored : null;
   });
-
-  const [backgroundImage, setBackgroundImage] = useState<string | null>(() => {
-    return localStorage.getItem("app_background_image") || null;
-  });
-
-  // --- Effects to Update CSS Variables ---
 
   useEffect(() => {
-    if (!isValidColor(primaryColor)) {
-      console.warn("AppPreferences: invalid primary color value, skipping.");
-      return;
-    }
-    const root = document.documentElement;
-    root.style.setProperty("--primary", primaryColor);
-
-    // Calculate readable foreground
-    const fg = getReviewForeground(primaryColor);
-    root.style.setProperty("--primary-foreground", fg);
-
-    // We might also want to update ring color to match
-    root.style.setProperty("--ring", primaryColor.replace(")", " / 0.8)"));
-
-    localStorage.setItem("app_primary_color", primaryColor);
-  }, [primaryColor]);
-
-  useEffect(() => {
-    if (!isValidColor(accentColor)) {
-      console.warn("AppPreferences: invalid accent color value, skipping.");
-      return;
-    }
-    const root = document.documentElement;
-    root.style.setProperty("--accent", accentColor);
-
-    // Calculate readable foreground for highlights
-    const fg = getReviewForeground(accentColor);
-    root.style.setProperty("--accent-foreground", fg);
-
-    localStorage.setItem("app_accent_color", accentColor);
-  }, [accentColor]);
+    applyAccent(accent);
+    storeAccent(accent);
+  }, [accent]);
 
   useEffect(() => {
     if (backgroundImage) {
-      const isSafe =
-        backgroundImage.startsWith("data:image/") ||
-        backgroundImage.startsWith("asset://") ||
-        backgroundImage.startsWith("tauri://");
-        
-      if (!isSafe) {
-        console.warn("Blocked unsafe background image URL");
-        return;
-      }
       document.body.style.backgroundImage = `url('${backgroundImage}')`;
       document.body.style.backgroundSize = "cover";
       document.body.style.backgroundPosition = "center";
@@ -128,24 +44,18 @@ export function AppPreferencesProvider({ children }: { children: React.ReactNode
     }
   }, [backgroundImage]);
 
-  // --- Actions ---
+  const setBackgroundImage = (url: string | null) => {
+    if (url !== null && !isSafeBackdrop(url)) return false;
+    setBackgroundImageState(url);
+    return true;
+  };
 
   const resetPreferences = () => {
-    setPrimaryColor(DEFAULT_PRIMARY);
-    setAccentColor(DEFAULT_ACCENT);
-    setBackgroundImage(null);
-    toast.success("Theme preferences reset to default.");
+    setAccentState(DEFAULT_ACCENT);
+    setBackgroundImageState(null);
   };
 
-  const value = {
-    primaryColor,
-    setPrimaryColor,
-    accentColor,
-    setAccentColor,
-    backgroundImage,
-    setBackgroundImage,
-    resetPreferences,
-  };
+  const value = { accent, setAccent: setAccentState, backgroundImage, setBackgroundImage, resetPreferences };
 
   return <AppPreferencesContext.Provider value={value}>{children}</AppPreferencesContext.Provider>;
 }

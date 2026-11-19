@@ -8,6 +8,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { formatISO } from "@carbaddie/core";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -33,13 +34,7 @@ export function LogCard({ log, onDelete }: LogCardProps) {
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
-  const displayDate = log.date
-    ? new Date(log.date).toLocaleDateString(undefined, {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-      })
-    : "—";
+  const displayDate = log.date ? formatISO(log.date) : "—";
 
   const handleEdit = () => {
     navigate(`/vehicles/${log.vehicle_id}/logs/${log.id}/edit`);
@@ -50,7 +45,7 @@ export function LogCard({ log, onDelete }: LogCardProps) {
     try {
       await onDelete(log.id);
     } catch (error) {
-      console.error("Failed to delete log:", error);
+      console.error("Could not delete the log:", error);
     } finally {
       setIsDeleting(false);
       setShowDeleteConfirm(false);
@@ -62,7 +57,7 @@ export function LogCard({ log, onDelete }: LogCardProps) {
       <div className="flex items-start justify-between gap-3">
         <div>
           <h4 className="text-sm font-medium text-foreground leading-snug">
-            {log.service_type ? log.service_type.name : "General Maintenance"}
+            {log.service_type ? log.service_type.name : "General maintenance"}
           </h4>
           <div className="flex flex-wrap items-center gap-3 mt-1.5 text-xs text-muted-foreground">
             <span className="flex items-center gap-1 font-mono">
@@ -92,7 +87,7 @@ export function LogCard({ log, onDelete }: LogCardProps) {
           <DropdownMenuContent align="end" className="text-xs">
             <DropdownMenuItem onClick={handleEdit}>
               <Edit3 className="mr-2 h-3.5 w-3.5 opacity-70" />
-              Edit Record
+              Edit log
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem
@@ -100,7 +95,7 @@ export function LogCard({ log, onDelete }: LogCardProps) {
               onClick={() => setShowDeleteConfirm(true)}
             >
               <Trash2 className="mr-2 h-3.5 w-3.5 opacity-70" />
-              Delete Record
+              Delete log
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -118,7 +113,7 @@ export function LogCard({ log, onDelete }: LogCardProps) {
           {log.custom_field_values.map((cf) => (
             <span
               key={cf.id}
-              className="font-mono text-[11px] px-2 py-0.5 rounded bg-secondary text-muted-foreground border border-border"
+              className="font-mono text-xs px-2 py-0.5 rounded bg-secondary text-muted-foreground border border-border"
             >
               {cf.custom_field?.name ?? "Field"}: {cf.value} {cf.custom_field?.unit ?? ""}
             </span>
@@ -130,7 +125,7 @@ export function LogCard({ log, onDelete }: LogCardProps) {
       <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
         <AlertDialogContent className="text-xs">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-sm font-semibold">Delete maintenance entry?</AlertDialogTitle>
+            <AlertDialogTitle className="text-sm font-semibold">Delete this log?</AlertDialogTitle>
             <AlertDialogDescription className="text-xs text-muted-foreground">
               This action cannot be undone. This service record will be removed from your logs.
             </AlertDialogDescription>
@@ -142,7 +137,7 @@ export function LogCard({ log, onDelete }: LogCardProps) {
               disabled={isDeleting}
               className="h-8 text-xs bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {isDeleting ? "Deleting..." : "Delete Record"}
+              {isDeleting ? "Deleting..." : "Delete log"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

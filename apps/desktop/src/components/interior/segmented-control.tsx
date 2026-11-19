@@ -11,13 +11,15 @@ import {
 
 const CELL = { type: "spring", stiffness: 520, damping: 34, mass: 0.45 } as const;
 
-const SEG =
-  "px-3 py-[7px] text-center text-[13px] font-medium leading-[18px] tracking-[-0.01em] whitespace-nowrap";
+const SEG_BASE = "text-center text-[13px] font-medium leading-[18px] whitespace-nowrap";
+const SEG_PAD = { default: "px-3 py-[7px]", compact: "px-2 py-[5px]" } as const;
 
 export type SegmentedOption = {
   value: string;
   label: React.ReactNode;
   disabled?: boolean;
+  /** Spoken name when the label is an icon or other non-text node. */
+  ariaLabel?: string;
 };
 
 export type SegmentedControlProps = {
@@ -26,6 +28,8 @@ export type SegmentedControlProps = {
   value?: string;
   defaultValue?: string;
   onValueChange?: (value: string) => void;
+  /** Tighter cells, for icon-only controls in small spaces. */
+  compact?: boolean;
   className?: string;
 };
 
@@ -35,8 +39,10 @@ export function SegmentedControl({
   value,
   defaultValue,
   onValueChange,
+  compact = false,
   className = "",
 }: SegmentedControlProps) {
+  const SEG = `${SEG_BASE} ${SEG_PAD[compact ? "compact" : "default"]}`;
   const count = Math.max(1, options.length);
   const template = `repeat(${count}, minmax(0, 1fr))`;
 
@@ -118,7 +124,7 @@ export function SegmentedControl({
     <div
       role="radiogroup"
       aria-label={label}
-      className={`relative inline-block select-none rounded-[9px] border border-black/[0.06] bg-neutral-50 p-[3px] dark:border-white/10 dark:bg-[#111111] ${className}`}
+      className={`relative inline-block select-none rounded-[9px] border border-border bg-secondary p-[3px] dark:bg-background ${className}`}
     >
       <div
         className="relative grid"
@@ -130,10 +136,10 @@ export function SegmentedControl({
             aria-hidden
             className={`${SEG} pointer-events-none ${
               option.disabled
-                ? "text-neutral-300 dark:text-neutral-600"
+                ? "text-muted-foreground/40"
                 : hovered === i && i !== index
-                  ? "text-neutral-700 dark:text-neutral-200"
-                  : "text-neutral-500 dark:text-neutral-400"
+                  ? "text-foreground"
+                  : "text-muted-foreground"
             }`}
           >
             {option.label}
@@ -142,7 +148,7 @@ export function SegmentedControl({
 
         <motion.div
           aria-hidden
-          className="pointer-events-none absolute inset-y-0 left-0 overflow-hidden rounded-[6px] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.08),0_0_0_1px_rgba(0,0,0,0.08)] dark:bg-[#222222] dark:shadow-[0_1px_2px_rgba(0,0,0,0.4),0_0_0_1px_rgba(255,255,255,0.08)]"
+          className="pointer-events-none absolute inset-y-0 left-0 overflow-hidden rounded-[6px] bg-card shadow-[0_1px_2px_rgba(0,0,0,0.08),0_0_0_1px_var(--border)] dark:bg-secondary"
           style={{ width: `${100 / count}%`, x: thumbX }}
           initial={false}
         >
@@ -158,7 +164,7 @@ export function SegmentedControl({
               {options.map((option) => (
                 <span
                   key={option.value}
-                  className={`${SEG} text-neutral-900 dark:text-neutral-100`}
+                  className={`${SEG} text-foreground`}
                 >
                   {option.label}
                 </span>
@@ -185,10 +191,10 @@ export function SegmentedControl({
               onClick={() => !option.disabled && select(option.value)}
               onKeyDown={(e) => onKeyDown(e, i)}
               onPointerEnter={() => !option.disabled && setHovered(i)}
-              className="cursor-default rounded-[6px] outline-none focus-visible:bg-[#4568FF]/[0.06] focus-visible:shadow-[inset_0_0_0_1px_#4568FF] dark:focus-visible:bg-[#4568FF]/[0.1]"
+              className="cursor-default rounded-[6px] outline-none focus-visible:shadow-[inset_0_0_0_2px_var(--ring)]"
             >
               <span className="sr-only">
-                {typeof option.label === "string" ? option.label : option.value}
+                {option.ariaLabel ?? (typeof option.label === "string" ? option.label : option.value)}
               </span>
             </button>
           ))}
