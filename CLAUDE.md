@@ -50,6 +50,56 @@ CI (.github/workflows/ci.yml): frozen install, typecheck, core tests.
 - `apps/desktop/GEMINI.md` holds the user's agent rules: plan first, minimal contained changes,
   no speculative edits, summarise every file changed.
 
+## UI contract (desktop and mobile must read the same)
+
+Rule: anything driven by the same data reads the same on both apps (term, number, date, status word and
+colour, mode, accent). Layout may differ (sidebar vs tabs, popover vs sheet).
+
+- Colours: one palette, `packages/core/src/theme.ts` (graphite ramp, one accent, three status colours,
+  six accent choices with a light and a dark shade). Mobile builds its theme from it (`apps/mobile/src/theme.ts`);
+  desktop mirrors it in `apps/desktop/src/index.css` and `test/theme.test.ts` fails when the two differ or a
+  text colour drops under 4.5:1. Change a colour in core first, then the CSS.
+- Primary is ink on light and off-white on dark; the accent only marks focus, selection, links, the main
+  chart series and the active menu item. Status colours (`danger`, `warn`, `ok`) carry meaning only.
+- Due state: the engine's `message` says when, `STATUS_LABEL` / `summariseStatuses` (core
+  `maintenance/status.ts`) say which bucket (Overdue, Due soon, On track). A status dot in the status colour
+  is the signature, used wherever something is due.
+- Dates: `formatISO` / `todayISO` / `parseISO` / `daysBetweenISO` from core (`dates.ts`). Never
+  `toISOString()` or `new Date("YYYY-MM-DD")` for a calendar date (UTC off-by-one).
+- Words: "service type" (not category), "visit" (one garage visit) and "log" (one service in it), "odometer",
+  "Total spent". Sentence case everywhere, no jargon (telemetry, fleet), no exclamation marks, short UI strings
+  end without a period. Nav: Vehicles, Service types, Settings. Settings groups: Sync, Preferences, Appearance,
+  Data and backup, Danger zone.
+- Appearance: mode (system, light, dark) and accent are chosen per device. Desktop keeps them in localStorage
+  (applied before first paint), mobile in app_settings (`appearance.*`). Syncing the accent between devices
+  would mean a new synced preference (core types, backup schema, sync upgrade).
+- Type: weights 400 to 600, nothing under 12px, tabular figures for numbers. Touch targets 48dp on mobile.
+- Garage deck (mobile home): favourites are big swipeable cards, the rest sit behind one row above them, Add visit
+  is a bar at the bottom for the card in view. `vehicles.body_type` (a string; unknown kinds pass through) picks the
+  outline from `packages/core/src/vehicles/silhouettes.ts` (data both apps can render); `is_favorite` NULL means
+  unset and resolves identically on every device (`vehicles/garage.ts`). Service types map to parts of the outline
+  by built-in slug (`maintenance/zones.ts`). Outline colour is one token (`outline` in `apps/mobile/src/theme.ts`).
+- Desktop fonts are bundled (@fontsource-variable/geist); mobile uses the system font.
+
+## Schema and sync compatibility (published app: devices run different versions)
+
+Every migration declares `compat` in `packages/core/src/db/migrations.ts`: "additive" (a nullable column, a new
+table; older apps keep syncing) or "breaking" (rename, removal, changed meaning; older apps stop and are told to
+update). When unsure: breaking. Rules that make additive changes safe, all covered by `test/sync-compat.test.ts`:
+
+- Sync files carry `schema_version` (the writer) and `min_reader` (the newest breaking migration). A reader older
+  than `min_reader` skips that device's files, keeps syncing the rest, still pushes, and reports `blocked`.
+- A column the app doesn't know is kept in `sync_extra` and sent back with the row, so a device that is behind
+  never strips what one that is ahead wrote; `adoptExtras` (run on open) moves it into the column after an update.
+- Copies of one row that carry different columns are combined (newer wins per column it carries), not picked between.
+- Writers validate strictly, readers accept anything: enum-like columns are strings, unknown values pass through.
+- A new column is NULL until a user sets it and the migration writes no rows; "unset" must resolve the same on
+  every device. Updates only touch fields the caller sends.
+- `test/fixtures/sync-file-v*.json` are files written by released versions; they must keep applying. Add one when
+  you add a migration, and never edit the old ones.
+- Never run a build with a newer schema against the real database to "just look": `migrate()` upgrades it in
+  place and apps still on the old schema then refuse to open it. Test on a copy.
+
 ## Roadmap (agreed target architecture)
 
 Goal: one TS domain core, SQLite on every device, real sync. No separate backend
