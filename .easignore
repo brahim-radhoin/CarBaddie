@@ -44,3 +44,6 @@ apps/mobile/.kotlin/
 *.tsbuildinfo
 apps/mobile/ios/
 apps/mobile/android/
+
+# --- local tooling (Claude Code worktrees and settings), never part of a build
+.claude/
