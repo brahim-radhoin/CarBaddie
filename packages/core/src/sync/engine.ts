@@ -21,7 +21,9 @@
 // - copies of one row that differ only in which columns they carry are combined, not picked between
 //
 // Local state (app_settings, never synced): `sync.seq` (last change file written),
-// `sync.cursor` (newest own `updated_at` pushed), `sync.seen` (JSON: device → last applied seq).
+// `sync.cursor` (newest own `updated_at` pushed), `sync.seen` (JSON: device → last applied seq),
+// and how the last sync went, for the apps to show (sync/status.ts): `sync.blocked` (JSON, the
+// result's `blocked`) and `sync.last_error` (message of the last failed sync, cleared by a good one).
 
 import { LATEST_SCHEMA_VERSION, MIN_READER_VERSION } from "../db/migrations.ts";
 import { transaction } from "../db/transaction.ts";
@@ -63,6 +65,8 @@ export const SYNC_SETTING_KEYS = {
   cursor: "sync.cursor",
   seen: "sync.seen",
   lastSuccess: "sync.last_success",
+  blocked: "sync.blocked",
+  lastError: "sync.last_error",
 } as const;
 
 const running = new WeakMap<SqlDriver, Promise<SyncResult>>();
@@ -71,9 +75,28 @@ const running = new WeakMap<SqlDriver, Promise<SyncResult>>();
 export function runSync(db: SqlDriver, w: WriteContext, transport: SyncTransport, options: SyncOptions = {}): Promise<SyncResult> {
   const current = running.get(db);
   if (current) return current;
-  const run = syncOnce(db, w, transport, options).finally(() => running.delete(db));
+  const run = recordOutcome(db, syncOnce(db, w, transport, options)).finally(() => running.delete(db));
   running.set(db, run);
   return run;
+}
+
+/**
+ * Remembers how a sync went, so the apps can say so even when it ran in the background
+ * (sync/status.ts reads it). A failure keeps the last known `blocked`.
+ */
+async function recordOutcome(db: SqlDriver, sync: Promise<SyncResult>): Promise<SyncResult> {
+  let result: SyncResult;
+  try {
+    result = await sync;
+  } catch (error) {
+    const message = error instanceof Error && error.message ? error.message : String(error);
+    await setSetting(db, SYNC_SETTING_KEYS.lastError, message).catch(() => undefined); // never hide the real error
+    throw error;
+  }
+  if (result.blocked.length > 0) await setSetting(db, SYNC_SETTING_KEYS.blocked, JSON.stringify(result.blocked));
+  else await db.run("DELETE FROM app_settings WHERE key = ?", [SYNC_SETTING_KEYS.blocked]);
+  await db.run("DELETE FROM app_settings WHERE key = ?", [SYNC_SETTING_KEYS.lastError]);
+  return result;
 }
 
 /**

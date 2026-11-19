@@ -4,6 +4,7 @@ import { openRepository } from "../src/db/open.ts";
 import { LATEST_SCHEMA_VERSION } from "../src/db/migrations.ts";
 import { parseSyncFileName, syncFileName } from "../src/sync/files.ts";
 import { SYNCED_TABLE_INFO } from "../src/sync/tables.ts";
+import { getSyncProblem, SYNC_BLOCKED_TEXT } from "../src/sync/status.ts";
 import type { SyncTransport } from "../src/sync/transport.ts";
 import { openTestDb, type TestDb } from "./helpers/sqlite.ts";
 
@@ -205,6 +206,38 @@ test("a file that needs a newer app is skipped and reported, and the rest still 
   const later = await a.sync(drive.transport, { readerVersion: LATEST_SCHEMA_VERSION + 1 });
   assert.equal(later.blocked.length, 0);
   assert.equal(later.downloaded, 1);
+});
+
+test("how the last sync went is kept for the apps to show, and a good sync clears it", async () => {
+  const drive = memoryDrive();
+  const a = await device();
+  assert.equal(await getSyncProblem(a.repo), null, "nothing to report before any sync");
+
+  const down: SyncTransport = {
+    ...drive.transport,
+    list: async () => {
+      throw new Error("Google Drive listing failed (503)");
+    },
+  };
+  await assert.rejects(a.sync(down), /503/);
+  assert.deepEqual(await getSyncProblem(a.repo), { kind: "failed", text: "Last sync failed: Google Drive listing failed (503)" });
+
+  await drive.transport.create(syncFileName({ kind: "changes", deviceId: "future-device", seq: 1 }), {
+    format: "carbaddie-sync",
+    version: 1,
+    kind: "changes",
+    device_id: "future-device",
+    seq: 1,
+    schema_version: LATEST_SCHEMA_VERSION + 1,
+    min_reader: LATEST_SCHEMA_VERSION + 1,
+    created_at: new Date().toISOString(),
+    tables: {},
+  });
+  await a.sync(drive.transport);
+  assert.deepEqual(await getSyncProblem(a.repo), { kind: "blocked", text: SYNC_BLOCKED_TEXT }, "the failure is cleared, the block shows");
+
+  await a.sync(drive.transport, { readerVersion: LATEST_SCHEMA_VERSION + 1 }); // the app was updated
+  assert.equal(await getSyncProblem(a.repo), null);
 });
 
 test("resetting sync state makes the next sync re-send everything", async () => {

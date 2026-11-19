@@ -36,6 +36,8 @@ export { HlcClock, formatHlc, parseHlc, tickHlc, receiveHlc } from "./sync/hlc";
 export type { Hlc } from "./sync/hlc";
 export { runSync, resetSyncState, SYNC_SETTING_KEYS } from "./sync/engine";
 export type { SyncOptions, SyncResult } from "./sync/engine";
+export { getSyncProblem, SYNC_BLOCKED_TEXT } from "./sync/status";
+export type { SyncProblem } from "./sync/status";
 export { parseSyncFile, parseSyncFileName, syncFileName, syncFileSchema } from "./sync/files";
 export type { SyncFile, SyncFileName, SyncRow } from "./sync/files";
 export type { RemoteFile, SyncTransport } from "./sync/transport";

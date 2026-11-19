@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import Constants from "expo-constants";
 import { Icon } from "@/components/Controls";
 import { AppearanceCard } from "@/components/AppearanceCard";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   StyleSheet,
   ScrollView,
@@ -20,7 +20,8 @@ import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import * as DocumentPicker from "expo-document-picker";
 import { exportBackupData, analyzeBackup, executeImport } from "@/src/db/backup";
-import { parseBackup } from "@carbaddie/core";
+import { parseBackup, SYNC_BLOCKED_TEXT } from "@carbaddie/core";
+import { useFocusEffect } from "expo-router";
 import { deleteAllVehicles } from "@/src/db/repository";
 import { restoreDefaultServiceTypes } from "@/src/db/seed";
 import type { FullBackupData } from "@/src/types";
@@ -37,6 +38,7 @@ import {
   signInWithGoogle,
   setAutoSyncEnabled,
   syncNow,
+  addSyncListener,
   type GoogleDriveStatus,
 } from "@/src/services/googleDrive";
 import * as repo from "@/src/db/repository";
@@ -82,9 +84,14 @@ export default function SettingsScreen() {
     }
   };
 
-  useEffect(() => {
-    refreshDriveStatus();
-  }, []);
+  // The tab stays mounted: refresh whenever it comes into view, and after any sync while it is
+  // open, so the last sync time and a failed or blocked sync are current.
+  useFocusEffect(
+    useCallback(() => {
+      void refreshDriveStatus();
+    }, []),
+  );
+  useEffect(() => addSyncListener(() => void refreshDriveStatus()), []);
 
   const handleGoogleSignIn = async () => {
     try {
@@ -110,6 +117,10 @@ export default function SettingsScreen() {
       setIsSyncing(true);
       const res = await syncNow();
       await refreshDriveStatus();
+      if (res.blocked.length > 0) {
+        Alert.alert("Update needed", SYNC_BLOCKED_TEXT);
+        return;
+      }
       Alert.alert(
         "Synced",
         res.applied > 0
@@ -117,6 +128,7 @@ export default function SettingsScreen() {
           : "Everything is in sync.",
       );
     } catch (e: any) {
+      await refreshDriveStatus();
       Alert.alert("Sync error", e.message || "Failed to sync with Google Drive.");
     } finally {
       setIsSyncing(false);
@@ -383,6 +395,16 @@ export default function SettingsScreen() {
                   </Text>
                 </View>
               </View>
+
+              {driveStatus.problem && (
+                <View
+                  accessibilityRole="alert"
+                  style={[styles.problemRow, { backgroundColor: driveStatus.problem.kind === "failed" ? colors.dangerBg : colors.warnBg }]}
+                >
+                  <View style={[styles.problemDot, { backgroundColor: driveStatus.problem.kind === "failed" ? colors.danger : colors.warn }]} />
+                  <Text style={[styles.problemText, { color: colors.text }]}>{driveStatus.problem.text}</Text>
+                </View>
+              )}
 
               <View style={[styles.switchRow, { borderTopColor: colors.border }]}>
                 <View style={{ flex: 1 }}>
@@ -737,6 +759,26 @@ const makeStyles = (colors: Palette) => StyleSheet.create({
   accountMeta: {
     fontSize: 12,
     marginTop: 2,
+  },
+  problemRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 6,
+  },
+  problemDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginTop: 5,
+  },
+  problemText: {
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 18,
   },
   switchRow: {
     flexDirection: "row",

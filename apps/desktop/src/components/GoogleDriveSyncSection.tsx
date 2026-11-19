@@ -8,7 +8,8 @@ import {
   downloadBackupFromGoogleDrive,
   GoogleDriveStatus,
 } from "../services/googleDrive";
-import { getLastSyncTime, resetSyncProgress, syncNow, SYNCED_EVENT } from "../services/sync";
+import { getLastSyncProblem, getLastSyncTime, resetSyncProgress, syncNow, SYNC_FAILED_EVENT, SYNCED_EVENT } from "../services/sync";
+import type { SyncProblem } from "@carbaddie/core";
 import { useAnalyzeBackup, useRestoreBackup } from "../api";
 import { getRepository } from "../db";
 import { useQueryClient } from "@tanstack/react-query";
@@ -24,6 +25,7 @@ export function GoogleDriveSyncSection() {
   const queryClient = useQueryClient();
   const [status, setStatus] = useState<GoogleDriveStatus>({ isConnected: false, autoSyncEnabled: true });
   const [lastSync, setLastSync] = useState<string | null>(null);
+  const [problem, setProblem] = useState<SyncProblem | null>(null);
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [busy, setBusy] = useState<"sync" | "upload" | "download" | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -35,13 +37,19 @@ export function GoogleDriveSyncSection() {
   const refreshStatus = useCallback(async () => {
     setStatus(await getGoogleDriveStatus());
     setLastSync(await getLastSyncTime());
+    setProblem(await getLastSyncProblem());
   }, []);
 
   useEffect(() => {
     refreshStatus();
-    const onSynced = () => void refreshStatus();
-    window.addEventListener(SYNCED_EVENT, onSynced);
-    return () => window.removeEventListener(SYNCED_EVENT, onSynced);
+    // Background syncs too, so a failure or a blocked device shows while this page is open.
+    const onSync = () => void refreshStatus();
+    window.addEventListener(SYNCED_EVENT, onSync);
+    window.addEventListener(SYNC_FAILED_EVENT, onSync);
+    return () => {
+      window.removeEventListener(SYNCED_EVENT, onSync);
+      window.removeEventListener(SYNC_FAILED_EVENT, onSync);
+    };
   }, [refreshStatus]);
 
   const runSync = async (quiet = false) => {
@@ -49,7 +57,10 @@ export function GoogleDriveSyncSection() {
       setBusy("sync");
       const result = await syncNow();
       if (result.applied > 0) await queryClient.invalidateQueries();
-      if (!quiet) {
+      const blocked = result.blocked.length > 0 ? await getLastSyncProblem() : null;
+      if (blocked) {
+        toast.warning(blocked.text);
+      } else if (!quiet) {
         toast.success(
           result.applied > 0
             ? `Synced: ${result.applied} change${result.applied === 1 ? "" : "s"} from your other devices.`
@@ -187,6 +198,13 @@ export function GoogleDriveSyncSection() {
               </span>
             )}
           </div>
+
+          {problem && (
+            <p role="status" className="flex items-start gap-2 text-xs text-foreground">
+              <span className={`status-dot mt-1 shrink-0 ${problem.kind === "failed" ? "bg-destructive" : "bg-warn"}`} />
+              <span>{problem.text}</span>
+            </p>
+          )}
 
           <div className="flex items-center justify-between py-2 border-y border-border/40 text-xs">
             <div>

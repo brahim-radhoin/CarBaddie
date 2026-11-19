@@ -11,7 +11,14 @@ import {
   isSuccessResponse,
   statusCodes,
 } from "@react-native-google-signin/google-signin";
-import { createDriveTransport, DRIVE_APPDATA_SCOPE, SYNC_SETTING_KEYS, type SyncResult } from "@carbaddie/core";
+import {
+  createDriveTransport,
+  DRIVE_APPDATA_SCOPE,
+  getSyncProblem,
+  SYNC_SETTING_KEYS,
+  type SyncProblem,
+  type SyncResult,
+} from "@carbaddie/core";
 import { getDatabase } from "../db/schema";
 import * as repo from "../db/repository";
 
@@ -19,6 +26,8 @@ export interface GoogleDriveStatus {
   isConnected: boolean;
   email?: string;
   lastSyncTime?: string;
+  /** A failed last sync, or a device on a newer version (the same words as on desktop). */
+  problem?: SyncProblem;
   autoSyncEnabled: boolean;
 }
 
@@ -66,6 +75,7 @@ export async function getGoogleDriveStatus(): Promise<GoogleDriveStatus> {
     isConnected: GoogleSignin.hasPreviousSignIn(),
     email: GoogleSignin.getCurrentUser()?.user.email ?? (await db.repo.getSetting(SETTING_EMAIL)) ?? undefined,
     lastSyncTime: (await db.repo.getSetting(SYNC_SETTING_KEYS.lastSuccess)) ?? undefined,
+    problem: (await getSyncProblem(db.repo)) ?? undefined,
     autoSyncEnabled: (await db.repo.getSetting(SETTING_AUTO_SYNC)) !== "false",
   };
 }
