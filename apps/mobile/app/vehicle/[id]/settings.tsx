@@ -1,4 +1,5 @@
-import { StyleSheet, ScrollView, TextInput, TouchableOpacity, View, Alert, ActivityIndicator } from "react-native";
+import { StyleSheet, TextInput, TouchableOpacity, View, Alert, ActivityIndicator } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { IconButton, Icon } from "@/components/Controls";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useTheme, type Palette } from "@/src/theme";
@@ -135,7 +136,7 @@ export default function VehicleSettingsScreen() {
   );
 
   return (
-    <ScrollView automaticallyAdjustKeyboardInsets
+    <KeyboardAwareScrollView bottomOffset={24}
       style={[styles.container, { backgroundColor: colors.background }]}
       contentContainerStyle={styles.content}
       keyboardShouldPersistTaps="handled"
@@ -286,7 +287,7 @@ export default function VehicleSettingsScreen() {
           )}
         </TouchableOpacity>
       </View>
-    </ScrollView>
+    </KeyboardAwareScrollView>
   );
 }
 

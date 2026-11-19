@@ -3,6 +3,7 @@ import { Stack, ThemeProvider } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect, useState } from "react";
 import "react-native-reanimated";
+import { KeyboardProvider } from "react-native-keyboard-controller";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useColorScheme } from "@/components/useColorScheme";
 import { useAutoSync } from "@/src/hooks/useAutoSync";
@@ -59,7 +60,11 @@ function RootLayoutNav() {
   const colorScheme = useColorScheme();
   const { accent } = useAppearance();
 
+  // The app draws edge to edge (Expo SDK 58), so on Android the window no longer shrinks for the
+  // keyboard: forms use KeyboardAwareScrollView and sheets KeyboardAvoidingView, both from
+  // react-native-keyboard-controller, which needs this provider at the root.
   return (
+    <KeyboardProvider statusBarTranslucent navigationBarTranslucent preserveEdgeToEdge>
     <QueryClientProvider client={queryClient}>
       <AutoSync />
       <ThemeProvider value={navigationTheme(colorScheme, accent)}>
@@ -112,5 +117,6 @@ function RootLayoutNav() {
         </Stack>
       </ThemeProvider>
     </QueryClientProvider>
+    </KeyboardProvider>
   );
 }

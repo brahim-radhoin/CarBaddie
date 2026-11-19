@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import React, { useState, useEffect } from "react";
-import { StyleSheet, ScrollView, TextInput, TouchableOpacity, View, Alert, ActivityIndicator } from "react-native";
+import { StyleSheet, TextInput, TouchableOpacity, View, Alert, ActivityIndicator } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useRouter } from "expo-router";
 import { useTheme, type Palette } from "@/src/theme";
 import {
@@ -169,7 +170,7 @@ export default function ServiceTypeForm({ serviceTypeId }: { serviceTypeId?: str
   }
 
   return (
-    <ScrollView automaticallyAdjustKeyboardInsets
+    <KeyboardAwareScrollView bottomOffset={24}
       style={[styles.container, { backgroundColor: colors.background }]}
       contentContainerStyle={styles.content}
       keyboardShouldPersistTaps="handled"
@@ -431,7 +432,7 @@ export default function ServiceTypeForm({ serviceTypeId }: { serviceTypeId?: str
           )}
         </TouchableOpacity>
       )}
-    </ScrollView>
+    </KeyboardAwareScrollView>
   );
 }
 

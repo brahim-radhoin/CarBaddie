@@ -1,4 +1,5 @@
-import { StyleSheet, ScrollView, TextInput, TouchableOpacity, View, Alert, ActivityIndicator } from "react-native";
+import { StyleSheet, TextInput, TouchableOpacity, View, Alert, ActivityIndicator } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { DateField } from "@/components/DateField";
 import { BodyTypePicker } from "@/components/BodyTypePicker";
 import { Switch } from "react-native";
@@ -105,7 +106,7 @@ export default function EditVehicleScreen() {
   }
 
   return (
-    <ScrollView keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets style={[styles.container, { backgroundColor: colors.background }]} contentContainerStyle={styles.content}>
+    <KeyboardAwareScrollView bottomOffset={24} keyboardShouldPersistTaps="handled" style={[styles.container, { backgroundColor: colors.background }]} contentContainerStyle={styles.content}>
       <Text style={[styles.label, { color: colors.text }]}>Make *</Text>
       <TextInput style={inputStyle} value={make} onChangeText={setMake} />
 
@@ -163,7 +164,7 @@ export default function EditVehicleScreen() {
           )}
         </TouchableOpacity>
       </View>
-    </ScrollView>
+    </KeyboardAwareScrollView>
   );
 }
 

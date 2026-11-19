@@ -1,17 +1,22 @@
 import type { ReactNode } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Text } from "@/components/Themed";
 import { Button } from "@/components/Controls";
 import { useTheme } from "@/src/theme";
 
-/** A bottom sheet with a title and a Close button. Content scrolls when it is long. */
+/**
+ * A bottom sheet with a title and a Close button. Content scrolls when it is long, and the sheet
+ * rises above the keyboard when a field in it is focused (Android draws edge to edge, so the window
+ * no longer shrinks for the keyboard by itself).
+ */
 export function Sheet({ visible, title, subtitle, onClose, children }: { visible: boolean; title: string; subtitle?: string; onClose: () => void; children: ReactNode }) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={styles.fill}>
+      <KeyboardAvoidingView behavior="padding" automaticOffset style={styles.fill}>
         <Pressable style={styles.backdrop} onPress={onClose} accessibilityRole="button" accessibilityLabel="Close" />
         <View
           accessibilityViewIsModal
@@ -23,7 +28,7 @@ export function Sheet({ visible, title, subtitle, onClose, children }: { visible
           <ScrollView keyboardShouldPersistTaps="handled" style={styles.body}>{children}</ScrollView>
           <Button label="Close" variant="outline" onPress={onClose} style={styles.close} />
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

@@ -1,4 +1,5 @@
-import { StyleSheet, ScrollView, TextInput, TouchableOpacity, View, Alert, ActivityIndicator } from "react-native";
+import { StyleSheet, TextInput, TouchableOpacity, View, Alert, ActivityIndicator } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { DateField } from "@/components/DateField";
 import { PickerField } from "@/components/PickerField";
 import { addDaysISO, todayISO } from "@/src/dates";
@@ -141,7 +142,7 @@ export default function EditLogScreen() {
   }
 
   return (
-    <ScrollView automaticallyAdjustKeyboardInsets
+    <KeyboardAwareScrollView bottomOffset={24}
       style={[styles.container, { backgroundColor: colors.background }]}
       contentContainerStyle={styles.content}
       keyboardShouldPersistTaps="handled"
@@ -325,7 +326,7 @@ export default function EditLogScreen() {
           <Text style={styles.deleteBtnText}>Delete log entry</Text>
         )}
       </TouchableOpacity>
-    </ScrollView>
+    </KeyboardAwareScrollView>
   );
 }
 

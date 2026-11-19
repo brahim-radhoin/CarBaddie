@@ -1,6 +1,7 @@
 // The garage visit form (add and edit): a header (date, odometer, shop, notes) and one or more
 // service items, each saved as a maintenance log of the visit.
-import { StyleSheet, ScrollView, TextInput, TouchableOpacity, View, Alert } from "react-native";
+import { StyleSheet, TextInput, TouchableOpacity, View, Alert } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useTheme, type Palette } from "@/src/theme";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState, type ReactNode, useMemo } from "react";
@@ -163,7 +164,7 @@ export function VisitForm({ vehicleId, initial, initialServiceTypeId, saveLabel,
   const total = items.reduce((sum, item) => sum + (parseMoney(item.cost) ?? 0), 0);
 
   return (
-    <ScrollView automaticallyAdjustKeyboardInsets
+    <KeyboardAwareScrollView bottomOffset={24}
       style={[styles.container, { backgroundColor: colors.background }]}
       contentContainerStyle={styles.content}
       keyboardShouldPersistTaps="handled"
@@ -290,7 +291,7 @@ export function VisitForm({ vehicleId, initial, initialServiceTypeId, saveLabel,
           <Text style={styles.deleteBtnText}>Delete visit</Text>
         </TouchableOpacity>
       )}
-    </ScrollView>
+    </KeyboardAwareScrollView>
   );
 }
 

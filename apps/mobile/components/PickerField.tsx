@@ -1,9 +1,7 @@
 import { useMemo, useState } from "react";
 import {
   FlatList,
-  KeyboardAvoidingView,
   Modal,
-  Platform,
   Pressable,
   StyleSheet,
   TextInput,
@@ -11,6 +9,7 @@ import {
   type StyleProp,
   type ViewStyle,
 } from "react-native";
+import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Text } from "@/components/Themed";
 import { Icon } from "@/components/Controls";
@@ -84,7 +83,8 @@ export function PickerField({
       </Pressable>
 
       <Modal visible={open} transparent animationType="slide" onRequestClose={close}>
-        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.fill}>
+        {/* Lifts the list above the keyboard on Android too (the app draws edge to edge). */}
+        <KeyboardAvoidingView behavior="padding" automaticOffset style={styles.fill}>
           <Pressable style={styles.backdrop} onPress={close} accessibilityRole="button" accessibilityLabel="Close list" />
           <View
             accessibilityViewIsModal

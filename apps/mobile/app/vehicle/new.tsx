@@ -1,4 +1,5 @@
-import { StyleSheet, ScrollView, TextInput, TouchableOpacity, View, Alert } from "react-native";
+import { StyleSheet, TextInput, TouchableOpacity, View, Alert } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { DateField } from "@/components/DateField";
 import { BodyTypePicker } from "@/components/BodyTypePicker";
 import { guessBodyType } from "@carbaddie/core";
@@ -49,7 +50,7 @@ export default function AddVehicleScreen() {
   };
 
   return (
-    <ScrollView keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets style={[styles.container, { backgroundColor: colors.background }]} contentContainerStyle={styles.content}>
+    <KeyboardAwareScrollView bottomOffset={24} keyboardShouldPersistTaps="handled" style={[styles.container, { backgroundColor: colors.background }]} contentContainerStyle={styles.content}>
       <Text style={[styles.label, { color: colors.text }]}>Make *</Text>
       <TextInput style={inputStyle} value={make} onChangeText={setMake} placeholder="e.g. Toyota" placeholderTextColor={colors.textMuted} />
 
@@ -79,7 +80,7 @@ export default function AddVehicleScreen() {
       >
         <Text style={styles.saveBtnText}>{addMutation.isPending ? "Saving" : "Add vehicle"}</Text>
       </TouchableOpacity>
-    </ScrollView>
+    </KeyboardAwareScrollView>
   );
 }
 

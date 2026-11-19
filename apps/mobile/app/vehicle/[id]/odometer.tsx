@@ -1,4 +1,5 @@
-import { StyleSheet, ScrollView, TextInput, TouchableOpacity, View, Alert, ActivityIndicator } from "react-native";
+import { StyleSheet, TextInput, TouchableOpacity, View, Alert, ActivityIndicator } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { formatISO } from "@/src/dates";
 import { DateField } from "@/components/DateField";
 import { useLocalSearchParams } from "expo-router";
@@ -76,7 +77,7 @@ export default function OdometerScreen() {
   };
 
   return (
-    <ScrollView keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets style={[styles.container, { backgroundColor: colors.background }]} contentContainerStyle={styles.content}>
+    <KeyboardAwareScrollView bottomOffset={24} keyboardShouldPersistTaps="handled" style={[styles.container, { backgroundColor: colors.background }]} contentContainerStyle={styles.content}>
       <View style={[styles.currentCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <Text style={[styles.currentLabel, { color: muted }]}>Current odometer</Text>
         <Text style={[styles.currentValue, { color: colors.text }]}>
@@ -141,7 +142,7 @@ export default function OdometerScreen() {
           </View>
         ))
       )}
-    </ScrollView>
+    </KeyboardAwareScrollView>
   );
 }
 
