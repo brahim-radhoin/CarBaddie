@@ -162,7 +162,8 @@ export function useDeleteServiceType() {
   const qc = useQueryClient();
   return useMutation<void, Error, string>({
     mutationFn: (id) => repo.deleteServiceType(id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: queryKeys.serviceTypes.all() }); },
+    // Its logs lose their type and its interval overrides go too: other queries change as well.
+    onSuccess: () => { qc.invalidateQueries(); },
   });
 }
 
@@ -178,6 +179,10 @@ export function useCustomFieldsForServiceType(serviceTypeId?: string) {
 // ====================================================================
 // MAINTENANCE LOG HOOKS
 // ====================================================================
+
+// Logs, visits, readings and overrides are part of VehicleRead (current mileage, what is due),
+// and the garage deck reads the vehicle list, not one vehicle. Invalidating the "vehicles"
+// prefix refreshes both; `vehicles.one(id)` alone left the deck on the old mileage.
 
 export function useLogsForVehicle(vehicleId?: string) {
   const id = vehicleId || undefined;
@@ -212,7 +217,7 @@ export function useAddMaintenanceLog() {
   return useMutation<MaintenanceLogRead, Error, { vehicleId: string; data: MaintenanceLogCreate }>({
     mutationFn: ({ vehicleId, data }) => repo.createMaintenanceLog(vehicleId, data),
     onSuccess: (_, { vehicleId }) => {
-      qc.invalidateQueries({ queryKey: queryKeys.vehicles.one(vehicleId) });
+      qc.invalidateQueries({ queryKey: queryKeys.vehicles.all() });
       qc.invalidateQueries({ queryKey: queryKeys.logs.forVehicle(vehicleId) });
       qc.invalidateQueries({ queryKey: queryKeys.summaries.forVehicle(vehicleId) });
       triggerBackgroundCloudPush();
@@ -225,8 +230,9 @@ export function useUpdateMaintenanceLog() {
   return useMutation<MaintenanceLogRead, Error, { logId: string; data: MaintenanceLogUpdate }>({
     mutationFn: ({ logId, data }) => repo.updateMaintenanceLog(logId, data),
     onSuccess: (updated) => {
-      qc.invalidateQueries({ queryKey: queryKeys.vehicles.one(updated.vehicle_id) });
+      qc.invalidateQueries({ queryKey: queryKeys.vehicles.all() });
       qc.invalidateQueries({ queryKey: queryKeys.logs.forVehicle(updated.vehicle_id) });
+      qc.invalidateQueries({ queryKey: queryKeys.summaries.forVehicle(updated.vehicle_id) });
       qc.setQueryData(queryKeys.logs.one(updated.id), updated);
       triggerBackgroundCloudPush();
     },
@@ -238,7 +244,7 @@ export function useDeleteMaintenanceLog() {
   return useMutation<void, Error, { logId: string; vehicleId: string }>({
     mutationFn: ({ logId }) => repo.deleteMaintenanceLog(logId),
     onSuccess: (_, { vehicleId }) => {
-      qc.invalidateQueries({ queryKey: queryKeys.vehicles.one(vehicleId) });
+      qc.invalidateQueries({ queryKey: queryKeys.vehicles.all() });
       qc.invalidateQueries({ queryKey: queryKeys.logs.forVehicle(vehicleId) });
       qc.invalidateQueries({ queryKey: queryKeys.summaries.forVehicle(vehicleId) });
       triggerBackgroundCloudPush();
@@ -298,7 +304,7 @@ export function useServiceEvent(visitId?: string) {
 function useInvalidateVisits() {
   const qc = useQueryClient();
   return (vehicleId: string) => {
-    qc.invalidateQueries({ queryKey: queryKeys.vehicles.one(vehicleId) });
+    qc.invalidateQueries({ queryKey: queryKeys.vehicles.all() });
     qc.invalidateQueries({ queryKey: queryKeys.logs.all() }); // includes the visit keys
     qc.invalidateQueries({ queryKey: queryKeys.summaries.forVehicle(vehicleId) });
     triggerBackgroundCloudPush();
@@ -340,8 +346,8 @@ export function useUpsertIntervalOverride() {
   }>({
     mutationFn: ({ vehicleId, serviceTypeId, data }) =>
       repo.upsertIntervalOverride(vehicleId, serviceTypeId, data),
-    onSuccess: (_, { vehicleId }) => {
-      qc.invalidateQueries({ queryKey: queryKeys.vehicles.one(vehicleId) });
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.vehicles.all() });
       triggerBackgroundCloudPush();
     },
   });
@@ -352,8 +358,8 @@ export function useDeleteIntervalOverride() {
   return useMutation<void, Error, { vehicleId: string; serviceTypeId: string }>({
     mutationFn: ({ vehicleId, serviceTypeId }) =>
       repo.deleteIntervalOverride(vehicleId, serviceTypeId),
-    onSuccess: (_, { vehicleId }) => {
-      qc.invalidateQueries({ queryKey: queryKeys.vehicles.one(vehicleId) });
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.vehicles.all() });
       triggerBackgroundCloudPush();
     },
   });
