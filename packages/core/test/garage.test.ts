@@ -9,7 +9,7 @@ import { ZONE_OF_SLUG } from "../src/maintenance/zones.ts";
 import { ValidationError } from "../src/validation.ts";
 import { encodeBackup, parseBackup } from "../src/backup/format.ts";
 import { BODY_TYPES } from "../src/vehicles/body-types.ts";
-import { SILHOUETTES } from "../src/vehicles/silhouettes.ts";
+import { FRAME, SILHOUETTES } from "../src/vehicles/silhouettes.ts";
 import { openTestDb } from "./helpers/sqlite.ts";
 
 let wall = 1_785_000_000_000;
@@ -56,6 +56,22 @@ test("body type: known as stored, unknown or unset drawn from a guess, never rew
   assert.equal(drawableBodyType(undefined, "Yamaha"), "motorbike");
   assert.equal(guessBodyType("Toyota"), "car");
   assert.ok(isBodyTypeId("car") && !isBodyTypeId("hovercraft"));
+  for (const id of ["sedan", "estate", "coupe", "suv", "pickup"]) assert.equal(drawableBodyType(id, "Toyota"), id);
+});
+
+test("body type ids that have shipped stay (they are stored and synced), and every id is a valid stored value", () => {
+  const ids = BODY_TYPES.map((t) => t.id as string);
+  for (const shipped of ["car", "motorbike", "snowmobile", "sedan", "estate", "coupe", "suv", "pickup"]) assert.ok(ids.includes(shipped), shipped);
+  for (const id of ids) assert.match(id, /^[a-z][a-z0-9_-]{0,39}$/);
+});
+
+test("every outline with wheels stands on the ground line, inside the frame", () => {
+  for (const { id } of BODY_TYPES) {
+    for (const w of SILHOUETTES[id].wheels) {
+      assert.ok(Math.abs(w.cy + w.r - FRAME.groundY) <= 2, `${id}: tyre bottom ${w.cy + w.r}`);
+      assert.ok(w.cx - w.r >= 30 && w.cx + w.r <= 302, `${id}: wheel outside the frame`);
+    }
+  }
 });
 
 test("a vehicle keeps a body type this app can't draw, and updates that don't mention it leave it alone", async () => {

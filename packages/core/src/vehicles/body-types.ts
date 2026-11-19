@@ -4,8 +4,15 @@
 // kinds than this one; an unknown value is kept as it is and only drawn as the default here.
 // Adding a kind later needs art and an entry below, no schema change.
 
+// Ids are stored and synced: never rename one. Labels can change. "car" is the default and is
+// drawn as a hatchback; it keeps the plain label so a vehicle nobody has typed yet reads "Car".
 export const BODY_TYPES = [
   { id: "car", label: "Car" },
+  { id: "sedan", label: "Sedan" },
+  { id: "estate", label: "Estate" },
+  { id: "coupe", label: "Coupé" },
+  { id: "suv", label: "SUV" },
+  { id: "pickup", label: "Pickup" },
   { id: "motorbike", label: "Motorbike" },
   { id: "snowmobile", label: "Snowmobile" },
 ] as const;
