@@ -74,7 +74,7 @@ test("changes made on one device reach another, and edits come back", async () =
 
   // Nothing new: nothing moves.
   const idle = await a.sync(drive.transport);
-  assert.deepEqual(idle, { downloaded: 0, applied: 0, uploaded: 0, compacted: false });
+  assert.deepEqual(idle, { downloaded: 0, applied: 0, uploaded: 0, compacted: false, blocked: [] });
 });
 
 test("the newer of two concurrent edits wins on both devices", async () => {
@@ -183,7 +183,7 @@ test("compaction replaces change files with a snapshot a new device can start fr
   assert.deepEqual(await liveState(a.db), await liveState(b.db));
 });
 
-test("files from a newer schema are not applied", async () => {
+test("a file that needs a newer app is skipped and reported, and the rest still syncs", async () => {
   const drive = memoryDrive();
   const a = await device();
   await drive.transport.create(syncFileName({ kind: "changes", deviceId: "future-device", seq: 1 }), {
@@ -193,10 +193,18 @@ test("files from a newer schema are not applied", async () => {
     device_id: "future-device",
     seq: 1,
     schema_version: LATEST_SCHEMA_VERSION + 1,
+    min_reader: LATEST_SCHEMA_VERSION + 1,
     created_at: new Date().toISOString(),
     tables: {},
   });
-  await assert.rejects(a.sync(drive.transport), /newer version of CarBaddie/);
+  await a.repo.createVehicle({ make: "Ford", model: "Fiesta" });
+  const result = await a.sync(drive.transport);
+  assert.deepEqual(result.blocked, [{ deviceId: "future-device", needs: LATEST_SCHEMA_VERSION + 1 }]);
+  assert.ok(result.uploaded > 0, "this device still pushes its own rows");
+  // Not marked as read, so it is applied once the app is updated.
+  const later = await a.sync(drive.transport, { readerVersion: LATEST_SCHEMA_VERSION + 1 });
+  assert.equal(later.blocked.length, 0);
+  assert.equal(later.downloaded, 1);
 });
 
 test("resetting sync state makes the next sync re-send everything", async () => {

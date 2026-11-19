@@ -30,14 +30,32 @@ export const syncFileSchema = z.object({
   kind: z.enum(["changes", "snapshot"]),
   device_id: z.string().min(1),
   seq: z.number().int().positive(),
-  /** Schema version of the writer; files from a newer schema are not applied. */
+  /** Schema version of the writer. What shape the rows have (sync/upgrade.ts reads it). */
   schema_version: z.number().int().nonnegative(),
+  /**
+   * The oldest app schema that can read this file safely (the writer's newest "breaking"
+   * migration, db/migrations.ts). Absent in files from before the rule: they need schema_version.
+   */
+  min_reader: z.number().int().nonnegative().optional(),
   created_at: z.string(),
   /** Table name → rows. Tables this device doesn't know are ignored. */
   tables: z.record(z.string(), z.array(rowSchema)),
 });
 
 export type SyncFile = z.output<typeof syncFileSchema>;
+
+/**
+ * Whether this app can read a file, decided from the envelope alone: the strict parse below
+ * would call a file from a newer app "invalid" and hide the real reason. A file this app
+ * cannot read is skipped (and reported), never half-applied.
+ */
+export function checkSyncFile(json: unknown, readerVersion: number): { readable: true } | { readable: false; needs: number } {
+  const o = json && typeof json === "object" ? (json as Record<string, unknown>) : null;
+  if (!o || o.format !== SYNC_FILE_FORMAT) throw new Error("Invalid sync file: not a CarBaddie sync file");
+  if (typeof o.version === "number" && o.version > SYNC_FILE_VERSION) return { readable: false, needs: Number.MAX_SAFE_INTEGER };
+  const needs = typeof o.min_reader === "number" ? o.min_reader : typeof o.schema_version === "number" ? o.schema_version : 0;
+  return needs > readerVersion ? { readable: false, needs } : { readable: true };
+}
 
 export function parseSyncFile(json: unknown): SyncFile {
   const result = syncFileSchema.safeParse(json);

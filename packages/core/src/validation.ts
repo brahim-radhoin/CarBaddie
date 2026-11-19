@@ -49,6 +49,7 @@ interface VehicleInput {
   year?: number | null;
   vin?: string | null;
   initial_mileage?: number | null;
+  body_type?: string | null;
 }
 
 /** `partial`: only check fields that are present (updates). */
@@ -63,6 +64,8 @@ export function validateVehicle(data: VehicleInput, partial = false): void {
   }
   c.nonNegativeInt("year", data.year);
   c.nonNegativeInt("initial_mileage", data.initial_mileage);
+  // Writers are strict (a short lowercase id); readers accept anything a newer app wrote.
+  if (data.body_type != null && !/^[a-z][a-z0-9_-]{0,39}$/.test(data.body_type)) c.add("body_type", "Not a valid vehicle type.");
   c.done();
 }
 

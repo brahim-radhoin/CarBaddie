@@ -264,6 +264,8 @@ export function createRepository(db: SqlDriver, w: WriteContext) {
       vin: row.vin,
       initial_mileage: row.initial_mileage,
       acquisition_date: row.acquisition_date,
+      body_type: row.body_type ?? null,
+      is_favorite: row.is_favorite == null ? null : row.is_favorite === 1,
       maintenance_logs,
       interval_overrides: await listOverrides(row.id),
       odometer_readings,
@@ -286,10 +288,11 @@ export function createRepository(db: SqlDriver, w: WriteContext) {
   async function insertVehicle(data: VehicleCreate): Promise<Id> {
     const id = w.newId();
     await run(
-      `INSERT INTO vehicles (id, make, model, year, vin, initial_mileage, acquisition_date, updated_at, deleted_at, device_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)`,
+      `INSERT INTO vehicles (id, make, model, year, vin, initial_mileage, acquisition_date, body_type, is_favorite, updated_at, deleted_at, device_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)`,
       [id, data.make, data.model, data.year ?? null, normaliseVin(data.vin), data.initial_mileage ?? null,
-        data.acquisition_date ?? null, w.stamp(), w.deviceId],
+        data.acquisition_date ?? null, data.body_type ?? null, data.is_favorite == null ? null : data.is_favorite ? 1 : 0,
+        w.stamp(), w.deviceId],
     );
     return id;
   }
@@ -685,6 +688,9 @@ export function createRepository(db: SqlDriver, w: WriteContext) {
       if (data.vin !== undefined) { sets.push("vin = ?"); vals.push(normaliseVin(data.vin)); }
       if (data.initial_mileage !== undefined) { sets.push("initial_mileage = ?"); vals.push(data.initial_mileage); }
       if (data.acquisition_date !== undefined) { sets.push("acquisition_date = ?"); vals.push(data.acquisition_date); }
+      // Only what the caller sends changes: a form that doesn't know these fields must not clear them.
+      if (data.body_type !== undefined) { sets.push("body_type = ?"); vals.push(data.body_type); }
+      if (data.is_favorite !== undefined) { sets.push("is_favorite = ?"); vals.push(data.is_favorite === null ? null : data.is_favorite ? 1 : 0); }
       if (sets.length > 0) {
         const [touch, touchVals] = touched();
         await run(`UPDATE vehicles SET ${sets.join(", ")}, ${touch} WHERE id = ? AND deleted_at IS NULL`, [...vals, ...touchVals, id]);

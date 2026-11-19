@@ -1,0 +1,29 @@
+{
+  "format": "carbaddie-sync",
+  "version": 1,
+  "kind": "changes",
+  "device_id": "fixture-device-v8",
+  "seq": 1,
+  "schema_version": 8,
+  "min_reader": 7,
+  "created_at": "2026-11-19T09:00:00.000Z",
+  "tables": {
+    "vehicles": [
+      {
+        "id": "0190a0a0-0000-7000-8000-00000000f801",
+        "make": "Ford",
+        "model": "Fiesta",
+        "year": 2003,
+        "vin": null,
+        "initial_mileage": null,
+        "acquisition_date": null,
+        "merged_into": null,
+        "body_type": "car",
+        "is_favorite": 1,
+        "updated_at": "000001790000000-000000-fixture-device-v8",
+        "deleted_at": null,
+        "device_id": "fixture-device-v8"
+      }
+    ]
+  }
+}

@@ -11,6 +11,15 @@ import type { SqlDriver, WriteContext } from "./driver";
 
 interface Migration {
   version: number;
+  /**
+   * How an older app sees what this migration changes, for sync (sync/engine.ts):
+   * - "additive": only adds things an older app can ignore (a nullable column, a new table).
+   *   Older apps keep syncing; they carry the columns they don't know through unchanged.
+   * - "breaking": renames, removes or re-means something. Apps older than this version must
+   *   stop reading files written after it (they are told to update).
+   * Required on every migration, so adding one forces the author to decide. When unsure, "breaking".
+   */
+  compat: "additive" | "breaking";
   description: string;
   /**
    * Fail the migration if foreign keys are violated afterwards. Off for v1: databases from
@@ -390,12 +399,13 @@ async function migrateV7(db: SqlDriver, ctx: WriteContext): Promise<void> {
 }
 
 export const MIGRATIONS: readonly Migration[] = [
-  { version: 1, description: "legacy integer-id schema", checkForeignKeys: false, up: (db) => db.exec(V1_LEGACY_SCHEMA) },
-  { version: 2, description: "UUID ids, sync columns, archivable custom fields", checkForeignKeys: true, up: migrateV2 },
+  { version: 1, compat: "breaking", description: "legacy integer-id schema", checkForeignKeys: false, up: (db) => db.exec(V1_LEGACY_SCHEMA) },
+  { version: 2, compat: "breaking", description: "UUID ids, sync columns, archivable custom fields", checkForeignKeys: true, up: migrateV2 },
   {
     // The vehicle catalog is a read-only app asset now, and Alembic no longer manages the
     // desktop database; both tables only exist in databases created by the Python backend.
     version: 3,
+    compat: "breaking", // shipped before the rule existed: treated as breaking
     description: "drop backend-only tables",
     checkForeignKeys: false,
     up: (db) => db.exec("DROP TABLE IF EXISTS vehicle_definitions; DROP TABLE IF EXISTS alembic_version;"),
@@ -405,6 +415,7 @@ export const MIGRATIONS: readonly Migration[] = [
     // and points at the vehicle it was merged into, so logs that arrive for it later
     // (from a device that hadn't seen the merge yet) can be moved over too.
     version: 4,
+    compat: "breaking", // shipped before the rule existed: treated as breaking
     description: "vehicles.merged_into for sync merges",
     checkForeignKeys: false,
     up: (db) => db.exec("ALTER TABLE vehicles ADD COLUMN merged_into TEXT"),
@@ -413,6 +424,7 @@ export const MIGRATIONS: readonly Migration[] = [
     // Money as exact integer hundredths, and settings both devices share (currency, units).
     // Sync converts `cost` in rows from devices still on v4 (sync/upgrade.ts).
     version: 5,
+    compat: "breaking", // shipped before the rule existed: treated as breaking
     description: "maintenance_logs.cost_cents, synced preferences",
     checkForeignKeys: false,
     up: (db) =>
@@ -432,6 +444,7 @@ export const MIGRATIONS: readonly Migration[] = [
     // is known without a log. The vehicle's current mileage is the highest of these, its logs
     // and its initial mileage.
     version: 6,
+    compat: "breaking", // shipped before the rule existed: treated as breaking
     description: "odometer_readings",
     checkForeignKeys: false,
     up: (db) =>
@@ -449,13 +462,43 @@ export const MIGRATIONS: readonly Migration[] = [
   },
   {
     version: 7,
+    compat: "breaking", // shipped before the rule existed: treated as breaking
     description: "service_events: garage visits with several items",
     checkForeignKeys: true,
     up: migrateV7,
   },
+  {
+    // The garage deck: a body type picks the outline drawn for a vehicle, and a favourite
+    // goes on the deck. Both stay NULL until the user sets them ("unset" resolves the same on
+    // every device, see vehicles/garage.ts), so the migration writes no rows and the devices
+    // cannot disagree. sync_extra holds columns a newer app sent that this one doesn't know,
+    // so they travel on when this device re-sends the row (sync/extras.ts).
+    version: 8,
+    compat: "additive",
+    description: "vehicles.body_type and is_favorite, sync_extra",
+    checkForeignKeys: false,
+    up: (db) =>
+      db.exec(`
+        ALTER TABLE vehicles ADD COLUMN body_type TEXT;
+        ALTER TABLE vehicles ADD COLUMN is_favorite INTEGER;
+        CREATE TABLE sync_extra (
+          table_name TEXT NOT NULL,
+          row_key TEXT NOT NULL,
+          data TEXT NOT NULL,
+          PRIMARY KEY (table_name, row_key)
+        );
+      `),
+  },
 ];
 
 export const LATEST_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;
+
+/**
+ * The oldest app version that can still read what this one writes: the newest "breaking"
+ * migration. Written into every sync file; a reader older than this stops at the file instead
+ * of misreading it.
+ */
+export const MIN_READER_VERSION = Math.max(...MIGRATIONS.filter((m) => m.compat === "breaking").map((m) => m.version));
 
 export async function getSchemaVersion(db: SqlDriver): Promise<number> {
   const [row] = await db.all<{ user_version: number }>("PRAGMA user_version");

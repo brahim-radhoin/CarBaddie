@@ -12,13 +12,22 @@
 //   racing an edit on another)
 // Every fix-up is an ordinary local write, so it syncs like any other change.
 //
+// Rules that keep devices on different app versions working together:
+// - a file says which reader it needs (`min_reader`, the writer's newest "breaking" migration). A
+//   device that is older than that skips the file and that device's later ones, keeps syncing
+//   with the rest and still pushes its own rows; the result lists what it skipped (`blocked`)
+// - columns a device doesn't know (from an "additive" migration) are kept aside and sent back
+//   with the row (extras.ts), so a device that is behind never strips what one that is ahead wrote
+// - copies of one row that differ only in which columns they carry are combined, not picked between
+//
 // Local state (app_settings, never synced): `sync.seq` (last change file written),
 // `sync.cursor` (newest own `updated_at` pushed), `sync.seen` (JSON: device → last applied seq).
 
-import { LATEST_SCHEMA_VERSION } from "../db/migrations.ts";
+import { LATEST_SCHEMA_VERSION, MIN_READER_VERSION } from "../db/migrations.ts";
 import { transaction } from "../db/transaction.ts";
 import { intervalOverrideId } from "../ids/uuid.ts";
-import { parseSyncFile, parseSyncFileName, syncFileName, SYNC_FILE_FORMAT, SYNC_FILE_VERSION } from "./files.ts";
+import { checkSyncFile, parseSyncFile, parseSyncFileName, syncFileName, SYNC_FILE_FORMAT, SYNC_FILE_VERSION } from "./files.ts";
+import { rowKey, saveExtras, withExtras } from "./extras.ts";
 import { SYNCED_TABLE_INFO } from "./tables.ts";
 import { upgradeRow } from "./upgrade.ts";
 import type { SqlDriver, SqlValue, WriteContext } from "../db/driver";
@@ -30,6 +39,8 @@ export interface SyncOptions {
   /** Write a snapshot once this device has more change files than this. Default 50. */
   compactAfter?: number;
   now?: () => Date;
+  /** The schema this app reads up to. Only tests change it. */
+  readerVersion?: number;
 }
 
 export interface SyncResult {
@@ -40,6 +51,11 @@ export interface SyncResult {
   /** Rows uploaded in this device's new change file. */
   uploaded: number;
   compacted: boolean;
+  /**
+   * Devices whose files this app is too old to read (they need a newer app). Their files were
+   * skipped, everything else synced. Show "update the app" when this is not empty.
+   */
+  blocked: { deviceId: string; needs: number }[];
 }
 
 export const SYNC_SETTING_KEYS = {
@@ -109,32 +125,41 @@ async function syncOnce(db: SqlDriver, w: WriteContext, transport: SyncTransport
   const devices = groupByDevice(listing);
 
   // ---- Pull: per device, its snapshot if we're missing files it compacted, then its
-  // change files in order, stopping at the first gap.
+  // change files in order, stopping at the first gap or the first file this app can't read.
+  const readerVersion = options.readerVersion ?? LATEST_SCHEMA_VERSION;
   const seen: Record<string, number> = JSON.parse((await getSetting(db, SYNC_SETTING_KEYS.seen)) ?? "{}");
-  const toDownload: RemoteFile[] = [];
-  const newSeen = { ...seen };
+  const plan: { deviceId: string; files: { file: RemoteFile; seq: number }[] }[] = [];
   for (const [deviceId, files] of devices) {
     if (deviceId === w.deviceId) continue;
     let at = seen[deviceId] ?? 0;
+    const list: { file: RemoteFile; seq: number }[] = [];
     if (files.snapshot && files.snapshot.seq > at && !files.changes.has(at + 1)) {
-      toDownload.push(files.snapshot.file);
+      list.push({ file: files.snapshot.file, seq: files.snapshot.seq });
       at = files.snapshot.seq;
     }
-    while (files.changes.has(at + 1)) toDownload.push(files.changes.get(++at)!);
-    newSeen[deviceId] = at;
+    while (files.changes.has(at + 1)) list.push({ file: files.changes.get(++at)!, seq: at });
+    plan.push({ deviceId, files: list });
   }
 
   const downloaded: SyncFile[] = [];
-  for (const file of toDownload) {
-    const parsed = parseSyncFile(await transport.read(file));
-    const name = parseSyncFileName(file.name)!;
-    if (parsed.device_id !== name.deviceId || parsed.seq !== name.seq) {
-      throw new Error(`Sync file ${file.name} doesn't match its name`);
+  const newSeen = { ...seen };
+  const blocked: SyncResult["blocked"] = [];
+  for (const { deviceId, files } of plan) {
+    for (const { file, seq } of files) {
+      const json = await transport.read(file);
+      const gate = checkSyncFile(json, readerVersion);
+      if (!gate.readable) {
+        blocked.push({ deviceId, needs: gate.needs });
+        break; // later files of this device depend on this one
+      }
+      const parsed = parseSyncFile(json);
+      const name = parseSyncFileName(file.name)!;
+      if (parsed.device_id !== name.deviceId || parsed.seq !== name.seq) {
+        throw new Error(`Sync file ${file.name} doesn't match its name`);
+      }
+      downloaded.push(parsed);
+      newSeen[deviceId] = seq;
     }
-    if (parsed.schema_version > LATEST_SCHEMA_VERSION) {
-      throw new Error("Another device syncs with a newer version of CarBaddie. Update this app to keep syncing.");
-    }
-    downloaded.push(parsed);
   }
 
   const applied = await transaction(db, async () => {
@@ -178,7 +203,7 @@ async function syncOnce(db: SqlDriver, w: WriteContext, transport: SyncTransport
   }
 
   await setSetting(db, SYNC_SETTING_KEYS.lastSuccess, now().toISOString());
-  return { downloaded: downloaded.length, applied, uploaded: changes.count, compacted };
+  return { downloaded: downloaded.length, applied, uploaded: changes.count, compacted, blocked };
 }
 
 function syncFile(w: WriteContext, kind: SyncFile["kind"], seq: number, tables: Record<string, SyncRow[]>, at: Date): SyncFile {
@@ -189,6 +214,7 @@ function syncFile(w: WriteContext, kind: SyncFile["kind"], seq: number, tables: 
     device_id: w.deviceId,
     seq,
     schema_version: LATEST_SCHEMA_VERSION,
+    min_reader: MIN_READER_VERSION,
     created_at: at.toISOString(),
     tables,
   };
@@ -198,9 +224,10 @@ async function readRows(db: SqlDriver, where: string, params: SqlValue[]) {
   const tables: Record<string, SyncRow[]> = {};
   let count = 0;
   let maxUpdatedAt = "";
-  for (const { name } of SYNCED_TABLE_INFO) {
-    const rows = await db.all<SyncRow>(`SELECT * FROM ${name} WHERE ${where}`, params);
-    if (rows.length === 0) continue;
+  for (const { name, primaryKey } of SYNCED_TABLE_INFO) {
+    const found = await db.all<SyncRow>(`SELECT * FROM ${name} WHERE ${where}`, params);
+    if (found.length === 0) continue;
+    const rows = await withExtras(db, name, primaryKey, found);
     tables[name] = rows;
     count += rows.length;
     for (const row of rows) if ((row.updated_at as string) > maxUpdatedAt) maxUpdatedAt = row.updated_at as string;
@@ -226,7 +253,7 @@ async function addReferencedEvents(db: SqlDriver, tables: Record<string, SyncRow
   for (let i = 0; i < missing.length; i += 500) {
     const chunk = missing.slice(i, i + 500);
     const rows = await db.all<SyncRow>(`SELECT * FROM service_events WHERE id IN (${chunk.map(() => "?").join(", ")})`, chunk);
-    if (rows.length) tables.service_events = [...(tables.service_events ?? []), ...rows];
+    if (rows.length) tables.service_events = [...(tables.service_events ?? []), ...(await withExtras(db, "service_events", ["id"], rows))];
   }
 }
 
@@ -261,7 +288,7 @@ async function mergeFiles(db: SqlDriver, w: WriteContext, files: SyncFile[]): Pr
         const row = upgradeRow(table.name, original, file.schema_version);
         const key = table.primaryKey.map((c) => row[c]).join("|");
         const prev = byKey.get(key);
-        if (!prev || (row.updated_at as string) > (prev.updated_at as string)) byKey.set(key, row);
+        byKey.set(key, prev ? combineCopies(prev, row) : row);
         w.observe(row.updated_at as string);
       }
     }
@@ -285,6 +312,15 @@ async function mergeFiles(db: SqlDriver, w: WriteContext, files: SyncFile[]): Pr
     throw new Error(`Sync data references rows that don't exist (${violations.length}: ${sample})`);
   }
   return applied;
+}
+
+/**
+ * Two copies of one row from different files: the newer one wins for every column it carries; a
+ * column it doesn't carry (it was written by an app that didn't know the column) comes from the other.
+ */
+function combineCopies(a: SyncRow, b: SyncRow): SyncRow {
+  const [older, newer] = (a.updated_at as string) <= (b.updated_at as string) ? [a, b] : [b, a];
+  return { ...older, ...newer };
 }
 
 class MergeContext {
@@ -311,14 +347,27 @@ class MergeContext {
   /** Applies one remote row if it is newer than the local copy. Returns whether it changed anything. */
   async applyRow(table: SyncedTable, remote: SyncRow, cols: Set<string>): Promise<boolean> {
     const row: SyncRow = {};
-    for (const [k, v] of Object.entries(remote)) if (cols.has(k)) row[k] = v;
+    const unknown: SyncRow = {};
+    for (const [k, v] of Object.entries(remote)) (cols.has(k) ? row : unknown)[k] = v;
     for (const c of table.primaryKey) {
       if (typeof row[c] !== "string") throw new Error(`Sync row in ${table.name} has no ${c}`);
     }
     const where = table.primaryKey.map((c) => `${c} = ?`).join(" AND ");
     const keyVals = table.primaryKey.map((c) => row[c]);
-    const local = await this.first<{ updated_at: string }>(`SELECT updated_at FROM ${table.name} WHERE ${where}`, keyVals);
-    if (local && local.updated_at >= (row.updated_at as string)) return false;
+    const key = rowKey(table.primaryKey, row);
+    const local = await this.first<Record<string, SqlValue>>(`SELECT * FROM ${table.name} WHERE ${where}`, keyVals);
+
+    if (local && (local.updated_at as string) > (row.updated_at as string)) return false;
+
+    if (local && local.updated_at === row.updated_at) {
+      // The same write again, possibly from a copy that carries columns ours was stored
+      // without (it came through an app that didn't know them). Fill the gaps, change nothing else.
+      const fill = Object.keys(row).filter((k) => local[k] === null && row[k] !== null && !table.primaryKey.includes(k));
+      await saveExtras(this.db, table.name, key, unknown);
+      if (fill.length === 0) return false;
+      await this.db.run(`UPDATE ${table.name} SET ${fill.map((k) => `${k} = ?`).join(", ")} WHERE ${where}`, [...fill.map((k) => row[k]), ...keyVals]);
+      return true;
+    }
 
     if (row.deleted_at == null) await this.resolveUniqueConflicts(table.name, row);
 
@@ -329,6 +378,7 @@ class MergeContext {
        ON CONFLICT(${table.primaryKey.join(", ")}) DO UPDATE SET ${updates.join(", ")}`,
       keys.map((k) => row[k]),
     );
+    await saveExtras(this.db, table.name, key, unknown);
     return true;
   }
 

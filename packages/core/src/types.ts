@@ -225,6 +225,13 @@ export interface VehicleBase {
   vin?: string | null;
   initial_mileage?: number | null;
   acquisition_date?: string | null; // ISO format: "YYYY-MM-DD"
+  /**
+   * Which outline the garage draws (vehicles/body-types.ts). A string, not a union: a newer app
+   * may know kinds this one doesn't, and they must pass through unchanged. null = not chosen yet.
+   */
+  body_type?: string | null;
+  /** On the garage deck. null = not chosen: vehicles/garage.ts resolves it the same way on every device. */
+  is_favorite?: boolean | null;
 }
 
 export interface VehicleCreate extends VehicleBase {}

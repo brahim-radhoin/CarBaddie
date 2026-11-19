@@ -9,6 +9,7 @@ import { seedBuiltinServiceTypes } from "./seed.ts";
 import { LEGACY_MERGE_SETTING, mergeLegacyServiceTypes } from "./legacy.ts";
 import { transaction } from "./transaction.ts";
 import { resetSyncState, runSync } from "../sync/engine.ts";
+import { adoptExtras } from "../sync/extras.ts";
 import { SYNCED_TABLES } from "../sync/tables.ts";
 import type { SqlDriver, WriteContext } from "./driver";
 import type { SyncOptions, SyncResult } from "../sync/engine";
@@ -48,6 +49,7 @@ export async function openRepository(db: SqlDriver, wallClock: () => number = Da
   };
 
   const migrated = await migrate(db, ctx); // leaves foreign key enforcement on
+  await adoptExtras(db); // columns an update just added that earlier syncs delivered as unknown ones
 
   // Never issue a timestamp older than one already stored (e.g. after the wall clock moved back).
   const latest = await db.all<{ latest: string | null }>(

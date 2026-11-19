@@ -117,6 +117,10 @@ const backupVehicleSchema = z.object({
     .transform((v) => (v && v.trim() ? v.trim() : null)),
   initial_mileage: optionalInt,
   acquisition_date: optionalString,
+  // Added with schema v8; files from older versions don't have them. A string, not a list of
+  // kinds: a newer app may write kinds this one doesn't know.
+  body_type: optionalString,
+  is_favorite: z.boolean().nullish().transform((v) => v ?? null),
   maintenance_logs: z.array(backupLogSchema).default([]),
   interval_overrides: z.array(backupOverrideSchema).default([]),
   odometer_readings: z.array(backupOdometerReadingSchema).default([]),
@@ -210,6 +214,8 @@ export function encodeBackup({ serviceTypes, vehicles, serviceEvents = [], confi
       vin: v.vin?.trim() ? v.vin.trim() : null,
       initial_mileage: v.initial_mileage ?? null,
       acquisition_date: v.acquisition_date ?? null,
+      body_type: v.body_type ?? null,
+      is_favorite: v.is_favorite ?? null,
       maintenance_logs: v.maintenance_logs.map((log) => ({
         id: fileIdFor("log", log.id),
         vehicle_id: vehicleFileId,
