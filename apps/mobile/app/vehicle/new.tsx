@@ -1,12 +1,12 @@
-import { StyleSheet, TextInput, TouchableOpacity, View, Alert } from "react-native";
+import { StyleSheet, TouchableOpacity, View, Alert } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { DateField } from "@/components/DateField";
 import { BodyTypePicker } from "@/components/BodyTypePicker";
-import { guessBodyType } from "@carbaddie/core";
+import { guessBodyType, parseWholeNumber, todayISO, vehicleStartDate } from "@carbaddie/core";
 import { useRouter } from "expo-router";
 import { useTheme, type Palette } from "@/src/theme";
 import { useAddVehicle } from "@/src/hooks/useDatabase";
-import { Text } from "@/components/Themed";
+import { Text, TextInput } from "@/components/Themed";
 import { useState, useMemo } from "react";
 import { useUnits } from "@/src/hooks/useUnits";
 
@@ -35,19 +35,33 @@ export default function AddVehicleScreen() {
       Alert.alert("Required", "Make and Model are required.");
       return;
     }
+    const typedYear = year.trim() ? parseWholeNumber(year) : null;
+    if (year.trim() && typedYear === null) {
+      Alert.alert("Check the year", "Enter the model year as four digits, e.g. 2020.");
+      return;
+    }
+    const typedMileage = mileage.trim() ? parseWholeNumber(mileage) : null;
+    if (mileage.trim() && typedMileage === null) {
+      Alert.alert("Check the odometer", "Enter the initial mileage as a whole number, e.g. 50000.");
+      return;
+    }
     addMutation.mutate(
       {
         make: make.trim(),
         model: model.trim(),
-        year: year ? Number(year) : undefined,
+        year: typedYear ?? undefined,
         vin: vin.trim() || null,
-        initial_mileage: mileage ? units.fromDisplay(Number(mileage)) : undefined,
+        initial_mileage: typedMileage != null ? units.fromDisplay(typedMileage) : undefined,
         acquisition_date: acquisitionDate.trim() || null,
         body_type: bodyType,
       },
-      { onSuccess: () => router.back() }
+      {
+        onSuccess: () => router.back(),
+        onError: (err) => Alert.alert("Could not add vehicle", err.message || "Could not add the vehicle."),
+      }
     );
   };
+  const typedYear = parseWholeNumber(year);
 
   return (
     <KeyboardAwareScrollView bottomOffset={24} keyboardShouldPersistTaps="handled" style={[styles.container, { backgroundColor: colors.background }]} contentContainerStyle={styles.content}>
@@ -61,16 +75,24 @@ export default function AddVehicleScreen() {
       <BodyTypePicker value={bodyType} onChange={setPickedType} />
 
       <Text style={[styles.label, { color: colors.text }]}>Year</Text>
-      <TextInput style={inputStyle} value={year} onChangeText={setYear} placeholder="e.g. 2020" placeholderTextColor={colors.textMuted} keyboardType="numeric" />
+      <TextInput style={inputStyle} value={year} onChangeText={setYear} placeholder="e.g. 2020" placeholderTextColor={colors.textMuted} keyboardType="number-pad" maxLength={4} />
 
       <Text style={[styles.label, { color: colors.text }]}>VIN</Text>
       <TextInput style={inputStyle} value={vin} onChangeText={setVin} placeholder="Optional VIN" placeholderTextColor={colors.textMuted} autoCapitalize="characters" />
 
       <Text style={[styles.label, { color: colors.text }]}>Initial mileage ({units.unit})</Text>
-      <TextInput style={inputStyle} value={mileage} onChangeText={setMileage} placeholder="e.g. 50000" placeholderTextColor={colors.textMuted} keyboardType="numeric" />
+      <TextInput style={inputStyle} value={mileage} onChangeText={setMileage} placeholder="e.g. 50000" placeholderTextColor={colors.textMuted} keyboardType="number-pad" />
 
       <Text style={[styles.label, { color: colors.text }]}>Acquisition date</Text>
-      <DateField label="Acquisition date" value={acquisitionDate} onChange={setAcquisitionDate} placeholder="Optional" allowClear />
+      <DateField
+        label="Acquisition date"
+        value={acquisitionDate}
+        onChange={setAcquisitionDate}
+        placeholder="Optional"
+        allowClear
+        min={vehicleStartDate(typedYear) ?? undefined}
+        max={todayISO()}
+      />
 
       <TouchableOpacity accessibilityRole="button"
         style={[styles.saveBtn, { backgroundColor: colors.primary }]}

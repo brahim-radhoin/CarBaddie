@@ -5,6 +5,9 @@ node_modules/
 # Archived .git folders of the three repos this monorepo was merged from
 .old-repos/
 
+# Local agent/tooling directories
+.claude/
+
 # Local backup exports
 /carbaddie_*export*.json
 

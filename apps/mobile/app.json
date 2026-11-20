@@ -2,7 +2,7 @@
   "expo": {
     "name": "CarBaddie",
     "slug": "carbaddie-mobile",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "carbaddie",
@@ -20,7 +20,7 @@
         "backgroundColor": "#0a0a0f"
       },
       "package": "com.carbaddie.mobile",
-      "versionCode": 2
+      "versionCode": 3
     },
     "plugins": [
       "expo-router",
@@ -33,7 +33,8 @@
           "backgroundColor": "#0a0a0f",
           "imageWidth": 200
         }
-      ]
+      ],
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true

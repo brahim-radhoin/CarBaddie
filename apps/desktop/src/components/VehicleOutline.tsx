@@ -36,7 +36,8 @@ export function VehicleOutline({
   className?: string;
 }) {
   const art = SILHOUETTES[bodyType];
-  const stroke = dashed ? "var(--muted-foreground)" : "var(--foreground)";
+  // `--outline` is the text colour, or the accent when picked in Appearance (index.css).
+  const stroke = dashed ? "var(--muted-foreground)" : "var(--outline)";
   const dash = dashed ? "5 5" : undefined;
   const entries = Object.entries(art.zones) as [DrawnZoneId, SilhouetteZone][];
 

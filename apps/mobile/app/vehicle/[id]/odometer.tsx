@@ -1,20 +1,15 @@
-import { StyleSheet, TextInput, TouchableOpacity, View, Alert, ActivityIndicator } from "react-native";
+import { StyleSheet, TouchableOpacity, View, Alert, ActivityIndicator } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { formatISO } from "@/src/dates";
 import { DateField } from "@/components/DateField";
 import { useLocalSearchParams } from "expo-router";
 import { useTheme, type Palette } from "@/src/theme";
-import { ValidationError } from "@carbaddie/core";
+import { ValidationError, parseWholeNumber, todayISO as localToday } from "@carbaddie/core";
 import { useVehicle, useAddOdometerReading, useDeleteOdometerReading } from "@/src/hooks/useDatabase";
-import { Text } from "@/components/Themed";
+import { Text, TextInput } from "@/components/Themed";
 import { useState, useMemo } from "react";
 import { useUnits } from "@/src/hooks/useUnits";
-
-/** Today as "YYYY-MM-DD" in local time. */
-function localToday(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
+import { useHistoryChecks } from "@/src/hooks/useHistoryChecks";
 
 /** Add an odometer reading between services, and list / delete the vehicle's readings. */
 export default function OdometerScreen() {
@@ -26,8 +21,9 @@ export default function OdometerScreen() {
   const addMutation = useAddOdometerReading();
   const deleteMutation = useDeleteOdometerReading();
   const units = useUnits();
+  const checks = useHistoryChecks(vehicle);
 
-  const [date, setDate] = useState(localToday);
+  const [date, setDate] = useState(() => localToday());
   const [mileage, setMileage] = useState("");
   const [note, setNote] = useState("");
 
@@ -43,9 +39,9 @@ export default function OdometerScreen() {
   }
 
   const handleSave = () => {
-    const typed = Number(mileage);
-    if (!mileage.trim() || !Number.isFinite(typed) || typed < 0) {
-      Alert.alert("Required", `Enter the odometer in ${units.unit}.`);
+    const typed = parseWholeNumber(mileage);
+    if (typed === null) {
+      Alert.alert("Check the odometer", `Enter the odometer in ${units.unit} as a whole number, e.g. 55000.`);
       return;
     }
     addMutation.mutate(
@@ -93,13 +89,17 @@ export default function OdometerScreen() {
         style={inputStyle}
         value={mileage}
         onChangeText={setMileage}
-        keyboardType="numeric"
+        keyboardType="number-pad"
         placeholder={vehicle.current_mileage != null ? String(units.toDisplay(vehicle.current_mileage)) : "e.g. 55000"}
         placeholderTextColor={muted}
       />
+      {(() => {
+        const warning = checks.odometerWarning(date, mileage);
+        return warning ? <Text style={[styles.warning, { color: colors.warn }]}>{warning}</Text> : null;
+      })()}
 
       <Text style={[styles.label, { color: colors.text }]}>Date *</Text>
-      <DateField label="Reading date" value={date} onChange={setDate} />
+      <DateField label="Reading date" value={date} onChange={setDate} min={checks.minDate} max={checks.maxDate} />
 
       <Text style={[styles.label, { color: colors.text }]}>Note</Text>
       <TextInput style={inputStyle} value={note} onChangeText={setNote} placeholder="Optional" placeholderTextColor={muted} />
@@ -155,6 +155,7 @@ const makeStyles = (colors: Palette) => StyleSheet.create({
   currentHint: { fontSize: 12, marginTop: 4, textAlign: "center" },
   label: { fontSize: 13, fontWeight: "600", marginBottom: 6, marginTop: 16 },
   input: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15 },
+  warning: { fontSize: 12, marginTop: 6 },
   saveBtn: { marginTop: 24, borderRadius: 12, paddingVertical: 16, alignItems: "center" },
   saveBtnText: { color: colors.onPrimary, fontSize: 16, fontWeight: "600" },
   sectionTitle: { fontSize: 15, fontWeight: "600", marginTop: 28, marginBottom: 10 },

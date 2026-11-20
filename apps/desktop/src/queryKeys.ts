@@ -24,4 +24,5 @@ export const queryKeys = {
     forVehicle: (vehicleId: string | number) => ["summaries", String(vehicleId)] as const,
   },
   preferences: () => ["preferences"] as const,
+  garageOrder: () => ["preferences", "garage_order"] as const,
 };

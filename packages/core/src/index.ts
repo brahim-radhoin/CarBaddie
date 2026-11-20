@@ -64,7 +64,7 @@ export { migrate, getSchemaVersion, MIGRATIONS, LATEST_SCHEMA_VERSION } from "./
 export { seedBuiltinServiceTypes, SEED_STAMP } from "./db/seed";
 export { mergeLegacyServiceTypes } from "./db/legacy";
 export { createRepository } from "./db/repository";
-export type { Repository } from "./db/repository";
+export type { Repository, RepositoryOptions } from "./db/repository";
 export { openRepository, SYNCED_TABLES } from "./db/open";
 export type { OpenedDatabase } from "./db/open";
 export { transaction } from "./db/transaction";
@@ -80,7 +80,18 @@ export {
   validateOdometerReading,
   validateServiceEvent,
   validatePreference,
+  validateFieldValues,
+  fieldValueProblem,
+  odometerConflict,
+  odometerRecords,
+  describeOdometerConflict,
+  parseWholeNumber,
+  vehicleStartDate,
+  latestModelYear,
+  FIRST_MODEL_YEAR,
+  MAX_MILEAGE_KM,
 } from "./validation";
+export type { DateContext, VehicleContext } from "./validation";
 
 export {
   KM_PER_MILE,
@@ -98,17 +109,17 @@ export {
 
 export { toISO, parseISO, todayISO, addDaysISO, daysBetweenISO, formatISO } from "./dates";
 
-export { PALETTES, ACCENTS, DEFAULT_ACCENT, APPEARANCE_SETTING_KEYS, isAccentId, isThemeMode, accentColor } from "./theme";
-export type { Palette, ColorScheme, AccentId, ThemeMode } from "./theme";
+export { PALETTES, ACCENTS, DEFAULT_ACCENT, APPEARANCE_SETTING_KEYS, isAccentId, isThemeMode, isOutlineColour, accentColor } from "./theme";
+export type { Palette, ColorScheme, AccentId, ThemeMode, OutlineColour } from "./theme";
 
 export { STATUS_LABEL, summariseStatuses } from "./maintenance/status";
 export type { DueStatus } from "./maintenance/status";
 
 export { BODY_TYPES, DEFAULT_BODY_TYPE, isBodyTypeId, guessBodyType, drawableBodyType } from "./vehicles/body-types";
 export type { BodyTypeId } from "./vehicles/body-types";
-export { DECK_SIZE, splitGarage } from "./vehicles/garage";
+export { DECK_SIZE, moveInGarage, splitGarage } from "./vehicles/garage";
 export type { Garage } from "./vehicles/garage";
-export { ZONE_LABEL, ZONE_OF_SLUG, zoneStatus, groupByZone } from "./maintenance/zones";
+export { ZONE_IDS, ZONE_LABEL, ZONE_OF_SLUG, isZoneId, serviceTypeZone, groupServiceTypes, zoneStatus, groupByZone } from "./maintenance/zones";
 export type { ZoneId, DrawnZoneId, ZoneStatus, ZoneService } from "./maintenance/zones";
 export { FRAME, SILHOUETTES, sportSpokes } from "./vehicles/silhouettes";
 export type { Hit, Silhouette, SilhouetteZone } from "./vehicles/silhouettes";

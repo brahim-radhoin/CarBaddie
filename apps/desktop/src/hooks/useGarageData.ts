@@ -23,6 +23,7 @@ export function useGarageData(vehicle: VehicleRead) {
       status: i.status,
       message: i.message,
       slug: types.find((t) => t.id === i.serviceTypeId)?.slug ?? null,
+      zone: types.find((t) => t.id === i.serviceTypeId)?.zone ?? null,
     }));
     const groups = groupByZone(services, Object.keys(art.zones) as DrawnZoneId[], art.alias);
     const due = items

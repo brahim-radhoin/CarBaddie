@@ -82,8 +82,23 @@ export const DEFAULT_ACCENT: AccentId = "amber";
 
 export type ThemeMode = "system" | "light" | "dark";
 
-/** Device-local app_settings keys (the choice is per device, like reminders). Missing means system / amber. */
-export const APPEARANCE_SETTING_KEYS = { mode: "appearance.mode", accent: "appearance.accent" } as const;
+/**
+ * Device-local app_settings keys (the choice is per device, like reminders). Missing means system,
+ * amber, a neutral outline and a deck that stops at its last card.
+ */
+export const APPEARANCE_SETTING_KEYS = {
+  mode: "appearance.mode",
+  accent: "appearance.accent",
+  outline: "appearance.outline",
+  loopDeck: "appearance.loop_deck",
+} as const;
+
+/** The vehicle outline's stroke: the text colour, or the accent. Status marks keep their own colours. */
+export type OutlineColour = "neutral" | "accent";
+
+export function isOutlineColour(value: unknown): value is OutlineColour {
+  return value === "neutral" || value === "accent";
+}
 
 export function isAccentId(value: unknown): value is AccentId {
   return ACCENTS.some((a) => a.id === value);

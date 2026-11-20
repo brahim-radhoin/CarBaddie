@@ -12,6 +12,8 @@ import { builtinServiceTypeId, findBuiltinServiceTypeByName } from "../service-t
 import { vehicleIdentityKey } from "../vehicles/identity.ts";
 import {
   normaliseVin,
+  validateFieldValues,
+  validateGarageOrder,
   validateIntervalOverride,
   validateMaintenanceLog,
   validateOdometerReading,
@@ -19,7 +21,9 @@ import {
   validateServiceEvent,
   validateServiceType,
   validateVehicle,
+  type DateContext,
 } from "../validation.ts";
+import { todayISO } from "../dates.ts";
 import { DEFAULT_PREFERENCES } from "../units.ts";
 import { seedBuiltinServiceTypes } from "./seed.ts";
 import { transaction } from "./transaction.ts";
@@ -58,12 +62,24 @@ import type {
 } from "../types";
 
 type Row = Record<string, any>;
+const GARAGE_ORDER_KEY = "garage_order";
 type LinkTable = "service_type_resets" | "service_type_suggestions";
 type LinkColumn = "reset_id" | "suggestion_id";
 
 export type Repository = ReturnType<typeof createRepository>;
 
-export function createRepository(db: SqlDriver, w: WriteContext) {
+export interface RepositoryOptions {
+  /** Today as "YYYY-MM-DD" for the date rules (validation.ts). Injectable for tests. */
+  today?: () => string;
+}
+
+/** The fields of `data` whose value differs from the stored row: an edit is only checked for what it changes. */
+function changedFields<T extends object>(data: T, row: Row): Partial<T> {
+  return Object.fromEntries(Object.entries(data).filter(([key, value]) => value !== undefined && row[key] !== value)) as Partial<T>;
+}
+
+export function createRepository(db: SqlDriver, w: WriteContext, options: RepositoryOptions = {}) {
+  const today = options.today ?? (() => todayISO());
   const all = <T = Row>(sql: string, params: SqlValue[] = []) => db.all<T>(sql, params);
   const first = async <T = Row>(sql: string, params: SqlValue[] = []) => (await db.all<T>(sql, params))[0] ?? null;
   const run = (sql: string, params: SqlValue[] = []) => db.run(sql, params);
@@ -71,14 +87,55 @@ export function createRepository(db: SqlDriver, w: WriteContext) {
 
   /** `SET` fragment and values marking a row as written now. */
   const touched = (): [string, SqlValue[]] => ["updated_at = ?, device_id = ?", [w.stamp(), w.deviceId]];
+  /** Writes one synced preference row (the caller owns the transaction). */
+  const writePreference = (key: string, value: string, ifUnset = false) =>
+    run(
+      `INSERT INTO preferences (key, value, updated_at, deleted_at, device_id) VALUES (?, ?, ?, NULL, ?)
+       ON CONFLICT(key) DO ${ifUnset ? "NOTHING" : "UPDATE SET value = excluded.value, deleted_at = NULL, updated_at = excluded.updated_at, device_id = excluded.device_id"}`,
+      [key, value, w.stamp(), w.deviceId],
+    );
   /** `SET` fragment and values tombstoning a row now. */
   const tombstoned = (): [string, SqlValue[]] => {
     const stamp = w.stamp();
     return ["deleted_at = ?, updated_at = ?, device_id = ?", [stamp, stamp, w.deviceId]];
   };
-  /** Trimmed, or null when empty. */
-  const cleanText = (text: string | null | undefined) => (text && text.trim() ? text.trim() : null);
+  /** Without control characters (line breaks and tabs stay), trimmed, or null when empty. */
+  const cleanText = (text: string | null | undefined) => {
+    const t = text?.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, "").trim();
+    return t ? t : null;
+  };
+  /** One line: control characters and line breaks become spaces, runs of spaces one. */
+  const cleanLine = (text: string) => text.replace(/[\u0000-\u001f\u007f]+/g, " ").replace(/ {2,}/g, " ").trim();
   const cleanUnit = cleanText;
+
+  /** Today and the vehicle's model year, for the date rules. */
+  async function dateContext(vehicleId: Id): Promise<DateContext> {
+    const v = await first<{ year: number | null }>("SELECT year FROM vehicles WHERE id = ?", [vehicleId]);
+    return { today: today(), year: v?.year ?? null };
+  }
+
+  /** Checks custom field values against their fields' types; with `logId`, only values that differ from the log's. */
+  async function checkFieldValues(values: CustomFieldValueCreate[] | undefined, logId?: Id): Promise<void> {
+    if (!values?.length) return;
+    const ids = [...new Set(values.map((v) => v.field_id))];
+    const fields = await all<{ id: Id; name: string; field_type: string }>(
+      `SELECT id, name, field_type FROM custom_fields WHERE id IN (${ids.map(() => "?").join(", ")})`,
+      ids,
+    );
+    const byId = new Map(fields.map((f) => [f.id, f]));
+    const stored = logId
+      ? new Map(
+          (await all<{ field_id: Id; value: string }>("SELECT field_id, value FROM custom_field_values WHERE log_id = ? AND deleted_at IS NULL", [logId]))
+            .map((r) => [r.field_id, r.value]),
+        )
+      : new Map<Id, string>();
+    validateFieldValues(
+      values.flatMap((v) => {
+        const f = byId.get(v.field_id);
+        return f && stored.get(v.field_id) !== v.value ? [{ field_id: v.field_id, value: v.value, name: f.name, field_type: f.field_type }] : [];
+      }),
+    );
+  }
 
   // ==================================================================
   // Hydration
@@ -116,6 +173,7 @@ export function createRepository(db: SqlDriver, w: WriteContext) {
     return {
       id: row.id,
       slug: row.slug ?? null,
+      zone: row.zone ?? null,
       name: row.name,
       recommended_interval_km: row.recommended_interval_km,
       recommended_interval_days: row.recommended_interval_days,
@@ -290,7 +348,7 @@ export function createRepository(db: SqlDriver, w: WriteContext) {
     await run(
       `INSERT INTO vehicles (id, make, model, year, vin, initial_mileage, acquisition_date, body_type, is_favorite, updated_at, deleted_at, device_id)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)`,
-      [id, data.make, data.model, data.year ?? null, normaliseVin(data.vin), data.initial_mileage ?? null,
+      [id, cleanLine(data.make), cleanLine(data.model), data.year ?? null, normaliseVin(data.vin), data.initial_mileage ?? null,
         data.acquisition_date ?? null, data.body_type ?? null, data.is_favorite == null ? null : data.is_favorite ? 1 : 0,
         w.stamp(), w.deviceId],
     );
@@ -311,11 +369,11 @@ export function createRepository(db: SqlDriver, w: WriteContext) {
     await run(`UPDATE vehicles SET ${del} WHERE deleted_at IS NULL AND id = ?`, [...delVals, id]);
   }
 
-  async function insertServiceType(id: Id, slug: string | null, name: string, km: number | null, days: number | null) {
+  async function insertServiceType(id: Id, slug: string | null, name: string, km: number | null, days: number | null, zone: string | null = null) {
     await run(
-      `INSERT INTO service_types (id, slug, name, recommended_interval_km, recommended_interval_days, updated_at, deleted_at, device_id)
-       VALUES (?, ?, ?, ?, ?, ?, NULL, ?)`,
-      [id, slug, name, km, days, w.stamp(), w.deviceId],
+      `INSERT INTO service_types (id, slug, name, recommended_interval_km, recommended_interval_days, zone, updated_at, deleted_at, device_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?)`,
+      [id, slug, cleanLine(name), km, days, zone, w.stamp(), w.deviceId],
     );
   }
 
@@ -418,7 +476,7 @@ export function createRepository(db: SqlDriver, w: WriteContext) {
       `INSERT INTO maintenance_logs (id, vehicle_id, event_id, service_type_id, date, mileage, cost_cents, notes,
                                      updated_at, deleted_at, device_id)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)`,
-      [id, vehicleId, eventId, data.service_type_id ?? null, data.date, data.mileage, data.cost_cents, data.notes ?? null,
+      [id, vehicleId, eventId, data.service_type_id ?? null, data.date, data.mileage, data.cost_cents, cleanText(data.notes),
         w.stamp(), w.deviceId],
     );
     for (const cfv of data.custom_field_values ?? []) await insertFieldValue(id, cfv);
@@ -561,13 +619,13 @@ export function createRepository(db: SqlDriver, w: WriteContext) {
           [st.name, st.recommended_interval_km, st.recommended_interval_days, w.stamp(), w.deviceId, id],
         );
       } else {
-        await insertServiceType(id, builtin.slug, st.name, st.recommended_interval_km, st.recommended_interval_days);
+        await insertServiceType(id, builtin.slug, st.name, st.recommended_interval_km, st.recommended_interval_days, st.zone);
       }
       return id;
     }
 
     const id = w.newId();
-    await insertServiceType(id, null, st.name, st.recommended_interval_km, st.recommended_interval_days);
+    await insertServiceType(id, null, st.name, st.recommended_interval_km, st.recommended_interval_days, st.zone);
     return id;
   }
 
@@ -673,17 +731,36 @@ export function createRepository(db: SqlDriver, w: WriteContext) {
     },
 
     async createVehicle(data: VehicleCreate): Promise<VehicleRead> {
-      validateVehicle(data);
+      validateVehicle(data, false, { today: today(), year: data.year });
       const id = await tx(() => insertVehicle(data));
       return (await repo.getVehicleById(id))!;
     },
 
     async updateVehicle(id: Id, data: VehicleUpdate): Promise<VehicleRead> {
-      validateVehicle(data, true);
+      const row = await first("SELECT * FROM vehicles WHERE id = ? AND deleted_at IS NULL", [id]);
+      if (!row) throw new Error("This vehicle no longer exists.");
+      const changed = changedFields(data, row);
+      // A new model year must not leave its history older than the vehicle.
+      let earliestRecord: string | null = null;
+      if (changed.year != null) {
+        const oldest = await first<{ date: string | null }>(
+          `SELECT MIN(date) AS date FROM (
+             SELECT date FROM maintenance_logs WHERE vehicle_id = ? AND deleted_at IS NULL
+             UNION ALL SELECT date FROM odometer_readings WHERE vehicle_id = ? AND deleted_at IS NULL)`,
+          [id, id],
+        );
+        const acquired = changed.acquisition_date === undefined ? row.acquisition_date : null;
+        earliestRecord = [oldest?.date, acquired].filter((d): d is string => !!d).sort()[0] ?? null;
+      }
+      validateVehicle(changed, true, {
+        today: today(),
+        year: data.year !== undefined ? data.year : row.year,
+        earliestRecord,
+      });
       const sets: string[] = [];
       const vals: SqlValue[] = [];
-      if (data.make !== undefined) { sets.push("make = ?"); vals.push(data.make); }
-      if (data.model !== undefined) { sets.push("model = ?"); vals.push(data.model); }
+      if (data.make !== undefined) { sets.push("make = ?"); vals.push(cleanLine(data.make)); }
+      if (data.model !== undefined) { sets.push("model = ?"); vals.push(cleanLine(data.model)); }
       if (data.year !== undefined) { sets.push("year = ?"); vals.push(data.year); }
       if (data.vin !== undefined) { sets.push("vin = ?"); vals.push(normaliseVin(data.vin)); }
       if (data.initial_mileage !== undefined) { sets.push("initial_mileage = ?"); vals.push(data.initial_mileage); }
@@ -726,7 +803,7 @@ export function createRepository(db: SqlDriver, w: WriteContext) {
       validateServiceType(data);
       const id = w.newId();
       await tx(async () => {
-        await insertServiceType(id, null, data.name, data.recommended_interval_km ?? null, data.recommended_interval_days ?? null);
+        await insertServiceType(id, null, data.name, data.recommended_interval_km ?? null, data.recommended_interval_days ?? null, data.zone ?? null);
         await syncFields(id, data.fields);
         await setLinks("service_type_resets", "reset_id", id, data.resets ?? []);
         await setLinks("service_type_suggestions", "suggestion_id", id, data.suggestions ?? []);
@@ -735,13 +812,16 @@ export function createRepository(db: SqlDriver, w: WriteContext) {
     },
 
     async updateServiceType(id: Id, data: ServiceTypeUpdate): Promise<ServiceTypeRead> {
-      validateServiceType(data, true);
+      const row = await first("SELECT * FROM service_types WHERE id = ? AND deleted_at IS NULL", [id]);
+      // A part a newer app wrote is not rejected when the form sends it back unchanged.
+      validateServiceType(row ? { ...data, zone: data.zone === row.zone ? undefined : data.zone } : data, true);
       await tx(async () => {
         const sets: string[] = [];
         const vals: SqlValue[] = [];
-        if (data.name !== undefined) { sets.push("name = ?"); vals.push(data.name); }
+        if (data.name !== undefined) { sets.push("name = ?"); vals.push(cleanLine(data.name)); }
         if (data.recommended_interval_km !== undefined) { sets.push("recommended_interval_km = ?"); vals.push(data.recommended_interval_km); }
         if (data.recommended_interval_days !== undefined) { sets.push("recommended_interval_days = ?"); vals.push(data.recommended_interval_days); }
+        if (data.zone !== undefined) { sets.push("zone = ?"); vals.push(data.zone); }
         if (sets.length > 0) {
           const [touch, touchVals] = touched();
           await run(`UPDATE service_types SET ${sets.join(", ")}, ${touch} WHERE id = ? AND deleted_at IS NULL`, [...vals, ...touchVals, id]);
@@ -793,20 +873,23 @@ export function createRepository(db: SqlDriver, w: WriteContext) {
     },
 
     async createMaintenanceLog(vehicleId: Id, data: MaintenanceLogCreate): Promise<MaintenanceLogRead> {
-      validateMaintenanceLog(data);
+      validateMaintenanceLog(data, false, await dateContext(vehicleId));
+      await checkFieldValues(data.custom_field_values);
       const id = await tx(() => insertLog(vehicleId, data));
       return (await repo.getLogById(id))!;
     },
 
     async updateMaintenanceLog(logId: Id, data: MaintenanceLogUpdate): Promise<MaintenanceLogRead> {
-      validateMaintenanceLog(data, true);
+      const row = await first("SELECT * FROM maintenance_logs WHERE id = ? AND deleted_at IS NULL", [logId]);
+      validateMaintenanceLog(row ? changedFields(data, row) : data, true, row ? await dateContext(row.vehicle_id) : undefined);
+      await checkFieldValues(data.custom_field_values, logId);
       await tx(async () => {
         const sets: string[] = [];
         const vals: SqlValue[] = [];
         if (data.date !== undefined) { sets.push("date = ?"); vals.push(data.date); }
         if (data.mileage !== undefined) { sets.push("mileage = ?"); vals.push(data.mileage); }
         if (data.cost_cents !== undefined) { sets.push("cost_cents = ?"); vals.push(data.cost_cents); }
-        if (data.notes !== undefined) { sets.push("notes = ?"); vals.push(data.notes); }
+        if (data.notes !== undefined) { sets.push("notes = ?"); vals.push(cleanText(data.notes)); }
         if (data.service_type_id !== undefined) { sets.push("service_type_id = ?"); vals.push(data.service_type_id); }
         if (sets.length > 0) {
           const [touch, touchVals] = touched();
@@ -841,7 +924,8 @@ export function createRepository(db: SqlDriver, w: WriteContext) {
 
     /** Records a visit and its items (one maintenance log each, at the visit's date and mileage). */
     async createServiceEvent(vehicleId: Id, data: ServiceEventCreate): Promise<ServiceEventRead> {
-      validateServiceEvent(data);
+      validateServiceEvent(data, false, await dateContext(vehicleId));
+      for (const item of data.items ?? []) await checkFieldValues(item.custom_field_values);
       const id = await tx(async () => {
         const eventId = await insertEvent(vehicleId, data);
         for (const item of data.items) {
@@ -854,7 +938,10 @@ export function createRepository(db: SqlDriver, w: WriteContext) {
 
     /** Updates the visit's header (a new date or mileage applies to its items) and, if given, its item list. */
     async updateServiceEvent(id: Id, data: ServiceEventUpdate): Promise<ServiceEventRead> {
-      validateServiceEvent(data, true);
+      const row = await first("SELECT * FROM service_events WHERE id = ? AND deleted_at IS NULL", [id]);
+      const { items, ...header } = data;
+      validateServiceEvent({ ...(row ? changedFields(header, row) : header), items }, true, row ? await dateContext(row.vehicle_id) : undefined);
+      for (const item of items ?? []) await checkFieldValues(item.custom_field_values, item.id);
       await tx(async () => {
         const event = await first("SELECT * FROM service_events WHERE id = ? AND deleted_at IS NULL", [id]);
         if (!event) throw new Error("This visit no longer exists.");
@@ -898,13 +985,14 @@ export function createRepository(db: SqlDriver, w: WriteContext) {
     getOdometerReadings: (vehicleId: Id): Promise<OdometerReadingRead[]> => listReadings(vehicleId),
 
     async addOdometerReading(vehicleId: Id, data: OdometerReadingCreate): Promise<OdometerReadingRead> {
-      validateOdometerReading(data);
+      validateOdometerReading(data, false, await dateContext(vehicleId));
       const id = await tx(() => insertReading(vehicleId, data));
       return (await getReading(id))!;
     },
 
     async updateOdometerReading(id: Id, data: OdometerReadingUpdate): Promise<OdometerReadingRead> {
-      validateOdometerReading(data, true);
+      const row = await first("SELECT * FROM odometer_readings WHERE id = ? AND deleted_at IS NULL", [id]);
+      validateOdometerReading(row ? changedFields(data, row) : data, true, row ? await dateContext(row.vehicle_id) : undefined);
       await tx(async () => {
         const sets: string[] = [];
         const vals: SqlValue[] = [];
@@ -1058,13 +1146,28 @@ export function createRepository(db: SqlDriver, w: WriteContext) {
     /** Only sets it if the device has no value yet (adopting an old per-device setting). */
     async setPreference<K extends keyof Preferences>(key: K, value: Preferences[K], opts: { ifUnset?: boolean } = {}): Promise<void> {
       validatePreference(key, value);
-      await tx(() =>
-        run(
-          `INSERT INTO preferences (key, value, updated_at, deleted_at, device_id) VALUES (?, ?, ?, NULL, ?)
-           ON CONFLICT(key) DO ${opts.ifUnset ? "NOTHING" : "UPDATE SET value = excluded.value, deleted_at = NULL, updated_at = excluded.updated_at, device_id = excluded.device_id"}`,
-          [key, value, w.stamp(), w.deviceId],
-        ),
-      );
+      await tx(() => writePreference(key, value, opts.ifUnset));
+    },
+
+    /**
+     * The order the user arranged the garage in (vehicle ids; see vehicles/garage.ts). A synced
+     * preference row, so apps that don't know it keep it and pass it on. Anything unreadable is
+     * treated as no order.
+     */
+    async getGarageOrder(): Promise<Id[]> {
+      const row = await first<{ value: string }>("SELECT value FROM preferences WHERE key = ? AND deleted_at IS NULL", [GARAGE_ORDER_KEY]);
+      if (!row) return [];
+      try {
+        const parsed: unknown = JSON.parse(row.value);
+        return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === "string") : [];
+      } catch {
+        return [];
+      }
+    },
+
+    async setGarageOrder(ids: Id[]): Promise<void> {
+      validateGarageOrder(ids);
+      await tx(() => writePreference(GARAGE_ORDER_KEY, JSON.stringify(ids)));
     },
 
     // --- Device-local settings (not synced) ---

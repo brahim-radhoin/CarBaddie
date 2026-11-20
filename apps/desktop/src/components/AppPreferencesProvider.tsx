@@ -1,9 +1,21 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
-import { applyAccent, readStoredAccent, storeAccent, DEFAULT_ACCENT, type AccentId } from "@/lib/accent";
+import {
+  applyAccent,
+  applyOutline,
+  readStoredAccent,
+  readStoredOutline,
+  storeAccent,
+  storeOutline,
+  DEFAULT_ACCENT,
+  type AccentId,
+  type OutlineColour,
+} from "@/lib/accent";
 
 type AppPreferencesContextType = {
   accent: AccentId;
   setAccent: (id: AccentId) => void;
+  outline: OutlineColour;
+  setOutline: (outline: OutlineColour) => void;
   backgroundImage: string | null;
   /** Returns false (and keeps the old value) when the address is not an embedded or local image. */
   setBackgroundImage: (url: string | null) => boolean;
@@ -30,6 +42,12 @@ export function AppPreferencesProvider({ children }: { children: React.ReactNode
     storeAccent(accent);
   }, [accent]);
 
+  const [outline, setOutline] = useState<OutlineColour>(readStoredOutline);
+  useEffect(() => {
+    applyOutline(outline);
+    storeOutline(outline);
+  }, [outline]);
+
   useEffect(() => {
     if (backgroundImage) {
       document.body.style.backgroundImage = `url('${backgroundImage}')`;
@@ -52,10 +70,11 @@ export function AppPreferencesProvider({ children }: { children: React.ReactNode
 
   const resetPreferences = () => {
     setAccentState(DEFAULT_ACCENT);
+    setOutline("neutral");
     setBackgroundImageState(null);
   };
 
-  const value = { accent, setAccent: setAccentState, backgroundImage, setBackgroundImage, resetPreferences };
+  const value = { accent, setAccent: setAccentState, outline, setOutline, backgroundImage, setBackgroundImage, resetPreferences };
 
   return <AppPreferencesContext.Provider value={value}>{children}</AppPreferencesContext.Provider>;
 }

@@ -22,7 +22,15 @@ CI (.github/workflows/ci.yml): frozen install, typecheck, core tests.
 - All data access goes through `createRepository` (`packages/core/src/db/repository.ts`) over a `SqlDriver`;
   apps only adapt their SQLite (`apps/mobile/src/db/schema.ts`, `apps/desktop/src/db.ts`) and call
   `openRepository()`. Repository methods own their transaction (`db/transaction.ts`, queued, not nestable):
-  internal helpers never start one. User edits are validated in core (`validation.ts`, `ValidationError`).
+  internal helpers never start one. User edits are validated in core (`validation.ts`, `ValidationError`):
+  real calendar dates; visit, log, odometer and acquisition dates not after today nor before 1 January of
+  model year − 1 (`vehicleStartDate`); a model year 1886..next year that leaves no history older than the
+  vehicle; mileage under 2,000,000 km; custom values matching their field type (custom dates may be future);
+  text trimmed, control characters stripped, length-capped. Updates check only fields whose value changes
+  (forms resend everything), so old records that break a newer rule stay editable. Backup import and sync
+  are never validated. Forms prevent first (calendar/input `min`/`max`, `parseWholeNumber`, `useHistoryChecks`).
+  An odometer reading out of step with the vehicle's others is a warning under the field (`odometerConflict`,
+  `describeOdometerConflict`), never an error: odometers get replaced.
 - Schema changes go in `packages/core/src/db/migrations.ts` as a new version (`PRAGMA user_version`); never
   edit a shipped migration. Every synced row: UUID `id`, `updated_at` (HLC string), `deleted_at` tombstone,
   `device_id`. Reads filter `deleted_at IS NULL`; deletes tombstone and cascade by hand (core repository.ts).
@@ -60,26 +68,42 @@ colour, mode, accent). Layout may differ (sidebar vs tabs, popover vs sheet).
   desktop mirrors it in `apps/desktop/src/index.css` and `test/theme.test.ts` fails when the two differ or a
   text colour drops under 4.5:1. Change a colour in core first, then the CSS.
 - Primary is ink on light and off-white on dark; the accent only marks focus, selection, links, the main
-  chart series and the active menu item. Status colours (`danger`, `warn`, `ok`) carry meaning only.
+  chart series and the active menu item, and the vehicle outline when the user picks "Accent" for it.
+  Status colours (`danger`, `warn`, `ok`) carry meaning only.
 - Due state: the engine's `message` says when, `STATUS_LABEL` / `summariseStatuses` (core
   `maintenance/status.ts`) say which bucket (Overdue, Due soon, On track). A status dot in the status colour
   is the signature, used wherever something is due.
 - Dates: `formatISO` / `todayISO` / `parseISO` / `daysBetweenISO` from core (`dates.ts`). Never
   `toISOString()` or `new Date("YYYY-MM-DD")` for a calendar date (UTC off-by-one).
 - Words: "service type" (not category), "visit" (one garage visit) and "log" (one service in it), "odometer",
-  "Total spent". Sentence case everywhere, no jargon (telemetry, fleet), no exclamation marks, short UI strings
+  "Total spent", "part of the vehicle" (what service types are grouped by; the outline's parts), "Vehicle outline". Sentence case everywhere, no jargon (telemetry, fleet), no exclamation marks, short UI strings
   end without a period. Nav: Vehicles, Service types, Settings. Settings groups: Sync, Preferences, Appearance,
   Data and backup, Danger zone.
-- Appearance: mode (system, light, dark) and accent are chosen per device. Desktop keeps them in localStorage
-  (applied before first paint), mobile in app_settings (`appearance.*`). Syncing the accent between devices
-  would mean a new synced preference (core types, backup schema, sync upgrade).
+- Appearance: mode (system, light, dark), accent and vehicle outline colour (Neutral = text colour, Accent) are
+  chosen per device. Desktop keeps them in localStorage (applied before first paint as `data-accent` /
+  `data-outline` → `--outline`), mobile in app_settings (`appearance.*`, `APPEARANCE_SETTING_KEYS`). "Loop the
+  garage deck" is phone-only (the desktop deck is a grid). Syncing the accent between devices would mean a new
+  synced preference (core types, backup schema, sync upgrade).
 - Type: weights 400 to 600, nothing under 12px, tabular figures for numbers. Touch targets 48dp on mobile.
 - Garage deck (mobile home): favourites are big swipeable cards, the rest sit behind one row above them, Add visit
   is a bar at the bottom for the card in view. `vehicles.body_type` (a string; unknown kinds pass through) picks the
   outline from `packages/core/src/vehicles/silhouettes.ts` (data both apps can render); `is_favorite` NULL means
-  unset and resolves identically on every device (`vehicles/garage.ts`). Service types map to parts of the outline
-  by built-in slug (`maintenance/zones.ts`). Outline colour is one token (`outline` in `apps/mobile/src/theme.ts`).
-- Desktop fonts are bundled (@fontsource-variable/geist); mobile uses the system font.
+  unset and resolves identically on every device (`vehicles/garage.ts`). Service types sit in a part of the vehicle
+  (`maintenance/zones.ts`): `service_types.zone` (v9, a string, NULL = unset → built-in slug's part, else "other";
+  forms send it only when the user picks one), resolved by `serviceTypeZone`; lists and pickers group by it
+  (`groupServiceTypes`) and the outline marks it. Outline colour is one token (`outline` in
+  `apps/mobile/src/theme.ts`, `--outline` on desktop). With "Loop the garage deck" the deck is repeated
+  (`LOOP_ROUNDS`) and opened in the middle; cards scale and fade near the centre (off under reduce motion).
+- Geist on both apps, bundled: desktop @fontsource-variable/geist, mobile @expo-google-fonts/geist (400/500/600
+  files, `apps/mobile/src/fonts.ts`). Mobile text goes through Themed `Text`/`TextInput`, which turn the weight into
+  the family (no `fontWeight` left); navigation uses `font()` / the theme's `fonts`. Why: on the user's Android phone
+  semi-bold labels lost their end ("Delet") and centred text sat left, i.e. measured narrower than drawn. Known
+  causes it targets: OEM system fonts + weight, a Fabric measure paint left on an icon font (react/react-native
+  #57950), dropped variation axes (fixed in RN 0.88.1). Not yet confirmed on the phone.
+- Garage order: synced preference `garage_order` (JSON list of vehicle ids; `getGarageOrder`/`setGarageOrder`,
+  no migration: older apps keep and pass on the row). `splitGarage(vehicles, order)` only sorts the deck and the
+  list; favourites still decide the deck. Arranged on mobile (Arrange garage screen) and desktop (Arrange sheet).
+  Not in backups (no preference is).
 
 ## Schema and sync compatibility (published app: devices run different versions)
 

@@ -1,4 +1,5 @@
-import { BODY_TYPES, drawableBodyType, guessBodyType, splitGarage } from "@carbaddie/core";
+import { BODY_TYPES, drawableBodyType, guessBodyType, parseWholeNumber, splitGarage, todayISO, vehicleStartDate } from "@carbaddie/core";
+import { toast } from "sonner";
 import { useState, useEffect, FormEvent } from "react";
 import { VehicleCreate, VehicleRead } from "../types";
 import { useVehicles } from "../api";
@@ -98,12 +99,17 @@ export function VehicleForm({ initialData, isSubmitting, backendErrors, onSubmit
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
+    const initialMileage = formData.initial_mileage.trim() ? parseWholeNumber(formData.initial_mileage) : null;
+    if (formData.initial_mileage.trim() && initialMileage === null) {
+      toast.error("Enter the initial mileage as a whole number, e.g. 50000");
+      return;
+    }
     const payload: VehicleCreate = {
       make: formData.make.trim(),
       model: formData.model.trim(),
       year: formData.year ? parseInt(formData.year, 10) : undefined,
       vin: formData.vin ? formData.vin.trim() || undefined : undefined,
-      initial_mileage: formData.initial_mileage ? units.fromDisplay(parseInt(formData.initial_mileage, 10), initialData?.initial_mileage) : undefined,
+      initial_mileage: initialMileage != null ? units.fromDisplay(initialMileage, initialData?.initial_mileage) : undefined,
       acquisition_date: formData.acquisition_date || undefined,
       ...(mode === "edit" ? (pickedType !== null ? { body_type: pickedType } : {}) : { body_type: shownType }),
       ...(mode === "edit" && pickedFavourite !== null ? { is_favorite: pickedFavourite } : {}),
@@ -278,6 +284,8 @@ export function VehicleForm({ initialData, isSubmitting, backendErrors, onSubmit
                 type="date"
                 value={formData.acquisition_date || ""}
                 onChange={handleChange}
+                min={vehicleStartDate(selectedYear) ?? undefined}
+                max={todayISO()}
                 className={cn("h-8 text-xs font-mono bg-background", getFieldError("acquisition_date") && "border-destructive")}
               />
               {getFieldError("acquisition_date") && (

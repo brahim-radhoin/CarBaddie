@@ -13,6 +13,7 @@ const serviceTypes: ServiceTypeRead[] = [
   {
     id: ST_OIL,
     slug: "oil-change",
+    zone: null,
     name: "Oil Change",
     recommended_interval_km: 8000,
     recommended_interval_days: 180,
@@ -23,7 +24,7 @@ const serviceTypes: ServiceTypeRead[] = [
     resets: [ST_FILTER],
     suggestions: [],
   },
-  { id: ST_FILTER, slug: null, name: "Filter", fields: [], resets: [], suggestions: [], recommended_interval_km: null },
+  { id: ST_FILTER, slug: null, zone: null, name: "Filter", fields: [], resets: [], suggestions: [], recommended_interval_km: null },
 ];
 
 const vehicles: VehicleRead[] = [

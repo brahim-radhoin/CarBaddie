@@ -2,11 +2,20 @@
  * Learn more about Light and Dark modes:
  * https://docs.expo.io/guides/color-schemes/
  */
-import { Text as DefaultText, View as DefaultView, type TextProps as RNTextProps, type ViewProps as RNViewProps } from 'react-native';
+import {
+  StyleSheet,
+  Text as DefaultText,
+  TextInput as DefaultTextInput,
+  View as DefaultView,
+  type TextInputProps,
+  type TextProps as RNTextProps,
+  type ViewProps as RNViewProps,
+} from 'react-native';
 
 import { useColorScheme } from './useColorScheme';
 
 import Colors from '@/constants/Colors';
+import { withFont } from '@/src/fonts';
 
 type ThemeProps = {
   lightColor?: string;
@@ -30,11 +39,17 @@ export function useThemeColor(
   }
 }
 
+/** Every text in the app: theme colour, and the font file for its weight (see src/fonts.ts). */
 export function Text(props: TextProps) {
   const { style, lightColor, darkColor, ...otherProps } = props;
   const color = useThemeColor({ light: lightColor, dark: darkColor }, 'text');
 
-  return <DefaultText style={[{ color }, style]} {...otherProps} />;
+  return <DefaultText style={withFont(StyleSheet.flatten([{ color }, style]) ?? {})} {...otherProps} />;
+}
+
+/** React Native's TextInput in the app font. */
+export function TextInput({ style, ...props }: TextInputProps) {
+  return <DefaultTextInput style={withFont(StyleSheet.flatten(style) ?? {})} {...props} />;
 }
 
 export function View(props: ViewProps) {

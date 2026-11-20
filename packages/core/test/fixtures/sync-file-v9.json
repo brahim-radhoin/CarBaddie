@@ -1,0 +1,42 @@
+{
+  "format": "carbaddie-sync",
+  "version": 1,
+  "kind": "changes",
+  "device_id": "fixture-device-v9",
+  "seq": 1,
+  "schema_version": 9,
+  "min_reader": 7,
+  "created_at": "2026-11-19T22:00:00.000Z",
+  "tables": {
+    "vehicles": [
+      {
+        "id": "01a1ee56-5e0c-758f-9b4f-358919cf32a6",
+        "make": "Ford",
+        "model": "Fiesta",
+        "year": 2003,
+        "vin": null,
+        "initial_mileage": null,
+        "acquisition_date": null,
+        "updated_at": "001795000000015-000000-fixture-device-v9",
+        "deleted_at": null,
+        "device_id": "fixture-device-v9",
+        "merged_into": null,
+        "body_type": "car",
+        "is_favorite": 1
+      }
+    ],
+    "service_types": [
+      {
+        "id": "01a1ee56-5e06-70ab-8dea-a49d0c883589",
+        "slug": null,
+        "name": "Wheel bearings",
+        "recommended_interval_km": 100000,
+        "recommended_interval_days": null,
+        "updated_at": "001795000000009-000000-fixture-device-v9",
+        "deleted_at": null,
+        "device_id": "fixture-device-v9",
+        "zone": "wheels"
+      }
+    ]
+  }
+}

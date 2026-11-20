@@ -41,6 +41,7 @@ export const queryKeys = {
     forVehicle: (vehicleId: string) => ["summaries", String(vehicleId)] as const,
   },
   preferences: () => ["preferences"] as const,
+  garageOrder: () => ["preferences", "garage_order"] as const,
 };
 
 // ====================================================================
@@ -62,6 +63,31 @@ export function useSetPreference() {
       qc.invalidateQueries(); // every money and distance on screen depends on these
       triggerBackgroundCloudPush();
     },
+  });
+}
+
+/** The order the user arranged the garage in (synced; see core vehicles/garage.ts). */
+export function useGarageOrder() {
+  return useQuery<string[]>({
+    queryKey: queryKeys.garageOrder(),
+    queryFn: () => repo.getGarageOrder(),
+  });
+}
+
+export function useSetGarageOrder() {
+  const qc = useQueryClient();
+  return useMutation<void, Error, string[], { previous?: string[] }>({
+    mutationFn: (ids) => repo.setGarageOrder(ids),
+    // Shown at once, so the arrows feel direct; put back if the write fails.
+    onMutate: async (ids) => {
+      await qc.cancelQueries({ queryKey: queryKeys.garageOrder() });
+      const previous = qc.getQueryData<string[]>(queryKeys.garageOrder());
+      qc.setQueryData(queryKeys.garageOrder(), ids);
+      return { previous };
+    },
+    onError: (_e, _ids, context) => qc.setQueryData(queryKeys.garageOrder(), context?.previous),
+    onSuccess: () => triggerBackgroundCloudPush(),
+    onSettled: () => qc.invalidateQueries({ queryKey: queryKeys.garageOrder() }),
   });
 }
 

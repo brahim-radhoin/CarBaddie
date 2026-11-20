@@ -22,6 +22,7 @@ function serviceType(id: number, name: string, { resets = [], ...opts }: Interva
   return {
     id: String(id),
     slug: null,
+    zone: null,
     name,
     fields: [],
     resets: resets.map(String),

@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { openRepository } from "../src/db/open.ts";
 import { drawableBodyType, guessBodyType, isBodyTypeId } from "../src/vehicles/body-types.ts";
-import { splitGarage } from "../src/vehicles/garage.ts";
+import { moveInGarage, splitGarage } from "../src/vehicles/garage.ts";
 import { groupByZone, zoneStatus } from "../src/maintenance/zones.ts";
 import { BUILTIN_SERVICE_TYPES } from "../src/service-types/builtin.ts";
 import { ZONE_OF_SLUG } from "../src/maintenance/zones.ts";
@@ -45,6 +45,62 @@ test("two devices with the same vehicles see the same deck, whatever order they 
   const two = splitGarage([...list].reverse());
   assert.deepEqual(one.deck.map((x) => x.id), two.deck.map((x) => x.id));
   assert.deepEqual(one.others.map((x) => x.id), two.others.map((x) => x.id));
+});
+
+// ── the order the user arranged ─────────────────────────────────────────────────────────────
+
+const ids = (g: { deck: { id: string }[]; others: { id: string }[] }) => [g.deck.map((x) => x.id), g.others.map((x) => x.id)];
+
+test("the arranged order sorts the deck and the list but never changes what is on the deck", () => {
+  const list = [v("a"), v("b"), v("c"), v("d"), v("e")];
+  assert.deepEqual(ids(splitGarage(list, ["c", "e", "a"])), [["c", "a", "b"], ["e", "d"]]);
+  // No order is the order from before there was one.
+  assert.deepEqual(ids(splitGarage(list, [])), ids(splitGarage(list)));
+  // Ids that are gone are skipped, a repeated id counts once, vehicles not named follow by age.
+  assert.deepEqual(ids(splitGarage(list, ["gone", "b", "b", "a"])), [["b", "a", "c"], ["d", "e"]]);
+  // The vehicle promoted to keep the deck from being empty doesn't depend on the order either.
+  const unfavoured = [v("a", false), v("b", false)];
+  assert.deepEqual(ids(splitGarage(unfavoured, ["b"])), [["a"], ["b"]]);
+});
+
+test("moving a vehicle swaps it with its neighbour in its own group, and saving that shows it so", () => {
+  const list = [v("a", true), v("b", true), v("c", false), v("d", false)];
+  const garage = splitGarage(list);
+  const order = moveInGarage(garage, "b", -1)!;
+  assert.deepEqual(ids(splitGarage(list, order)), [["b", "a"], ["c", "d"]]);
+  assert.deepEqual(ids(splitGarage(list, moveInGarage(garage, "c", 1)!)), [["a", "b"], ["d", "c"]]);
+  assert.equal(moveInGarage(garage, "a", -1), null, "already first on the deck");
+  assert.equal(moveInGarage(garage, "c", -1), null, "the list's first doesn't jump onto the deck");
+  assert.equal(moveInGarage(garage, "d", 1), null);
+});
+
+test("the garage order syncs, and an unreadable stored value is no order", async () => {
+  const files = new Map<string, { name: string; content: string }>();
+  let n = 0;
+  const drive = {
+    list: async () => [...files].map(([id, f]) => ({ id, name: f.name })),
+    read: async (f: { id: string }) => JSON.parse(files.get(f.id)!.content),
+    create: async (name: string, c: unknown) => void files.set(String(++n), { name, content: JSON.stringify(c) }),
+    remove: async (f: { id: string }) => void files.delete(f.id),
+  };
+  const aDb = openTestDb();
+  const a = await openRepository(aDb, clock);
+  const b = await open();
+  assert.deepEqual(await a.repo.getGarageOrder(), []);
+  const one = await a.repo.createVehicle({ make: "Ford", model: "Fiesta" });
+  const two = await a.repo.createVehicle({ make: "Ford", model: "Puma" });
+  await a.repo.setGarageOrder([two.id, one.id]);
+  await a.sync(drive);
+  await b.sync(drive);
+  assert.deepEqual(await b.repo.getGarageOrder(), [two.id, one.id]);
+  assert.deepEqual(splitGarage(await b.repo.getAllVehicles(), await b.repo.getGarageOrder()).deck.map((x) => x.id), [two.id, one.id]);
+  // It is a preference row the other preferences don't see.
+  assert.deepEqual(await b.repo.getPreferences(), { currency: "USD", distance_unit: "km" });
+
+  await assert.rejects(a.repo.setGarageOrder([one.id, one.id]), ValidationError);
+  await assert.rejects(a.repo.setGarageOrder("nope" as unknown as string[]), ValidationError);
+  await aDb.run("UPDATE preferences SET value = 'not json' WHERE key = 'garage_order'");
+  assert.deepEqual(await a.repo.getGarageOrder(), []);
 });
 
 // ── body type ───────────────────────────────────────────────────────────────────────────────

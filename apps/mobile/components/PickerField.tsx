@@ -4,18 +4,24 @@ import {
   Modal,
   Pressable,
   StyleSheet,
-  TextInput,
   View,
   type StyleProp,
   type ViewStyle,
 } from "react-native";
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Text } from "@/components/Themed";
+import { groupServiceTypes } from "@carbaddie/core";
+import { Text, TextInput } from "@/components/Themed";
 import { Icon } from "@/components/Controls";
 import { TOUCH, useTheme } from "@/src/theme";
 
-export type PickerOption = { value: string; label: string; hint?: string };
+/** `group`: options next to each other with the same group get one heading above them. */
+export type PickerOption = { value: string; label: string; hint?: string; group?: string };
+
+/** Service types as options, under the part of the vehicle they belong to. */
+export function serviceTypeOptions(types: readonly { id: string; name: string; slug: string | null; zone: string | null }[]): PickerOption[] {
+  return groupServiceTypes(types).flatMap((g) => g.types.map((t) => ({ value: t.id, label: t.name, group: g.label })));
+}
 
 /**
  * Choose one option from a list that can be long. Shows the current choice in a field and opens a
@@ -116,8 +122,13 @@ export function PickerField({
                 ) : undefined
               }
               ListEmptyComponent={<Text style={[styles.empty, { color: colors.textSecondary }]}>Nothing matches</Text>}
-              renderItem={({ item }) => (
-                <Row label={item.label} hint={item.hint} selected={item.value === value} onPress={() => choose(item.value)} />
+              renderItem={({ item, index }) => (
+                <>
+                  {item.group && item.group !== shown[index - 1]?.group && (
+                    <Text style={[styles.group, { color: colors.textMuted }]} accessibilityRole="header">{item.group}</Text>
+                  )}
+                  <Row label={item.label} hint={item.hint} selected={item.value === value} onPress={() => choose(item.value)} />
+                </>
               )}
             />
           </View>
@@ -169,4 +180,5 @@ const styles = StyleSheet.create({
   rowLabel: { fontSize: 15 },
   rowHint: { fontSize: 12, marginTop: 2 },
   empty: { textAlign: "center", paddingVertical: 24, fontSize: 14 },
+  group: { fontSize: 12, fontWeight: "600", paddingTop: 16, paddingBottom: 4 },
 });

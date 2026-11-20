@@ -6,15 +6,17 @@ import { useNavigate } from "react-router-dom";
 import {
   BODY_TYPES,
   formatISO,
+  moveInGarage,
   STATUS_LABEL,
   summariseStatuses,
   ZONE_LABEL,
   zoneStatus,
   type DrawnZoneId,
+  type Garage,
   type ZoneId,
   type ZoneService,
 } from "@carbaddie/core";
-import { useVisitsForVehicle } from "../api";
+import { useSetGarageOrder, useVisitsForVehicle } from "../api";
 import { useGarageData } from "../hooks/useGarageData";
 import { useUnits } from "../hooks/useUnits";
 import type { VehicleRead } from "../types";
@@ -22,7 +24,7 @@ import { VehicleOutline } from "./VehicleOutline";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
-import { Plus } from "lucide-react";
+import { ArrowDown, ArrowUp, Plus } from "lucide-react";
 
 export type PartsTarget = { vehicle: VehicleRead; zone: ZoneId | "due" | "parts" };
 
@@ -210,6 +212,55 @@ export function VehiclePartsPanel({ vehicle }: { vehicle: VehicleRead }) {
       </div>
       <PartsSheet target={target} onClose={() => setTarget(null)} />
     </div>
+  );
+}
+
+/**
+ * Arrange the garage: the order of the deck cards and of the other vehicles, as the phone's
+ * Arrange garage screen. The order is a synced preference; what is on the deck stays the
+ * favourite switch's job.
+ */
+export function ArrangeSheet({ garage, open, onClose }: { garage: Garage<VehicleRead>; open: boolean; onClose: () => void }) {
+  const setOrder = useSetGarageOrder();
+  const move = (id: string, step: -1 | 1) => {
+    const next = moveInGarage(garage, id, step);
+    if (next) setOrder.mutate(next);
+  };
+  const group = (title: string, list: VehicleRead[]) =>
+    list.length > 0 && (
+      <section className="space-y-2">
+        <h3 className="text-xs font-medium text-muted-foreground">{title}</h3>
+        <ul className="divide-y divide-border rounded-lg border border-border">
+          {list.map((v, i) => {
+            const name = `${v.make} ${v.model}`;
+            return (
+              <li key={v.id} className="flex min-h-12 items-center gap-1 pl-3 pr-1.5">
+                <span className="min-w-0 flex-1 truncate text-sm text-foreground">{name}</span>
+                <Button variant="ghost" size="icon" className="h-8 w-8" aria-label={`Move ${name} earlier`} disabled={i === 0} onClick={() => move(v.id, -1)}>
+                  <ArrowUp className="h-4 w-4" />
+                </Button>
+                <Button variant="ghost" size="icon" className="h-8 w-8" aria-label={`Move ${name} later`} disabled={i === list.length - 1} onClick={() => move(v.id, 1)}>
+                  <ArrowDown className="h-4 w-4" />
+                </Button>
+              </li>
+            );
+          })}
+        </ul>
+      </section>
+    );
+  return (
+    <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
+      <SheetContent className="gap-0 overflow-y-auto sm:max-w-md">
+        <SheetHeader>
+          <SheetTitle>Arrange garage</SheetTitle>
+          <SheetDescription>The first card is the one the garage opens on. The order is the same on all your devices.</SheetDescription>
+        </SheetHeader>
+        <div className="space-y-5 px-4 pb-6">
+          {group("Garage deck", garage.deck)}
+          {group("Other vehicles", garage.others)}
+        </div>
+      </SheetContent>
+    </Sheet>
   );
 }
 

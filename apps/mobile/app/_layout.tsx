@@ -9,6 +9,7 @@ import { useColorScheme } from "@/components/useColorScheme";
 import { useAutoSync } from "@/src/hooks/useAutoSync";
 import { useReminders } from "@/src/hooks/useReminders";
 import { navigationTheme } from "@/src/theme";
+import { FONT_FILES } from "@/src/fonts";
 import { loadAppearance, useAppearance } from "@/src/appearance";
 
 export { ErrorBoundary } from "expo-router";
@@ -28,6 +29,7 @@ const queryClient = new QueryClient({
 export default function RootLayout() {
   const [loaded, error] = useFonts({
     SpaceMono: require("../assets/fonts/SpaceMono-Regular.ttf"),
+    ...FONT_FILES,
   });
 
   useEffect(() => {
@@ -97,6 +99,10 @@ function RootLayoutNav() {
           <Stack.Screen
             name="vehicle/[id]/odometer"
             options={{ title: "Odometer" }}
+          />
+          <Stack.Screen
+            name="arrange"
+            options={{ title: "Arrange garage" }}
           />
           <Stack.Screen
             name="vehicle/new"

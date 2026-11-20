@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { useServiceTypes, useDeleteServiceType } from "../api";
 import { ServiceTypeRead } from "../types";
+import { groupServiceTypes } from "@carbaddie/core";
 import { useUnits } from "../hooks/useUnits";
 
 // UI Components & Icons
@@ -30,7 +31,8 @@ export function ManageServiceTypesPage() {
   const { mutate: deleteServiceType, isPending: isDeleting } = useDeleteServiceType();
   const units = useUnits();
 
-  const sortedServiceTypes = [...serviceTypes].sort((a, b) => a.name.localeCompare(b.name));
+  // Grouped by the part of the vehicle they belong to, the parts the garage outline shows.
+  const groups = groupServiceTypes([...serviceTypes].sort((a, b) => a.name.localeCompare(b.name)));
 
   if (isLoading) {
     return (
@@ -92,15 +94,24 @@ export function ManageServiceTypesPage() {
                 <th className="py-2.5 px-3.5 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-border/60">
-              {sortedServiceTypes.length === 0 ? (
+            {groups.length === 0 && (
+              <tbody>
                 <tr>
                   <td colSpan={4} className="py-8 text-center text-muted-foreground">
-                    No service categories configured yet.
+                    No service types yet
                   </td>
                 </tr>
-              ) : (
-                sortedServiceTypes.map((type: ServiceTypeRead) => (
+              </tbody>
+            )}
+            {groups.map((group) => (
+            <tbody key={group.zone} className="divide-y divide-border/60 border-b border-border last:border-b-0">
+              <tr className="bg-muted/20">
+                <th colSpan={4} scope="colgroup" className="py-2 px-3.5 text-xs font-semibold text-foreground">
+                  {group.label} <span className="ml-1 font-normal text-muted-foreground">{group.types.length}</span>
+                </th>
+              </tr>
+              {(
+                group.types.map((type: ServiceTypeRead) => (
                   <tr key={type.id} className="hover:bg-accent/20 transition-colors">
                     <td className="py-2.5 px-3.5 font-medium text-foreground">
                       {type.name}
@@ -139,7 +150,7 @@ export function ManageServiceTypesPage() {
                               <AlertDialogHeader>
                                 <AlertDialogTitle className="text-sm font-semibold">Delete "{type.name}"?</AlertDialogTitle>
                                 <AlertDialogDescription className="text-xs text-muted-foreground">
-                                  This service category and its interval rules will be permanently deleted.
+                                  This service type and its interval rules will be deleted. Logs that used it are kept
                                 </AlertDialogDescription>
                               </AlertDialogHeader>
                               <AlertDialogFooter>
@@ -161,6 +172,7 @@ export function ManageServiceTypesPage() {
                 ))
               )}
             </tbody>
+            ))}
           </table>
         </div>
       </div>

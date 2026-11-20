@@ -3,6 +3,8 @@ import { useNavigate, useParams, Link } from "react-router-dom";
 import { useServiceType, useAddServiceType, useUpdateServiceType, useServiceTypes } from "../api";
 import { ServiceTypeCreate, ServiceTypeUpdate, CustomFieldCreate, ServiceTypeRead } from "../types";
 import { useUnits } from "../hooks/useUnits";
+import { ZONE_IDS, ZONE_LABEL, parseWholeNumber, serviceTypeZone } from "@carbaddie/core";
+import { toast } from "sonner";
 
 // UI Components & Icons
 import { Button } from "@/components/ui/button";
@@ -74,6 +76,9 @@ export function AddEditServiceTypePage() {
   const [customFields, setCustomFields] = useState<FormCustomField[]>([]);
   const [resetIds, setResetIds] = useState<string[]>([]);
   const [suggestionIds, setSuggestionIds] = useState<string[]>([]);
+  // Only a part the user picks is sent, so one a newer app set is kept.
+  const [pickedZone, setPickedZone] = useState<string | null>(null);
+  const zone = pickedZone ?? serviceTypeZone(isEditMode && serviceType ? serviceType : { slug: null, zone: null });
 
   useEffect(() => {
     if (isEditMode && serviceType) {
@@ -134,14 +139,22 @@ export function AddEditServiceTypePage() {
         unit: fieldData.unit?.trim() || undefined,
       }));
 
-    const km = recommendedIntervalKm ? units.fromDisplay(parseInt(recommendedIntervalKm, 10), serviceType?.recommended_interval_km) : undefined;
-    const days = recommendedIntervalDays ? parseInt(recommendedIntervalDays, 10) : undefined;
+    const typedKm = recommendedIntervalKm.trim() ? parseWholeNumber(recommendedIntervalKm) : null;
+    const typedDays = recommendedIntervalDays.trim() ? parseWholeNumber(recommendedIntervalDays) : null;
+    if ((recommendedIntervalKm.trim() && typedKm === null) || (recommendedIntervalDays.trim() && typedDays === null)) {
+      toast.error("Enter each interval as a whole number, e.g. 10000 or 180");
+      return;
+    }
+    const km = typedKm != null ? units.fromDisplay(typedKm, serviceType?.recommended_interval_km) : undefined;
+    const days = typedDays ?? undefined;
+    const zoneChange = pickedZone !== null ? { zone: pickedZone } : {};
 
     if (isEditMode && serviceTypeId) {
       const payload: ServiceTypeUpdate = {
         name: name.trim(),
         recommended_interval_km: km,
         recommended_interval_days: days,
+        ...zoneChange,
         fields: preparedFields,
         resets: resetIds,
         suggestions: suggestionIds,
@@ -157,6 +170,7 @@ export function AddEditServiceTypePage() {
         name: name.trim(),
         recommended_interval_km: km,
         recommended_interval_days: days,
+        ...zoneChange,
         fields: preparedFields,
         resets: resetIds,
         suggestions: suggestionIds,
@@ -203,10 +217,10 @@ export function AddEditServiceTypePage() {
 
       <div>
         <h1 className="text-xl font-medium tracking-tight text-foreground">
-          {isEditMode ? `Edit Category: ${name}` : "Create service type"}
+          {isEditMode ? `Edit ${name}` : "Create service type"}
         </h1>
         <p className="text-xs text-muted-foreground mt-0.5">
-          Configure default intervals, co-service suggestions, auto-resets, and custom telemetry fields.
+          Default intervals, the part of the vehicle, co-service suggestions, resets and custom fields
         </p>
       </div>
 
@@ -218,19 +232,41 @@ export function AddEditServiceTypePage() {
 
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="rounded-lg border border-border bg-card p-5 space-y-5">
-          {/* Category Name */}
-          <div className="space-y-1.5">
-            <Label htmlFor="name" className="text-xs font-medium text-foreground">
-              Category Name <span className="text-destructive">*</span>
-            </Label>
-            <Input
-              id="name"
-              placeholder="e.g. Synthetic Oil & Filter Service"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-              className="h-8 text-xs bg-background"
-            />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="name" className="text-xs font-medium text-foreground">
+                Name <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                id="name"
+                placeholder="e.g. Synthetic Oil & Filter Service"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
+                maxLength={80}
+                className="h-8 text-xs bg-background"
+              />
+            </div>
+
+            {/* Where it sits on the vehicle: its group in lists and its spot on the garage outline */}
+            <div className="space-y-1.5">
+              <Label htmlFor="zone" className="text-xs font-medium text-foreground">
+                Part of the vehicle
+              </Label>
+              <Select value={zone} onValueChange={setPickedZone}>
+                <SelectTrigger id="zone" className="h-8 text-xs bg-background">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {ZONE_IDS.map((z) => (
+                    <SelectItem key={z} value={z} className="text-xs">
+                      {z === "other" ? "Other" : ZONE_LABEL[z]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">Groups it in lists and marks that part on the garage outline</p>
+            </div>
           </div>
 
           {/* Recommended Intervals */}

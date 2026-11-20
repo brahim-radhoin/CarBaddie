@@ -21,6 +21,7 @@ function serviceType(id: string, name: string, km: number | null, days: number |
   return {
     id,
     slug: null,
+    zone: null,
     name,
     fields: [],
     resets: [],

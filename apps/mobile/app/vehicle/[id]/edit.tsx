@@ -1,13 +1,13 @@
-import { StyleSheet, TextInput, TouchableOpacity, View, Alert, ActivityIndicator } from "react-native";
+import { StyleSheet, TouchableOpacity, View, Alert, ActivityIndicator } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { DateField } from "@/components/DateField";
 import { BodyTypePicker } from "@/components/BodyTypePicker";
 import { Switch } from "react-native";
-import { drawableBodyType, splitGarage } from "@carbaddie/core";
+import { drawableBodyType, parseWholeNumber, splitGarage, todayISO, vehicleStartDate } from "@carbaddie/core";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useTheme, type Palette } from "@/src/theme";
 import { useVehicle, useVehicles, useUpdateVehicle, useDeleteVehicle } from "@/src/hooks/useDatabase";
-import { Text } from "@/components/Themed";
+import { Text, TextInput } from "@/components/Themed";
 import { useState, useEffect, useMemo } from "react";
 import { useUnits } from "@/src/hooks/useUnits";
 
@@ -47,10 +47,20 @@ export default function EditVehicleScreen() {
   }, [vehicle, units]);
 
   const inputStyle = [styles.input, { backgroundColor: colors.card, color: colors.text, borderColor: colors.border }];
+  const typedYear = year.trim() ? parseWholeNumber(year) : null;
 
   const handleSave = () => {
     if (!make.trim() || !model.trim()) {
       Alert.alert("Required", "Make and Model are required.");
+      return;
+    }
+    if (year.trim() && typedYear === null) {
+      Alert.alert("Check the year", "Enter the model year as four digits, e.g. 2020.");
+      return;
+    }
+    const typedMileage = mileage.trim() ? parseWholeNumber(mileage) : null;
+    if (mileage.trim() && typedMileage === null) {
+      Alert.alert("Check the odometer", "Enter the initial mileage as a whole number, e.g. 50000.");
       return;
     }
     updateMutation.mutate(
@@ -59,15 +69,18 @@ export default function EditVehicleScreen() {
         data: {
           make: make.trim(),
           model: model.trim(),
-          year: year ? Number(year) : undefined,
+          year: typedYear,
           vin: vin.trim() || null,
-          initial_mileage: mileage ? units.fromDisplay(Number(mileage), vehicle?.initial_mileage) : undefined,
+          initial_mileage: typedMileage != null ? units.fromDisplay(typedMileage, vehicle?.initial_mileage) : null,
           acquisition_date: acquisitionDate.trim() || null,
           ...(pickedType !== null ? { body_type: pickedType } : {}),
           ...(pickedFavourite !== null ? { is_favorite: pickedFavourite } : {}),
         },
       },
-      { onSuccess: () => router.back() }
+      {
+        onSuccess: () => router.back(),
+        onError: (err) => Alert.alert("Could not save", err.message || "Could not save the vehicle."),
+      }
     );
   };
 
@@ -125,16 +138,24 @@ export default function EditVehicleScreen() {
       </View>
 
       <Text style={[styles.label, { color: colors.text }]}>Year</Text>
-      <TextInput style={inputStyle} value={year} onChangeText={setYear} keyboardType="numeric" />
+      <TextInput style={inputStyle} value={year} onChangeText={setYear} keyboardType="number-pad" maxLength={4} placeholder="e.g. 2020" placeholderTextColor={colors.textMuted} />
 
       <Text style={[styles.label, { color: colors.text }]}>VIN</Text>
       <TextInput style={inputStyle} value={vin} onChangeText={setVin} autoCapitalize="characters" />
 
       <Text style={[styles.label, { color: colors.text }]}>Initial mileage ({units.unit})</Text>
-      <TextInput style={inputStyle} value={mileage} onChangeText={setMileage} keyboardType="numeric" />
+      <TextInput style={inputStyle} value={mileage} onChangeText={setMileage} keyboardType="number-pad" />
 
       <Text style={[styles.label, { color: colors.text }]}>Acquisition date</Text>
-      <DateField label="Acquisition date" value={acquisitionDate} onChange={setAcquisitionDate} placeholder="Optional" allowClear />
+      <DateField
+        label="Acquisition date"
+        value={acquisitionDate}
+        onChange={setAcquisitionDate}
+        placeholder="Optional"
+        allowClear
+        min={vehicleStartDate(typedYear) ?? undefined}
+        max={todayISO()}
+      />
 
       <TouchableOpacity accessibilityRole="button"
         style={[styles.saveBtn, { backgroundColor: colors.primary }]}

@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import React, { useState, useEffect } from "react";
-import { StyleSheet, TextInput, TouchableOpacity, View, Alert, ActivityIndicator } from "react-native";
+import { StyleSheet, TouchableOpacity, View, Alert, ActivityIndicator } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useRouter } from "expo-router";
 import { useTheme, type Palette } from "@/src/theme";
@@ -11,10 +11,14 @@ import {
   useUpdateServiceType,
   useDeleteServiceType,
 } from "@/src/hooks/useDatabase";
-import { Text } from "@/components/Themed";
+import { Text, TextInput } from "@/components/Themed";
 import { Icon } from "@/components/Controls";
+import { PickerField } from "@/components/PickerField";
+import { ZONE_IDS, ZONE_LABEL, parseWholeNumber, serviceTypeZone } from "@carbaddie/core";
 import type { CustomFieldCreate } from "@/src/types";
 import { useUnits } from "@/src/hooks/useUnits";
+
+const PART_OPTIONS = ZONE_IDS.map((z) => ({ value: z, label: z === "other" ? "Other" : ZONE_LABEL[z] }));
 
 interface FormField extends CustomFieldCreate {
   _key: string;
@@ -46,6 +50,9 @@ export default function ServiceTypeForm({ serviceTypeId }: { serviceTypeId?: str
   const [fields, setFields] = useState<FormField[]>([]);
   const [resets, setResets] = useState<string[]>([]);
   const [suggestions, setSuggestions] = useState<string[]>([]);
+  // Only a part the user picks is sent, so one a newer app set is kept.
+  const [pickedZone, setPickedZone] = useState<string | null>(null);
+  const zone = pickedZone ?? serviceTypeZone(existing ?? { slug: null, zone: null });
 
   useEffect(() => {
     if (existing) {
@@ -109,10 +116,18 @@ export default function ServiceTypeForm({ serviceTypeId }: { serviceTypeId?: str
         unit: f.unit?.trim() ? f.unit.trim() : undefined,
       }));
 
+    const km = intervalKm.trim() ? parseWholeNumber(intervalKm) : null;
+    const days = intervalDays.trim() ? parseWholeNumber(intervalDays) : null;
+    if ((intervalKm.trim() && km === null) || (intervalDays.trim() && days === null)) {
+      Alert.alert("Check the interval", "Enter each interval as a whole number, e.g. 10000 or 180.");
+      return;
+    }
+
     const payload = {
       name: name.trim(),
-      recommended_interval_km: intervalKm ? units.fromDisplay(Number(intervalKm), existing?.recommended_interval_km) : undefined,
-      recommended_interval_days: intervalDays ? Number(intervalDays) : undefined,
+      recommended_interval_km: km != null ? units.fromDisplay(km, existing?.recommended_interval_km) : undefined,
+      recommended_interval_days: days ?? undefined,
+      ...(pickedZone !== null ? { zone: pickedZone } : {}),
       fields: cleanedFields,
       resets,
       suggestions,
@@ -185,6 +200,11 @@ export default function ServiceTypeForm({ serviceTypeId }: { serviceTypeId?: str
         placeholderTextColor={colors.textMuted}
       />
 
+      {/* Where it sits on the vehicle: its group in lists and its spot on the garage outline */}
+      <Text style={[styles.label, { color: colors.text }]}>Part of the vehicle</Text>
+      <PickerField title="Part of the vehicle" value={zone} options={PART_OPTIONS} onChange={(z) => setPickedZone(z ?? "other")} />
+      <Text style={[styles.hint, { color: colors.textMuted }]}>Groups it in lists and marks that part on the garage outline</Text>
+
       {/* Interval Targets */}
       <View style={styles.row}>
         <View style={styles.halfCol}>
@@ -193,7 +213,7 @@ export default function ServiceTypeForm({ serviceTypeId }: { serviceTypeId?: str
             style={inputStyle}
             value={intervalKm}
             onChangeText={setIntervalKm}
-            keyboardType="numeric"
+            keyboardType="number-pad"
             placeholder="e.g. 10000"
             placeholderTextColor={colors.textMuted}
           />
@@ -204,7 +224,7 @@ export default function ServiceTypeForm({ serviceTypeId }: { serviceTypeId?: str
             style={inputStyle}
             value={intervalDays}
             onChangeText={setIntervalDays}
-            keyboardType="numeric"
+            keyboardType="number-pad"
             placeholder="e.g. 180"
             placeholderTextColor={colors.textMuted}
           />
@@ -441,6 +461,7 @@ const makeStyles = (colors: Palette) => StyleSheet.create({
   loadingContainer: { flex: 1, alignItems: "center", justifyContent: "center" },
   content: { padding: 20, paddingBottom: 50 },
   label: { fontSize: 13, fontWeight: "600", marginBottom: 6, marginTop: 14 },
+  hint: { fontSize: 12, marginTop: 6 },
   subLabel: { fontSize: 12, fontWeight: "600", marginBottom: 4, marginTop: 10 },
   row: { flexDirection: "row", gap: 12 },
   halfCol: { flex: 1 },

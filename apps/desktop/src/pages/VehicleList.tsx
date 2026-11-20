@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
 import { splitGarage } from "@carbaddie/core";
-import { useVehicles } from "../api";
+import { useGarageOrder, useVehicles } from "../api";
 import { VehicleCard } from "../components/VehicleCard";
-import { EmptyGarage, GarageCard, PartsSheet, type PartsTarget } from "../components/Garage";
+import { ArrangeSheet, EmptyGarage, GarageCard, PartsSheet, type PartsTarget } from "../components/Garage";
 import { useNavigate } from "react-router-dom";
 
 // shadcn/ui components
@@ -12,10 +12,11 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 // lucide-react icons
-import { Plus, Search } from "lucide-react";
+import { ArrowUpDown, Plus, Search } from "lucide-react";
 
-type SortOption = "make_asc" | "make_desc" | "model_asc" | "model_desc" | "newest" | "oldest";
+type SortOption = "arranged" | "make_asc" | "make_desc" | "model_asc" | "model_desc" | "newest" | "oldest";
 const sortOptions: { value: SortOption; label: string }[] = [
+  { value: "arranged", label: "Your order" },
   { value: "newest", label: "Newest first" },
   { value: "oldest", label: "Oldest first" },
   { value: "make_asc", label: "Make, A to Z" },
@@ -29,12 +30,15 @@ export function VehicleList() {
   const navigate = useNavigate();
 
   const [searchTerm, setSearchTerm] = useState("");
-  const [sortBy, setSortBy] = useState<SortOption>("newest");
+  const [sortBy, setSortBy] = useState<SortOption>("arranged");
   const [partsTarget, setPartsTarget] = useState<PartsTarget | null>(null);
+  const [arranging, setArranging] = useState(false);
+  const { data: order = [] } = useGarageOrder();
 
-  // The deck is the phone's garage deck exactly (favourites, then unset vehicles by age): search
-  // and sort only apply to the vehicles below it.
-  const { deck, others } = useMemo(() => splitGarage(allVehicles), [allVehicles]);
+  // The deck is the phone's garage deck exactly (favourites, then unset vehicles by age, in the
+  // order the user arranged): search and sort only apply to the vehicles below it.
+  const garage = useMemo(() => splitGarage(allVehicles, order), [allVehicles, order]);
+  const { deck, others } = garage;
 
   const filteredAndSortedVehicles = useMemo(() => {
     let result = [...others];
@@ -48,6 +52,7 @@ export function VehicleList() {
       );
     }
     switch (sortBy) {
+      case "arranged": break; // splitGarage already put them in the arranged order
       case "make_asc": result.sort((a, b) => a.make.localeCompare(b.make)); break;
       case "make_desc": result.sort((a, b) => b.make.localeCompare(a.make)); break;
       case "model_asc": result.sort((a, b) => a.model.localeCompare(b.model)); break;
@@ -70,13 +75,21 @@ export function VehicleList() {
             {allVehicles.length} vehicle{allVehicles.length !== 1 ? "s" : ""}
           </p>
         </div>
-        <Button
-          onClick={() => navigate("/vehicles/new")}
-          className="h-8 px-3 text-xs font-medium gap-1.5 self-start sm:self-auto"
-        >
-          <Plus className="h-3.5 w-3.5" />
-          Add vehicle
-        </Button>
+        <div className="flex gap-2 self-start sm:self-auto">
+          {allVehicles.length > 1 && (
+            <Button variant="outline" onClick={() => setArranging(true)} className="h-8 px-3 text-xs font-medium gap-1.5">
+              <ArrowUpDown className="h-3.5 w-3.5" />
+              Arrange
+            </Button>
+          )}
+          <Button
+            onClick={() => navigate("/vehicles/new")}
+            className="h-8 px-3 text-xs font-medium gap-1.5"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Add vehicle
+          </Button>
+        </div>
       </div>
 
       {isLoading ? (
@@ -147,6 +160,7 @@ export function VehicleList() {
       )}
 
       <PartsSheet target={partsTarget} onClose={() => setPartsTarget(null)} />
+      <ArrangeSheet garage={garage} open={arranging} onClose={() => setArranging(false)} />
     </div>
   );
 }

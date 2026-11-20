@@ -195,6 +195,10 @@
 [data-accent="violet"] { --brand-accent: var(--accent-violet); }
 [data-accent="graphite"] { --brand-accent: var(--accent-graphite); }
 
+/* Vehicle outline colour (see lib/accent.ts): the text colour, or the accent. Status marks keep theirs. */
+:root { --outline: var(--foreground); }
+[data-outline="accent"] { --outline: var(--brand-accent); }
+
 .dark {
   /* Graphite Dark: Deep matte graphite surfaces, quiet chrome, amber telemetry */
   --background: #121213;

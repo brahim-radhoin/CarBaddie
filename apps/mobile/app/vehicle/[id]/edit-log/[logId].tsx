@@ -1,7 +1,8 @@
-import { StyleSheet, TextInput, TouchableOpacity, View, Alert, ActivityIndicator } from "react-native";
+import { StyleSheet, TouchableOpacity, View, Alert, ActivityIndicator } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { DateField } from "@/components/DateField";
-import { PickerField } from "@/components/PickerField";
+import { PickerField, serviceTypeOptions } from "@/components/PickerField";
+import { CustomFieldInput } from "@/components/CustomFieldInput";
 import { addDaysISO, todayISO } from "@/src/dates";
 import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
 import { useTheme, type Palette } from "@/src/theme";
@@ -11,12 +12,14 @@ import {
   useDeleteMaintenanceLog,
   useServiceTypes,
   useCustomFieldsForServiceType,
+  useVehicle,
 } from "@/src/hooks/useDatabase";
-import { Text } from "@/components/Themed";
+import { Text, TextInput } from "@/components/Themed";
 import { useState, useEffect, useMemo } from "react";
 import type { CustomFieldValueCreate } from "@/src/types";
-import { centsToInput, parseMoney } from "@carbaddie/core";
+import { centsToInput, parseMoney, parseWholeNumber } from "@carbaddie/core";
 import { useUnits } from "@/src/hooks/useUnits";
+import { useHistoryChecks } from "@/src/hooks/useHistoryChecks";
 
 export default function EditLogScreen() {
   const { id: vehicleId, logId } = useLocalSearchParams<{ id: string; logId: string }>();
@@ -29,6 +32,8 @@ export default function EditLogScreen() {
   const updateMutation = useUpdateMaintenanceLog();
   const deleteMutation = useDeleteMaintenanceLog();
   const units = useUnits();
+  const { data: vehicle } = useVehicle(vehicleId);
+  const checks = useHistoryChecks(vehicle, { logId });
 
   const [serviceTypeId, setServiceTypeId] = useState<string | null>(null);
   const [date, setDate] = useState("");
@@ -72,9 +77,9 @@ export default function EditLogScreen() {
       Alert.alert("Required", "Date and mileage are required.");
       return;
     }
-    const numMileage = parseInt(mileage, 10);
-    if (isNaN(numMileage) || numMileage < 0) {
-      Alert.alert("Invalid mileage", "Please enter a valid mileage.");
+    const numMileage = parseWholeNumber(mileage);
+    if (numMileage === null) {
+      Alert.alert("Check the odometer", "Enter the odometer reading as a whole number, e.g. 55000.");
       return;
     }
     const costCents = parseMoney(cost);
@@ -153,7 +158,7 @@ export default function EditLogScreen() {
         title="Service type"
         placeholder="Select a service type"
         value={serviceTypeId}
-        options={(serviceTypes ?? []).map((st) => ({ value: st.id, label: st.name }))}
+        options={serviceTypeOptions(serviceTypes ?? [])}
         allowClear
         clearLabel="No service type"
         onChange={setServiceTypeId}
@@ -181,7 +186,7 @@ export default function EditLogScreen() {
           </TouchableOpacity>
         </View>
       </View>
-      <DateField label="Log date" value={date} onChange={setDate} />
+      <DateField label="Log date" value={date} onChange={setDate} min={checks.minDate} max={checks.maxDate} />
 
       {/* Mileage Input */}
       <Text style={[styles.label, { color: colors.text }]}>Odometer ({units.unit}) *</Text>
@@ -189,10 +194,14 @@ export default function EditLogScreen() {
         style={inputStyle}
         value={mileage}
         onChangeText={setMileage}
-        keyboardType="numeric"
+        keyboardType="number-pad"
         placeholder="e.g. 55000"
         placeholderTextColor={colors.textMuted}
       />
+      {(() => {
+        const warning = checks.odometerWarning(date, mileage, log?.mileage);
+        return warning ? <Text style={[styles.warning, { color: colors.warn }]}>{warning}</Text> : null;
+      })()}
 
       {/* Cost Input */}
       <Text style={[styles.label, { color: colors.text }]}>Total cost ({units.currency})</Text>
@@ -221,81 +230,16 @@ export default function EditLogScreen() {
       {customFields && customFields.length > 0 && (
         <View style={styles.customFieldsSection}>
           <Text style={[styles.sectionHeader, { color: colors.primary }]}>Custom fields</Text>
-          {customFields.map((field) => {
-            const currentValue = fieldValues[field.id] ?? "";
-            return (
-              <View key={field.id} style={styles.customFieldRow}>
-                <Text style={[styles.label, { color: colors.text }]}>
-                  {field.name}
-                  {field.unit ? ` (${field.unit})` : ""}
-                </Text>
-
-                {field.field_type === "boolean" ? (
-                  <View style={styles.booleanRow}>
-                    <TouchableOpacity accessibilityRole="button"
-                      style={[
-                        styles.booleanPill,
-                        {
-                          backgroundColor: currentValue === "true" ? colors.primary : colors.card,
-                          borderColor: currentValue === "true" ? colors.primary : colors.border,
-                        },
-                      ]}
-                      onPress={() => setFieldValues((p) => ({ ...p, [field.id]: "true" }))}
-                      activeOpacity={0.7}
-                    >
-                      <Text
-                        style={{
-                          color: currentValue === "true" ? colors.onPrimary : colors.text,
-                          fontWeight: currentValue === "true" ? "600" : "500",
-                          fontSize: 13,
-                        }}
-                      >
-                        Yes
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity accessibilityRole="button"
-                      style={[
-                        styles.booleanPill,
-                        {
-                          backgroundColor: currentValue === "false" ? colors.primary : colors.card,
-                          borderColor: currentValue === "false" ? colors.primary : colors.border,
-                        },
-                      ]}
-                      onPress={() => setFieldValues((p) => ({ ...p, [field.id]: "false" }))}
-                      activeOpacity={0.7}
-                    >
-                      <Text
-                        style={{
-                          color: currentValue === "false" ? colors.onPrimary : colors.text,
-                          fontWeight: currentValue === "false" ? "600" : "500",
-                          fontSize: 13,
-                        }}
-                      >
-                        No
-                      </Text>
-                    </TouchableOpacity>
-                    {currentValue !== "" && (
-                      <TouchableOpacity accessibilityRole="button"
-                        style={[styles.booleanPillClear, { borderColor: colors.border }]}
-                        onPress={() => setFieldValues((p) => ({ ...p, [field.id]: "" }))}
-                      >
-                        <Text style={{ color: colors.textMuted, fontSize: 12 }}>Clear</Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                ) : (
-                  <TextInput
-                    style={inputStyle}
-                    value={currentValue}
-                    onChangeText={(v) => setFieldValues((prev) => ({ ...prev, [field.id]: v }))}
-                    keyboardType={field.field_type === "number" ? "numeric" : "default"}
-                    placeholder={`Enter ${field.name.toLowerCase()}${field.unit ? ` in ${field.unit}` : ""}`}
-                    placeholderTextColor={colors.textMuted}
-                  />
-                )}
-              </View>
-            );
-          })}
+          {customFields.map((field) => (
+            <CustomFieldInput
+              key={field.id}
+              field={field}
+              value={fieldValues[field.id] ?? ""}
+              onChange={(v) => setFieldValues((prev) => ({ ...prev, [field.id]: v }))}
+              inputStyle={inputStyle}
+              pillBackground={colors.card}
+            />
+          ))}
         </View>
       )}
 
@@ -397,25 +341,9 @@ const makeStyles = (colors: Palette) => StyleSheet.create({
     fontSize: 13,
     fontWeight: "600",
   },
-  customFieldRow: {
-    marginBottom: 4,
-  },
-  booleanRow: {
-    flexDirection: "row",
-    gap: 8,
-    alignItems: "center",
-  },
-  booleanPill: {
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 18,
-    paddingVertical: 9,
-  },
-  booleanPillClear: {
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
+  warning: {
+    fontSize: 12,
+    marginTop: 6,
   },
   saveBtn: {
     marginTop: 30,

@@ -223,7 +223,30 @@ test("every migration says whether older apps can keep syncing after it", () => 
 
 // ── files written by released versions must stay readable forever ──────────────────────────
 
-for (const name of ["sync-file-v7.json", "sync-file-v8.json"]) {
+test("migration v9 (service type parts) is additive", () => {
+  assert.equal(MIGRATIONS.find((m) => m.version === 9)?.compat, "additive");
+});
+
+test("a device behind v9 keeps a service type's part and sends it back", async () => {
+  const drive = memoryDrive();
+  const ahead = await device();
+  const st = await ahead.repo.createServiceType({ name: "Wheel bearings", zone: "wheels", fields: [] });
+  await ahead.sync(drive.transport);
+
+  // A v8 device: same schema without the column.
+  const behind = await device();
+  behind.db.raw.exec("ALTER TABLE service_types DROP COLUMN zone");
+  await behind.sync(drive.transport);
+  await behind.repo.updateServiceType(st.id, { name: "Wheel bearings, front" });
+  await behind.sync(drive.transport);
+
+  await ahead.sync(drive.transport);
+  const after = await ahead.repo.getServiceTypeById(st.id);
+  assert.equal(after?.name, "Wheel bearings, front", "the edit arrived");
+  assert.equal(after?.zone, "wheels", "and the part it didn't know survived");
+});
+
+for (const name of ["sync-file-v7.json", "sync-file-v8.json", "sync-file-v9.json"]) {
   test(`the committed ${name} still applies`, async () => {
     const f = JSON.parse(readFileSync(new URL(`./fixtures/${name}`, import.meta.url), "utf8"));
     const drive = memoryDrive();
@@ -234,7 +257,11 @@ for (const name of ["sync-file-v7.json", "sync-file-v8.json"]) {
     const vehicles = await d.repo.getAllVehicles();
     assert.equal(vehicles.length, 1);
     assert.equal(vehicles[0].make, "Ford");
-    if (name.includes("v8")) {
+    if (name.includes("v9")) {
+      const types = await d.repo.getAllServiceTypes();
+      assert.equal(types.find((t) => t.name === "Wheel bearings")?.zone, "wheels");
+    }
+    if (name.includes("v8") || name.includes("v9")) {
       assert.equal(vehicles[0].body_type, "car");
       assert.equal(vehicles[0].is_favorite, true);
     } else {

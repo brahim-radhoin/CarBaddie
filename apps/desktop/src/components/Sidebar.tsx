@@ -8,14 +8,21 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ModeToggle } from "./ModeToggle";
-import { useVehicles } from "../api";
+import { splitGarage } from "@carbaddie/core";
+import { useGarageOrder, useVehicles } from "../api";
 import { useUnits } from "../hooks/useUnits";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useAppVersion } from "../hooks/useAppVersion";
 
 export function Sidebar() {
-  const { data: vehicles = [] } = useVehicles();
+  const { data: allVehicles = [] } = useVehicles();
+  const { data: order = [] } = useGarageOrder();
+  // The garage's order: deck first, then the others, as arranged.
+  const vehicles = useMemo(() => {
+    const { deck, others } = splitGarage(allVehicles, order);
+    return [...deck, ...others];
+  }, [allVehicles, order]);
   const navigate = useNavigate();
   const units = useUnits();
   const [vehiclesOpen, setVehiclesOpen] = useState(true);

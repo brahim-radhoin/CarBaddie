@@ -7,20 +7,32 @@
  */
 import { DarkTheme, DefaultTheme } from "expo-router";
 import { useMemo } from "react";
-import { DEFAULT_ACCENT, PALETTES, accentColor, type AccentId, type ColorScheme, type Palette as SharedPalette } from "@carbaddie/core";
+import {
+  DEFAULT_ACCENT,
+  PALETTES,
+  accentColor,
+  type AccentId,
+  type ColorScheme,
+  type OutlineColour,
+  type Palette as SharedPalette,
+} from "@carbaddie/core";
 import { useColorScheme } from "@/components/useColorScheme";
 import { useAppearance } from "@/src/appearance";
+import { font } from "@/src/fonts";
+
+export { font };
 
 export type Palette = SharedPalette & {
   accent: string;
   notification: string;
-  /** The stroke of the vehicle outlines. One token, so it is easy to change (it is neutral for now). */
+  /** The stroke of the vehicle outlines: the text colour, or the accent when the user picks it (Appearance). */
   outline: string;
 };
 
-export function buildPalette(scheme: ColorScheme, accent: AccentId = DEFAULT_ACCENT): Palette {
+export function buildPalette(scheme: ColorScheme, accent: AccentId = DEFAULT_ACCENT, outline: OutlineColour = "neutral"): Palette {
   const p = PALETTES[scheme];
-  return { ...p, accent: accentColor(accent, scheme), notification: p.danger, outline: p.text };
+  const accentShade = accentColor(accent, scheme);
+  return { ...p, accent: accentShade, notification: p.danger, outline: outline === "accent" ? accentShade : p.text };
 }
 
 /** Default-accent palettes, for the few places that cannot call a hook (Themed text defaults). */
@@ -36,14 +48,21 @@ export function navigationTheme(scheme: ColorScheme, accent: AccentId) {
   return {
     ...base,
     colors: { ...base.colors, primary: p.primary, background: p.background, card: p.card, text: p.text, border: p.border, notification: p.notification },
+    // Headers and tab labels in the app font, by family not weight (see src/fonts.ts).
+    fonts: {
+      regular: { ...font("400"), fontWeight: "normal" as const },
+      medium: { ...font("500"), fontWeight: "normal" as const },
+      bold: { ...font("600"), fontWeight: "normal" as const },
+      heavy: { ...font("600"), fontWeight: "normal" as const },
+    },
   };
 }
 
 /** Drop-in replacement for expo-router's `useTheme()` with the extra tokens and the chosen accent. */
 export function useTheme() {
   const scheme = useColorScheme();
-  const { accent } = useAppearance();
-  const colors = useMemo(() => buildPalette(scheme, accent), [scheme, accent]);
+  const { accent, outline } = useAppearance();
+  const colors = useMemo(() => buildPalette(scheme, accent, outline), [scheme, accent, outline]);
   return { colors, dark: scheme === "dark" };
 }
 

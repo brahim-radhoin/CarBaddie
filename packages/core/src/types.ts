@@ -40,6 +40,11 @@ export interface ServiceTypeBase {
   name: string;
   recommended_interval_km?: number | null;
   recommended_interval_days?: number | null;
+  /**
+   * The part of the vehicle it sits in (maintenance/zones.ts). A string, not a union: a newer app
+   * may know parts this one doesn't. null = not chosen; `serviceTypeZone()` resolves it.
+   */
+  zone?: string | null;
 }
 
 export interface ServiceTypeCreate extends ServiceTypeBase {
@@ -52,6 +57,7 @@ export interface ServiceTypeRead extends ServiceTypeBase {
   id: Id;
   /** Stable key of a built-in service type (see service-types/builtin.ts); null for custom ones. */
   slug: string | null;
+  zone: string | null;
   /** Active fields only. */
   fields: CustomFieldRead[];
   resets: Id[];
@@ -62,6 +68,8 @@ export interface ServiceTypeUpdate {
   name?: string;
   recommended_interval_km?: number | null;
   recommended_interval_days?: number | null;
+  /** Only sent when the user picked a part: a form must not overwrite one a newer app set. */
+  zone?: string | null;
   /**
    * The complete new field list. Fields matched by `id` (or, failing that, by name) are kept;
    * existing fields left out are archived, never deleted.

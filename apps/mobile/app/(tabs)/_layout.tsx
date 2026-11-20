@@ -1,21 +1,24 @@
 import { Tabs, useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
-import { View, Image, Text } from "react-native";
-import { useTheme } from "@/src/theme";
+import { View, Image } from "react-native";
+import { Text } from "@/components/Themed";
+import { font, useTheme } from "@/src/theme";
 import { IconButton } from "@/components/Controls";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useVehicles } from "@/src/hooks/useDatabase";
 
 export default function TabLayout() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const vehicleCount = useVehicles().data?.length ?? 0;
 
   return (
     <Tabs
       screenOptions={{
         tabBarActiveTintColor: colors.accent,
         tabBarInactiveTintColor: colors.textMuted,
-        tabBarLabelStyle: { fontSize: 12, fontWeight: "500" },
+        tabBarLabelStyle: { fontSize: 12, ...font("500") },
         tabBarStyle: {
           backgroundColor: colors.card,
           borderTopColor: colors.border,
@@ -26,14 +29,19 @@ export default function TabLayout() {
         headerStyle: { backgroundColor: colors.card },
         headerShadowVisible: false,
         headerTintColor: colors.text,
-        headerTitleStyle: { fontWeight: "600", fontSize: 17 },
+        headerTitleStyle: { ...font("600"), fontSize: 17 },
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
           title: "Vehicles",
-          headerRight: () => <IconButton name="add" label="Add vehicle" color={colors.text} onPress={() => router.push("/vehicle/new")} />,
+          headerRight: () => (
+            <View style={{ flexDirection: "row" }}>
+              {vehicleCount > 1 && <IconButton name="arrange" label="Arrange garage" color={colors.text} onPress={() => router.push("/arrange")} />}
+              <IconButton name="add" label="Add vehicle" color={colors.text} onPress={() => router.push("/vehicle/new")} />
+            </View>
+          ),
           headerTitle: () => (
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }} accessibilityRole="header">
               <Image

@@ -3,7 +3,7 @@ import { SymbolView } from "expo-symbols";
 import { Text } from "@/components/Themed";
 import { TOUCH, useTheme } from "@/src/theme";
 
-type IconName = "close" | "check" | "add" | "warning" | "chevron" | "chevronLeft" | "chevronDown" | "calendar" | "search";
+type IconName = "close" | "check" | "add" | "warning" | "chevron" | "chevronLeft" | "chevronDown" | "calendar" | "search" | "up" | "down" | "arrange";
 
 const SYMBOLS = {
   close: { ios: "xmark", android: "close", web: "close" },
@@ -15,6 +15,9 @@ const SYMBOLS = {
   chevronDown: { ios: "chevron.down", android: "keyboard_arrow_down", web: "keyboard_arrow_down" },
   calendar: { ios: "calendar", android: "calendar_today", web: "calendar_today" },
   search: { ios: "magnifyingglass", android: "search", web: "search" },
+  up: { ios: "arrow.up", android: "arrow_upward", web: "arrow_upward" },
+  down: { ios: "arrow.down", android: "arrow_downward", web: "arrow_downward" },
+  arrange: { ios: "arrow.up.arrow.down", android: "swap_vert", web: "swap_vert" },
 } as const;
 
 /** One icon set at one size, taking its colour from the text role it sits in. */
@@ -28,12 +31,14 @@ export function IconButton({
   label,
   onPress,
   color,
+  disabled,
   style,
 }: {
   name: IconName;
   label: string;
   onPress: () => void;
   color?: string;
+  disabled?: boolean;
   style?: StyleProp<ViewStyle>;
 }) {
   const { colors } = useTheme();
@@ -41,9 +46,11 @@ export function IconButton({
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
+      accessibilityState={{ disabled: !!disabled }}
+      disabled={disabled}
       onPress={onPress}
       hitSlop={4}
-      style={({ pressed }) => [styles.iconButton, pressed && { backgroundColor: colors.raised }, style]}
+      style={({ pressed }) => [styles.iconButton, pressed && { backgroundColor: colors.raised }, disabled && { opacity: 0.3 }, style]}
     >
       <Icon name={name} color={color ?? colors.textSecondary} />
     </Pressable>

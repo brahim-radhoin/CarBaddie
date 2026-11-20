@@ -1,10 +1,10 @@
-import { StyleSheet, TextInput, TouchableOpacity, View, Alert, ActivityIndicator } from "react-native";
+import { StyleSheet, TouchableOpacity, View, Alert, ActivityIndicator } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { IconButton, Icon } from "@/components/Controls";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useTheme, type Palette } from "@/src/theme";
 import { useVehicle, useServiceTypes, useUpsertIntervalOverride, useDeleteIntervalOverride, useDeleteVehicle } from "@/src/hooks/useDatabase";
-import { Text } from "@/components/Themed";
+import { Text, TextInput } from "@/components/Themed";
 import { useState, useEffect, useMemo } from "react";
 import { useUnits } from "@/src/hooks/useUnits";
 

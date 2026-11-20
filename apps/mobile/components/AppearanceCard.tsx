@@ -1,9 +1,9 @@
-import { Pressable, StyleSheet, View } from "react-native";
-import { ACCENTS, accentColor, type ThemeMode } from "@carbaddie/core";
+import { Pressable, StyleSheet, Switch, View } from "react-native";
+import { ACCENTS, accentColor, type OutlineColour, type ThemeMode } from "@carbaddie/core";
 import { Text } from "@/components/Themed";
 import { Icon } from "@/components/Controls";
 import { TOUCH, useTheme } from "@/src/theme";
-import { setAccent, setMode, useAppearance } from "@/src/appearance";
+import { setAccent, setLoopDeck, setMode, setOutline, useAppearance } from "@/src/appearance";
 
 const MODES: { value: ThemeMode; label: string }[] = [
   { value: "light", label: "Light" },
@@ -11,10 +11,38 @@ const MODES: { value: ThemeMode; label: string }[] = [
   { value: "system", label: "System" },
 ];
 
-/** Mode and accent, the same choices as the desktop Appearance settings. */
+const OUTLINES: { value: OutlineColour; label: string }[] = [
+  { value: "neutral", label: "Neutral" },
+  { value: "accent", label: "Accent" },
+];
+
+/** A row of mutually exclusive choices on one track. */
+function Segments<T extends string>({ label, options, value, onChange }: { label: string; options: { value: T; label: string }[]; value: T; onChange: (v: T) => void }) {
+  const { colors } = useTheme();
+  return (
+    <View accessibilityRole="radiogroup" accessibilityLabel={label} style={[styles.track, { backgroundColor: colors.raised, borderColor: colors.border }]}>
+      {options.map((o) => {
+        const selected = value === o.value;
+        return (
+          <Pressable
+            key={o.value}
+            accessibilityRole="radio"
+            accessibilityState={{ selected }}
+            onPress={() => onChange(o.value)}
+            style={[styles.segment, selected && { backgroundColor: colors.primary }]}
+          >
+            <Text style={[styles.segmentText, { color: selected ? colors.onPrimary : colors.text }]}>{o.label}</Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+/** Mode, accent and outline colour (the same choices as the desktop Appearance settings), and the deck loop. */
 export function AppearanceCard() {
   const { colors, dark } = useTheme();
-  const { mode, accent } = useAppearance();
+  const { mode, accent, outline, loopDeck } = useAppearance();
   const scheme = dark ? "dark" : "light";
   const accentLabel = ACCENTS.find((a) => a.id === accent)?.label.toLowerCase();
 
@@ -22,26 +50,7 @@ export function AppearanceCard() {
     <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
       <Text style={[styles.label, { color: colors.text }]}>Mode</Text>
       <Text style={[styles.desc, { color: colors.textMuted }]}>Light, dark, or follow your phone</Text>
-      <View
-        accessibilityRole="radiogroup"
-        accessibilityLabel="Colour mode"
-        style={[styles.track, { backgroundColor: colors.raised, borderColor: colors.border }]}
-      >
-        {MODES.map((m) => {
-          const selected = mode === m.value;
-          return (
-            <Pressable
-              key={m.value}
-              accessibilityRole="radio"
-              accessibilityState={{ selected }}
-              onPress={() => setMode(m.value)}
-              style={[styles.segment, selected && { backgroundColor: colors.primary }]}
-            >
-              <Text style={[styles.segmentText, { color: selected ? colors.onPrimary : colors.text }]}>{m.label}</Text>
-            </Pressable>
-          );
-        })}
-      </View>
+      <Segments label="Colour mode" options={MODES} value={mode} onChange={setMode} />
 
       <View style={[styles.divider, { borderTopColor: colors.border }]} />
 
@@ -68,6 +77,28 @@ export function AppearanceCard() {
           );
         })}
       </View>
+
+      <View style={[styles.divider, { borderTopColor: colors.border }]} />
+
+      <Text style={[styles.label, { color: colors.text }]}>Vehicle outline</Text>
+      <Text style={[styles.desc, { color: colors.textMuted }]}>Draw the garage outlines in the text colour or the accent</Text>
+      <Segments label="Vehicle outline colour" options={OUTLINES} value={outline} onChange={setOutline} />
+
+      <View style={[styles.divider, { borderTopColor: colors.border }]} />
+
+      <View style={styles.switchRow}>
+        <View style={styles.flex}>
+          <Text style={[styles.label, { color: colors.text }]}>Loop the garage deck</Text>
+          <Text style={[styles.desc, { color: colors.textMuted, marginBottom: 0 }]}>Swipe past the last card back to the first</Text>
+        </View>
+        <Switch
+          value={loopDeck}
+          onValueChange={setLoopDeck}
+          trackColor={{ false: colors.textMuted, true: colors.accent }}
+          thumbColor="#ffffff"
+          accessibilityLabel="Loop the garage deck"
+        />
+      </View>
     </View>
   );
 }
@@ -81,6 +112,8 @@ const styles = StyleSheet.create({
   segmentText: { fontSize: 14, fontWeight: "600" },
   divider: { borderTopWidth: StyleSheet.hairlineWidth, marginVertical: 16 },
   swatches: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  switchRow: { flexDirection: "row", alignItems: "center", gap: 12, minHeight: TOUCH },
+  flex: { flex: 1 },
   swatchHit: { width: TOUCH, height: TOUCH, borderRadius: TOUCH / 2, borderWidth: 2, borderColor: "transparent", alignItems: "center", justifyContent: "center" },
   swatch: { width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center" },
 });

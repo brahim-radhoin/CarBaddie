@@ -1,7 +1,8 @@
 import { useState, FormEvent } from "react";
-import { ValidationError } from "@carbaddie/core";
-import { useAddOdometerReading } from "../api";
+import { ValidationError, parseWholeNumber, todayISO as localToday } from "@carbaddie/core";
+import { useAddOdometerReading, useVehicle } from "../api";
 import { useUnits } from "../hooks/useUnits";
+import { useHistoryChecks } from "../hooks/useHistoryChecks";
 import { cn } from "@/lib/utils";
 
 import { Button } from "@/components/ui/button";
@@ -9,12 +10,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Gauge } from "lucide-react";
-
-/** Today as "YYYY-MM-DD" in local time. */
-const localToday = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-};
 
 interface UpdateOdometerPopoverProps {
   vehicleId: string;
@@ -25,9 +20,11 @@ interface UpdateOdometerPopoverProps {
 /** Records an odometer reading (date + mileage typed in the user's unit + optional note). */
 export function UpdateOdometerPopover({ vehicleId, currentMileage }: UpdateOdometerPopoverProps) {
   const units = useUnits();
+  const { data: vehicle } = useVehicle(vehicleId);
+  const checks = useHistoryChecks(vehicle);
   const { mutate: addReading, isPending, error } = useAddOdometerReading();
   const [open, setOpen] = useState(false);
-  const [date, setDate] = useState(localToday);
+  const [date, setDate] = useState(() => localToday());
   const [mileage, setMileage] = useState("");
   const [note, setNote] = useState("");
   const [localError, setLocalError] = useState<string | null>(null);
@@ -43,9 +40,9 @@ export function UpdateOdometerPopover({ vehicleId, currentMileage }: UpdateOdome
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
-    const typed = Number(mileage);
-    if (!mileage.trim() || !Number.isFinite(typed) || typed < 0) {
-      setLocalError(`Enter the odometer in ${units.unit}.`);
+    const typed = parseWholeNumber(mileage);
+    if (typed === null) {
+      setLocalError(`Enter the odometer in ${units.unit} as a whole number.`);
       return;
     }
     setLocalError(null);
@@ -101,6 +98,10 @@ export function UpdateOdometerPopover({ vehicleId, currentMileage }: UpdateOdome
               className={cn("h-8 text-xs font-mono bg-background", mileageError && "border-destructive")}
             />
             {mileageError && <p className="text-xs text-destructive">{mileageError}</p>}
+            {!mileageError && (() => {
+              const warning = checks.odometerWarning(date, mileage);
+              return warning ? <p className="text-xs text-warn">{warning}</p> : null;
+            })()}
           </div>
 
           <div className="space-y-1.5">
@@ -112,6 +113,8 @@ export function UpdateOdometerPopover({ vehicleId, currentMileage }: UpdateOdome
               type="date"
               value={date}
               onChange={(e) => setDate(e.target.value)}
+              min={checks.minDate}
+              max={checks.maxDate}
               className={cn("h-8 text-xs font-mono bg-background", fieldErrors.date && "border-destructive")}
             />
             {fieldErrors.date && <p className="text-xs text-destructive">{fieldErrors.date[0]}</p>}

@@ -1,4 +1,5 @@
-import { StyleSheet, FlatList, TouchableOpacity, View, TextInput, Alert } from "react-native";
+import { StyleSheet, SectionList, TouchableOpacity, View, Alert } from "react-native";
+import { groupServiceTypes } from "@carbaddie/core";
 import { IconButton, Icon } from "@/components/Controls";
 import { useRouter } from "expo-router";
 import { useTheme, type Palette } from "@/src/theme";
@@ -6,7 +7,7 @@ import { useServiceTypes, useDeleteServiceType } from "@/src/hooks/useDatabase";
 import { restoreDefaultServiceTypes } from "@/src/db/seed";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState, useMemo } from "react";
-import { Text } from "@/components/Themed";
+import { Text, TextInput } from "@/components/Themed";
 import type { ServiceTypeRead } from "@/src/types";
 import { useUnits } from "@/src/hooks/useUnits";
 
@@ -42,6 +43,11 @@ export default function ServiceTypesScreen() {
     const q = search.toLowerCase();
     return serviceTypes.filter((st) => st.name.toLowerCase().includes(q));
   }, [serviceTypes, search]);
+  // Grouped by the part of the vehicle they belong to, the parts the garage outline shows.
+  const sections = useMemo(
+    () => groupServiceTypes(filteredTypes).map((g) => ({ key: g.zone, title: g.label, data: g.types })),
+    [filteredTypes]
+  );
 
   const handleDelete = (id: string, name: string) => {
     Alert.alert("Delete service type", `Delete "${name}"? Existing logs will keep their records.`, [
@@ -118,10 +124,17 @@ export default function ServiceTypesScreen() {
         )}
       </View>
 
-      <FlatList
-        data={filteredTypes}
+      <SectionList
+        sections={sections}
         keyExtractor={(item) => String(item.id)}
         renderItem={renderServiceType}
+        renderSectionHeader={({ section }) => (
+          <View style={[styles.sectionHeader, { backgroundColor: colors.background }]} accessibilityRole="header">
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>{section.title}</Text>
+            <Text style={[styles.sectionCount, { color: colors.textMuted }]}>{section.data.length}</Text>
+          </View>
+        )}
+        stickySectionHeadersEnabled
         contentContainerStyle={styles.list}
         ListHeaderComponent={
           serviceTypes.length > 0 ? (
@@ -178,6 +191,9 @@ const makeStyles = (colors: Palette) => StyleSheet.create({
   list: { padding: 16, paddingTop: 6, paddingBottom: 90 },
   listHeader: { marginBottom: 8, paddingHorizontal: 2 },
   countText: { fontSize: 12, fontWeight: "600" },
+  sectionHeader: { flexDirection: "row", alignItems: "baseline", gap: 8, paddingTop: 14, paddingBottom: 8, paddingHorizontal: 2 },
+  sectionTitle: { fontSize: 14, fontWeight: "600" },
+  sectionCount: { fontSize: 12 },
   card: { borderRadius: 14, borderWidth: 1, padding: 16, marginBottom: 10 },
   cardTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   name: { fontSize: 16, fontWeight: "600" },

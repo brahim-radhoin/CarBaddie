@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, TextInput, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { useRouter } from "expo-router";
 import {
   BODY_TYPES,
@@ -14,7 +14,7 @@ import {
   type ZoneId,
   type ZoneService,
 } from "@carbaddie/core";
-import { Text } from "@/components/Themed";
+import { Text, TextInput } from "@/components/Themed";
 import { Button, Icon, StatusDot } from "@/components/Controls";
 import { Sheet } from "@/components/Sheet";
 import { VehicleOutline } from "@/components/VehicleOutline";
@@ -33,13 +33,10 @@ export function useGarageData(vehicle: VehicleRead) {
   return useMemo(() => {
     const bodyType = drawableBodyType(vehicle.body_type, vehicle.make);
     const art = SILHOUETTES[bodyType];
-    const services = items.map((i) => ({
-      serviceTypeId: i.serviceTypeId,
-      name: i.serviceTypeName,
-      status: i.status,
-      message: i.message,
-      slug: types.find((t) => t.id === i.serviceTypeId)?.slug ?? null,
-    }));
+    const services = items.map((i) => {
+      const type = types.find((t) => t.id === i.serviceTypeId);
+      return { serviceTypeId: i.serviceTypeId, name: i.serviceTypeName, status: i.status, message: i.message, slug: type?.slug ?? null, zone: type?.zone ?? null };
+    });
     const groups = groupByZone(services, Object.keys(art.zones) as DrawnZoneId[], art.alias);
     const due = items
       .filter((i) => i.status === "Overdue" || i.status === "Upcoming")

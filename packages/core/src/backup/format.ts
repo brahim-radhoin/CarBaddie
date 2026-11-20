@@ -41,6 +41,8 @@ const backupServiceTypeSchema = z.object({
   name: z.string(),
   recommended_interval_km: optionalInt,
   recommended_interval_days: optionalInt,
+  /** The part of the vehicle it sits in (schema v9); absent in older files. A string: a newer app may know more parts. */
+  zone: optionalString,
   fields: z.array(backupFieldSchema).default([]),
   resets: z.array(idRef).default([]),
   suggestions: z.array(idRef).default([]),
@@ -196,6 +198,7 @@ export function encodeBackup({ serviceTypes, vehicles, serviceEvents = [], confi
     name: st.name,
     recommended_interval_km: st.recommended_interval_km ?? null,
     recommended_interval_days: st.recommended_interval_days ?? null,
+    zone: st.zone ?? null,
     fields: st.fields.map(encodeField),
     resets: st.resets.filter((id) => knownServiceTypes.has(id)).map((id) => fileIdFor("serviceType", id)),
     suggestions: st.suggestions.filter((id) => knownServiceTypes.has(id)).map((id) => fileIdFor("serviceType", id)),

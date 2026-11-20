@@ -130,9 +130,14 @@ function AccentPreview() {
   );
 }
 
+const OUTLINE_OPTIONS: SegmentedOption[] = [
+  { value: "neutral", label: "Neutral" },
+  { value: "accent", label: "Accent" },
+];
+
 export function AppearanceSection() {
   const { setTheme } = useTheme();
-  const { accent, setAccent, backgroundImage, setBackgroundImage, resetPreferences } = useAppPreferences();
+  const { accent, setAccent, outline, setOutline, backgroundImage, setBackgroundImage, resetPreferences } = useAppPreferences();
   const [imageUrl, setImageUrl] = useState(backgroundImage ?? "");
   const accentLabel = ACCENTS.find((a) => a.id === accent)?.label;
 
@@ -176,6 +181,19 @@ export function AppearanceSection() {
           <AccentSwatches value={accent} onChange={setAccent} />
         </div>
         <AccentPreview />
+      </div>
+
+      <div className="flex items-center justify-between gap-4 border-t border-border/60 pt-4">
+        <div>
+          <p className="text-sm font-medium text-foreground">Vehicle outline</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">Draw the garage outlines in the text colour or the accent</p>
+        </div>
+        <SegmentedControl
+          label="Vehicle outline colour"
+          options={OUTLINE_OPTIONS}
+          value={outline}
+          onValueChange={(v) => setOutline(v === "accent" ? "accent" : "neutral")}
+        />
       </div>
 
       <div className="border-t border-border/60 pt-4">

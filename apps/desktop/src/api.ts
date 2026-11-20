@@ -52,6 +52,33 @@ export function useSetPreference() {
   });
 }
 
+/** The order the user arranged the garage in (synced; see core vehicles/garage.ts). */
+export function useGarageOrder() {
+  return useQuery<Id[]>({
+    queryKey: queryKeys.garageOrder(),
+    queryFn: async () => (await getRepository()).getGarageOrder(),
+  });
+}
+
+export function useSetGarageOrder() {
+  const queryClient = useQueryClient();
+  return useMutation<void, Error, Id[], { previous?: Id[] }>({
+    mutationFn: async (ids) => (await getRepository()).setGarageOrder(ids),
+    // Shown at once, so the arrows feel direct; put back if the write fails.
+    onMutate: async (ids) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.garageOrder() });
+      const previous = queryClient.getQueryData<Id[]>(queryKeys.garageOrder());
+      queryClient.setQueryData(queryKeys.garageOrder(), ids);
+      return { previous };
+    },
+    onError: (error, _ids, context) => {
+      queryClient.setQueryData(queryKeys.garageOrder(), context?.previous);
+      toast.error(message(error, "Failed to save the order."));
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: queryKeys.garageOrder() }),
+  });
+}
+
 // --- VEHICLE HOOKS ---
 
 export function useVehicles() {

@@ -16,8 +16,9 @@ import {
   useUpdateMaintenanceLog,
 } from "../api";
 import { CustomFieldValueCreate, CustomFieldValueRead, Id, ServiceItemUpdate, ServiceTypeRead } from "../types";
-import { centsToInput, parseMoney, todayISO } from "@carbaddie/core";
+import { centsToInput, fieldValueProblem, groupServiceTypes, parseMoney, parseWholeNumber, todayISO } from "@carbaddie/core";
 import { useUnits } from "../hooks/useUnits";
+import { useHistoryChecks } from "../hooks/useHistoryChecks";
 import { toast } from "sonner";
 import { Checkbox } from "@/components/ui/checkbox";
 
@@ -25,7 +26,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
@@ -80,6 +81,7 @@ export function AddMaintenanceLogPage() {
   const updateVisit = useUpdateServiceEvent();
   const updateLog = useUpdateMaintenanceLog();
   const units = useUnits();
+  const checks = useHistoryChecks(vehicle, { visitId, logId });
 
   // --- Local UI State ---
   const [date, setDate] = useState(todayISO());
@@ -149,7 +151,12 @@ export function AddMaintenanceLogPage() {
         custom_field_values: filledValues(item.values),
       });
     }
-    const mileageKm = units.fromDisplay(parseInt(mileage, 10), visitToEdit?.mileage ?? logToEdit?.mileage);
+    const typedMileage = parseWholeNumber(mileage);
+    if (typedMileage === null) {
+      toast.error("Enter the odometer reading as a whole number, e.g. 55000");
+      return;
+    }
+    const mileageKm = units.fromDisplay(typedMileage, visitToEdit?.mileage ?? logToEdit?.mileage);
     const done = { onSuccess: () => navigate(`/vehicles/${vehicleId}`) };
 
     if (mode === "log" && logId) {
@@ -254,6 +261,8 @@ export function AddMaintenanceLogPage() {
                 type="date"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
+                min={checks.minDate}
+                max={checks.maxDate}
                 required
                 className="h-8 text-xs font-mono bg-background"
               />
@@ -270,9 +279,14 @@ export function AddMaintenanceLogPage() {
                 value={mileage}
                 onChange={(e) => setMileage(e.target.value)}
                 min="0"
+                step="1"
                 required
                 className="h-8 text-xs font-mono bg-background"
               />
+              {(() => {
+                const warning = checks.odometerWarning(date, mileage, visitToEdit?.mileage ?? logToEdit?.mileage);
+                return warning ? <p className="text-xs text-warn">{warning}</p> : null;
+              })()}
             </div>
           </div>
 
@@ -424,10 +438,15 @@ function ServiceItemEditor({ item, index, serviceTypes, currency, canRemove, onC
               <SelectValue placeholder="Select service type" />
             </SelectTrigger>
             <SelectContent>
-              {serviceTypes.map((type) => (
-                <SelectItem key={type.id} value={String(type.id)} className="text-xs">
-                  {type.name}
-                </SelectItem>
+              {groupServiceTypes(serviceTypes).map((group) => (
+                <SelectGroup key={group.zone}>
+                  <SelectLabel className="text-xs">{group.label}</SelectLabel>
+                  {group.types.map((type) => (
+                    <SelectItem key={type.id} value={String(type.id)} className="text-xs">
+                      {type.name}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
               ))}
             </SelectContent>
           </Select>
@@ -500,14 +519,28 @@ function ServiceItemEditor({ item, index, serviceTypes, currency, canRemove, onC
                     <span className="text-xs font-mono text-muted-foreground">{item.values[field.id] === "true" ? "Yes" : "No"}</span>
                   </div>
                 ) : (
-                  <Input
-                    id={id(`custom-${field.id}`)}
-                    type={field.field_type === "date" ? "date" : field.field_type === "number" ? "number" : "text"}
-                    step={field.field_type === "number" ? "any" : undefined}
-                    value={item.values[field.id] || ""}
-                    onChange={(e) => setValue(field.id, e.target.value)}
-                    className="h-8 text-xs font-mono bg-background"
-                  />
+                  <>
+                    <Input
+                      id={id(`custom-${field.id}`)}
+                      type={field.field_type === "date" ? "date" : field.field_type === "number" ? "number" : "text"}
+                      step={field.field_type === "number" ? "any" : undefined}
+                      maxLength={field.field_type === "text" ? 500 : undefined}
+                      value={item.values[field.id] || ""}
+                      onChange={(e) => setValue(field.id, e.target.value)}
+                      className="h-8 text-xs font-mono bg-background"
+                    />
+                    {(() => {
+                      const value = item.values[field.id] || "";
+                      const problem = fieldValueProblem(field.field_type, value);
+                      if (!problem) return null;
+                      // A value saved before dates were picked (free text) is kept until it is replaced.
+                      return (
+                        <p className="text-xs text-muted-foreground">
+                          {field.field_type === "date" ? `Saved as “${value}”. Pick a date to replace it` : problem}
+                        </p>
+                      );
+                    })()}
+                  </>
                 )}
               </div>
             ))}

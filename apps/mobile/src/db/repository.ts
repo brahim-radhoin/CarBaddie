@@ -48,6 +48,8 @@ export const getServiceTypeSummaries = call("getServiceTypeSummaries");
 
 export const getPreferences = call("getPreferences");
 export const setPreference = call("setPreference");
+export const getGarageOrder = call("getGarageOrder");
+export const setGarageOrder = call("setGarageOrder");
 
 export const getSetting = call("getSetting");
 export const setSetting = call("setSetting");

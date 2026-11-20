@@ -1,19 +1,21 @@
 // The garage visit form (add and edit): a header (date, odometer, shop, notes) and one or more
 // service items, each saved as a maintenance log of the visit.
-import { StyleSheet, TextInput, TouchableOpacity, View, Alert } from "react-native";
+import { StyleSheet, TouchableOpacity, View, Alert } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useTheme, type Palette } from "@/src/theme";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState, type ReactNode, useMemo } from "react";
-import { Text } from "@/components/Themed";
+import { Text, TextInput } from "@/components/Themed";
 import { Icon } from "@/components/Controls";
 import { DateField } from "@/components/DateField";
-import { PickerField } from "@/components/PickerField";
+import { PickerField, serviceTypeOptions } from "@/components/PickerField";
 import { addDaysISO, todayISO } from "@/src/dates";
 import { useVehicle, useServiceTypes, useCustomFieldsForServiceType } from "@/src/hooks/useDatabase";
 import { restoreDefaultServiceTypes } from "@/src/db/seed";
 import { useUnits } from "@/src/hooks/useUnits";
-import { centsToInput, parseMoney } from "@carbaddie/core";
+import { useHistoryChecks } from "@/src/hooks/useHistoryChecks";
+import { CustomFieldInput } from "@/components/CustomFieldInput";
+import { centsToInput, parseMoney, parseWholeNumber } from "@carbaddie/core";
 import type { CustomFieldValueCreate, ServiceEventRead, ServiceItemUpdate, ServiceTypeRead } from "@/src/types";
 
 /** One service item as typed in the form. */
@@ -66,6 +68,7 @@ export function VisitForm({ vehicleId, initial, initialServiceTypeId, saveLabel,
   const { data: vehicle } = useVehicle(vehicleId);
   const { data: serviceTypes = [] } = useServiceTypes();
   const units = useUnits();
+  const checks = useHistoryChecks(vehicle, { visitId: initial?.id });
   const [isSeeding, setIsSeeding] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -113,15 +116,16 @@ export function VisitForm({ vehicleId, initial, initialServiceTypeId, saveLabel,
   const inputStyle = [styles.input, { backgroundColor: colors.card, color: colors.text, borderColor: colors.border }];
 
   const setYesterday = () => setDate(addDaysISO(todayISO(), -1));
+  const odometerWarning = checks.odometerWarning(date, mileage, initial?.mileage);
 
   const handleSave = async () => {
     if (!date.trim() || !mileage.trim()) {
       Alert.alert("Required", "Date and mileage are required.");
       return;
     }
-    const numMileage = parseInt(mileage, 10);
-    if (isNaN(numMileage) || numMileage < 0) {
-      Alert.alert("Invalid mileage", "Please enter a valid mileage.");
+    const numMileage = parseWholeNumber(mileage);
+    if (numMileage === null) {
+      Alert.alert("Check the odometer", "Enter the odometer reading as a whole number, e.g. 55000.");
       return;
     }
     const parsed: ServiceItemUpdate[] = [];
@@ -181,7 +185,7 @@ export function VisitForm({ vehicleId, initial, initialServiceTypeId, saveLabel,
           </TouchableOpacity>
         </View>
       </View>
-      <DateField label="Visit date" value={date} onChange={setDate} />
+      <DateField label="Visit date" value={date} onChange={setDate} min={checks.minDate} max={checks.maxDate} />
 
       {/* Mileage Input */}
       <Text style={[styles.label, { color: colors.text }]}>Odometer ({units.unit}) *</Text>
@@ -189,10 +193,11 @@ export function VisitForm({ vehicleId, initial, initialServiceTypeId, saveLabel,
         style={inputStyle}
         value={mileage}
         onChangeText={setMileage}
-        keyboardType="numeric"
+        keyboardType="number-pad"
         placeholder={currentOdometer != null ? `e.g. ${units.toDisplay(currentOdometer)} (current)` : "e.g. 55000"}
         placeholderTextColor={colors.textMuted}
       />
+      {odometerWarning && <Text style={[styles.warning, { color: colors.warn }]}>{odometerWarning}</Text>}
 
       {/* Shop */}
       <Text style={[styles.label, { color: colors.text }]}>Shop / Garage</Text>
@@ -332,7 +337,7 @@ function ServiceItemEditor({ item, index, serviceTypes, currency, canRemove, onC
         title="Service type"
         placeholder="Select a service type"
         value={item.serviceTypeId}
-        options={serviceTypes.map((st) => ({ value: st.id, label: st.name }))}
+        options={serviceTypeOptions(serviceTypes)}
         allowClear
         clearLabel="No service type"
         onChange={(id) => onChange({ serviceTypeId: id, values: {} })}
@@ -368,53 +373,16 @@ function ServiceItemEditor({ item, index, serviceTypes, currency, canRemove, onC
         placeholderTextColor={colors.textMuted}
       />
 
-      {customFields?.map((field) => {
-        const currentValue = item.values[field.id] ?? "";
-        return (
-          <View key={field.id} style={styles.customFieldRow}>
-            <Text style={[styles.label, { color: colors.text }]}>
-              {field.name}
-              {field.unit ? ` (${field.unit})` : ""}
-            </Text>
-            {field.field_type === "boolean" ? (
-              <View style={styles.booleanRow}>
-                {(["true", "false"] as const).map((v) => (
-                  <TouchableOpacity accessibilityRole="button"
-                    key={v}
-                    style={[
-                      styles.booleanPill,
-                      {
-                        backgroundColor: currentValue === v ? colors.primary : colors.background,
-                        borderColor: currentValue === v ? colors.primary : colors.border,
-                      },
-                    ]}
-                    onPress={() => setValue(field.id, v)}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={{ color: currentValue === v ? colors.onPrimary : colors.text, fontWeight: currentValue === v ? "600" : "500", fontSize: 13 }}>
-                      {v === "true" ? "Yes" : "No"}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-                {currentValue !== "" && (
-                  <TouchableOpacity accessibilityRole="button" style={[styles.booleanPillClear, { borderColor: colors.border }]} onPress={() => setValue(field.id, "")}>
-                    <Text style={{ color: colors.textMuted, fontSize: 12 }}>Clear</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            ) : (
-              <TextInput
-                style={inputStyle}
-                value={currentValue}
-                onChangeText={(v) => setValue(field.id, v)}
-                keyboardType={field.field_type === "number" ? "numeric" : "default"}
-                placeholder={`Enter ${field.name.toLowerCase()}${field.unit ? ` in ${field.unit}` : ""}`}
-                placeholderTextColor={colors.textMuted}
-              />
-            )}
-          </View>
-        );
-      })}
+      {customFields?.map((field) => (
+        <CustomFieldInput
+          key={field.id}
+          field={field}
+          value={item.values[field.id] ?? ""}
+          onChange={(v) => setValue(field.id, v)}
+          inputStyle={inputStyle}
+          pillBackground={colors.background}
+        />
+      ))}
     </View>
   );
 }
@@ -448,10 +416,7 @@ const makeStyles = (colors: Palette) => StyleSheet.create({
   quickDateRow: { flexDirection: "row", gap: 6 },
   quickDatePill: { minHeight: 40, justifyContent: "center", borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
   quickDateText: { fontSize: 12, fontWeight: "600" },
-  customFieldRow: { marginBottom: 4 },
-  booleanRow: { flexDirection: "row", gap: 8, alignItems: "center" },
-  booleanPill: { minHeight: 40, justifyContent: "center", borderWidth: 1, borderRadius: 8, paddingHorizontal: 18, paddingVertical: 9 },
-  booleanPillClear: { minHeight: 40, justifyContent: "center", borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8 },
+  warning: { fontSize: 12, marginTop: 6 },
   sectionHeader: { fontSize: 15, fontWeight: "600", marginTop: 12, marginBottom: 4 },
   addItemBtn: { borderWidth: 1, borderStyle: "dashed", borderRadius: 12, paddingVertical: 12, alignItems: "center" },
   addItemText: { fontSize: 14, fontWeight: "600" },

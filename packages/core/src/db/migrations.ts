@@ -489,6 +489,17 @@ export const MIGRATIONS: readonly Migration[] = [
         );
       `),
   },
+  {
+    // The part of the vehicle a service type sits in (maintenance/zones.ts): where it shows on the
+    // outline and which group lists it under. NULL until the user picks one; a built-in then
+    // resolves from its slug and a custom type to "other", the same on every device, so the
+    // migration writes no rows.
+    version: 9,
+    compat: "additive",
+    description: "service_types.zone",
+    checkForeignKeys: false,
+    up: (db) => db.exec("ALTER TABLE service_types ADD COLUMN zone TEXT"),
+  },
 ];
 
 export const LATEST_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;
